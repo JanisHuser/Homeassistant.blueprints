@@ -1,0 +1,58 @@
+blueprint:
+  name: Rotate Through Scenes
+  description: Cycle through a list of scenes each time the trigger is activated.
+  domain: automation
+  input:
+    trigger_entity:
+      name: Trigger Entity
+      selector:
+        entity:
+          domain: [switch, button, input_boolean]
+    scenes:
+      name: Scenes to Cycle
+      selector:
+        entity:
+          domain: scene
+          multiple: true
+    current_scene:
+      name: Current Scene Helper
+      selector:
+        entity:
+          domain: input_select
+
+mode: single
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input trigger_entity
+    to: 'on'
+
+action:
+  - variables:
+      scenes_list: !input scenes
+      current_scene: !input current_scene
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ not states(current_scene) in scenes_list }}"
+        sequence:
+          - service: scene.turn_on
+            target:
+              entity_id: "{{ scenes_list[0] }}"
+          - service: input_select.select_option
+            target:
+              entity_id: "{{ current_scene }}"
+            data:
+              option: "{{ scenes_list[0] }}"
+      - default:
+          - variables:
+              index: "{{ (scenes_list.index(states(current_scene)) + 1) % scenes_list|length }}"
+          - service: scene.turn_on
+            target:
+              entity_id: "{{ scenes_list[index] }}"
+          - service: input_select.select_option
+            target:
+              entity_id: "{{ current_scene }}"
+            data:
+              option: "{{ scenes_list[index] }}"
