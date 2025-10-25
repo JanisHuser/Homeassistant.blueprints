@@ -1,62 +1,48 @@
 blueprint:
-  name: Rotate Through Scenes
-  description: Cycle through a list of scenes each time the trigger entity activates.
+  name: Cycle through scenes on state change
+  description: >
+    When any selected entity changes state, this blueprint cycles through a list of scenes.
+    It does not use any helpers — the cycling state is tracked in memory using a variable.
   domain: automation
   input:
-    trigger_entity:
-      name: Trigger Entity
-      description: Switch, button, or helper that triggers the next scene.
+    trigger_entities:
+      name: Trigger entities
+      description: Entities whose state changes should trigger the cycle.
       selector:
-        entity:
-          domain: [switch, button, input_boolean]
+        entity: {}
+      default: []
     scenes:
-      name: Scenes to Cycle
-      description: List of scenes to rotate through.
+      name: Scenes
+      description: List of scenes to cycle through.
       selector:
-        entity:
-          domain: scene
-          multiple: true
-    current_scene:
-      name: Current Scene Helper
-      description: Input select to store the currently active scene.
-      <selector:
-        entity:
-          domain: input_select
+        target:
+          entity:
+            domain: scene
+    cycle_script:
+      name: (Optional) Custom script name
+      description: Internal variable name for script instance (only needed if using multiple)
+      default: cycle_script
 
-mode: single
-max_exceeded: silent
+mode: restart
+variables:
+  scene_list: !input scenes
+  scene_index: "{{ (state_attr(cycle_script, 'current_index') or 0) | int }}"
+  total_scenes: "{{ scene_list.entity_id | count }}"
+  next_index: "{{ (scene_index + 1) % total_scenes }}"
+  next_scene: "{{ scene_list.entity_id[next_index] }}"
+  cycle_script: !input cycle_script
 
 trigger:
   - platform: state
-    entity_id: !input trigger_entity
-
-variables:
-  scenes_list: !input scenes
-  current_scene: !input current_scene
+    entity_id: !input trigger_entities
 
 action:
-  - choose:
-      # If current helper value is not in scene list (e.g. after restart)
-      - conditions:
-          - condition: template
-            value_template: "{{ states(current_scene) not in scenes_list }}"
-        sequence:
-          - service: scene.turn_on
-            target:
-              entity_id: "{{ scenes_list[0] }}"
-          - service: input_select.select_option
-            target:
-              entity_id: "{{ current_scene }}"
-            data:
-              option: "{{ scenes_list[0] }}"
-    default:
-      - variables:
-          index: "{{ (scenes_list.index(states(current_scene)) + 1) % scenes_list|length }}"
-      - service: scene.turn_on
-        target:
-          entity_id: "{{ scenes_list[index] }}"
-      - service: input_select.select_option
-        target:
-          entity_id: "{{ current_scene }}"
-        data:
-          option: "{{ scenes_list[index] }}"
+  - service: scene.turn_on
+    data:
+      entity_id: "{{ next_scene }}"
+
+  - service: script.turn_on
+    data:
+      entity_id: "script.{{ cycle_script }}"
+      variables:
+        current_index: "{{ next_index }}"
