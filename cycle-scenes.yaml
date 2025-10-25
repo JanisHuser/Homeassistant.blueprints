@@ -19,7 +19,7 @@ blueprint:
     current_scene:
       name: Current Scene Helper
       description: Input select to store the currently active scene.
-      selector:
+      <selector:
         entity:
           domain: input_select
 
