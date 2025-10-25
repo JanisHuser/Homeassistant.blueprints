@@ -1,48 +1,132 @@
 blueprint:
-  name: Cycle through scenes on state change
+  name: Scene Toggle (with trigger)
   description: >
-    When any selected entity changes state, this blueprint cycles through a list of scenes.
-    It does not use any helpers — the cycling state is tracked in memory using a variable.
+    Extended version of Simple Scene Toggle.
+    Cycles through scenes when a chosen entity changes state.
+
+    ## Features
+    - Toggle through scenes by order or last activated timestamp
+    - Define a transition time
+    - Select scenes by area and/or include/exclude specific scenes
+    - Timeout for beginning at start if using static order
+    - Triggers automatically on a selected entity’s state change
+
+    **Original Author:** [panhans](https://community.home-assistant.io/t/simple-scene-toggle)
+    **Modified by:** ChatGPT
+
   domain: automation
+  source_url: https://github.com/panhans/homeassistant/blob/main/blueprints/script/scene_toggle.yaml
+
   input:
-    trigger_entities:
-      name: Trigger entities
-      description: Entities whose state changes should trigger the cycle.
+    trigger_entity:
+      name: Trigger Entity
+      description: Entity whose state change triggers scene cycling (e.g. a button, switch, or sensor)
       selector:
         entity: {}
-      default: []
-    scenes:
-      name: Scenes
-      description: List of scenes to cycle through.
-      selector:
-        target:
-          entity:
-            domain: scene
-    cycle_script:
-      name: (Optional) Custom script name
-      description: Internal variable name for script instance (only needed if using multiple)
-      default: cycle_script
 
-mode: restart
-variables:
-  scene_list: !input scenes
-  scene_index: "{{ (state_attr(cycle_script, 'current_index') or 0) | int }}"
-  total_scenes: "{{ scene_list.entity_id | count }}"
-  next_index: "{{ (scene_index + 1) % total_scenes }}"
-  next_scene: "{{ scene_list.entity_id[next_index] }}"
-  cycle_script: !input cycle_script
+    area:
+      name: Name of area
+      description: Name of the area where you want to toggle scenes
+      default: ""
+      selector:
+        area:
+
+    included_scenes:
+      name: Included Scenes
+      description: Additional scenes to be included
+      default: []
+      selector:
+        entity:
+          filter:
+            domain: scene
+          multiple: true
+
+    excluded_scenes:
+      name: Excluded Scenes
+      description: Scenes to be excluded
+      default: []
+      selector:
+        entity:
+          filter:
+            domain: scene
+          multiple: true
+
+    transition:
+      name: Transition time
+      description: Transition time when switching between scenes
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.1
+          unit_of_measurement: s
+
+    use_static_order:
+      name: "Static order"
+      description: "Use static order instead of dynamic (timestamp-based) order."
+      default: false
+      selector:
+        boolean:
+
+    reset_after:
+      name: Reset After
+      description: "If static order is used, timeout (in seconds) after which it resets to first scene. 0 disables reset."
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 120
+          step: 1
+          unit_of_measurement: s
+
+mode: queued
 
 trigger:
   - platform: state
-    entity_id: !input trigger_entities
+    entity_id: !input trigger_entity
+
+variables:
+  area: !input "area"
+  included_scenes: !input "included_scenes"
+  excluded_scenes: !input "excluded_scenes"
+  reset_after: !input "reset_after"
+  use_static_order: !input use_static_order
+  last_triggered: "{{ as_timestamp(iif(state_attr(this.entity_id,'last_triggered') == none, now(), state_attr(this.entity_id,'last_triggered'))) }}"
 
 action:
   - service: scene.turn_on
-    data:
-      entity_id: "{{ next_scene }}"
+    data_template:
+      transition: !input transition
+      entity_id: >
+        {% set area_scenes = states.scene | selectattr('entity_id', 'in', area_entities(area)) | map(attribute='entity_id') | list %}
+        {% set all_scenes = (area_scenes | reject('in', excluded_scenes) | list) + included_scenes %}
 
-  - service: script.turn_on
-    data:
-      entity_id: "script.{{ cycle_script }}"
-      variables:
-        current_index: "{{ next_index }}"
+        {% if use_static_order == true %}
+
+          {% set is_reset = reset_after > 0 and (as_timestamp(now()) - last_triggered >= reset_after) %}
+
+          {% if is_reset == true %}
+            {{ all_scenes[0] }}
+          {% else %}
+            {% set unknown_scenes = expand(all_scenes) | selectattr('state', 'eq', 'unknown') | map(attribute='entity_id') | list %}
+            {% set scenes_sorted_by_activation = expand(all_scenes) | sort(attribute='state', reverse = true) | map(attribute='entity_id') | reject('in', unknown_scenes) | list %}
+            {% set last_activated_scene = scenes_sorted_by_activation[0] %}
+            {% set index_of_last_activated_scene = all_scenes.index(last_activated_scene) %}
+            {% set new_index = index_of_last_activated_scene + 1 %}
+            {% if new_index == all_scenes | count %}
+              {{ all_scenes[0] }}
+            {% else %}
+              {{ all_scenes[new_index] }}
+            {% endif %}
+          {% endif %}
+
+        {% else %}
+          {% set unknown_scenes = expand(all_scenes) | selectattr('state', 'eq', 'unknown') | map(attribute='entity_id') | list %}
+          {% if unknown_scenes | count > 0 %}
+            {{ unknown_scenes[0] }}
+          {% else %}
+            {% set known_scenes = expand(all_scenes) | sort(attribute='state', reverse = false) | map(attribute='entity_id') | list %}
+            {{ known_scenes[0] }}
+          {% endif %}
+        {% endif %}
