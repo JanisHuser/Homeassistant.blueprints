@@ -1,0 +1,154 @@
+blueprint:
+  name: Calendar Morning Scene
+  description: >
+    At a set time each morning, read today's events from a calendar and activate
+    a scene for each event whose name matches one you configured.
+
+    Matching is exact but case-insensitive (leading/trailing spaces ignored).
+    Each name maps to its OWN scene — fill in as many of the 5 rows as you need
+    and leave the rest blank. If several of today's events match, each matching
+    scene is activated in turn.
+
+    Uses calendar.get_events so it sees ALL of today's events (all-day and timed),
+    not just whatever event happens to be active at the trigger time.
+  domain: automation
+  author: Janis
+  input:
+    calendar:
+      name: Calendar
+      description: The calendar to read today's events from.
+      selector:
+        entity:
+          filter:
+            domain: calendar
+
+    run_time:
+      name: Run time
+      description: Time each morning to check the calendar.
+      default: "07:00:00"
+      selector:
+        time: {}
+
+    mappings:
+      name: Event name → scene
+      icon: mdi:calendar-star
+      collapsed: false
+      input:
+        name_1:
+          name: Event name 1
+          selector:
+            text: {}
+        scene_1:
+          name: Scene 1
+          selector:
+            entity:
+              filter:
+                domain: scene
+
+        name_2:
+          name: Event name 2
+          default: ""
+          selector:
+            text: {}
+        scene_2:
+          name: Scene 2
+          default: ""
+          selector:
+            entity:
+              filter:
+                domain: scene
+
+        name_3:
+          name: Event name 3
+          default: ""
+          selector:
+            text: {}
+        scene_3:
+          name: Scene 3
+          default: ""
+          selector:
+            entity:
+              filter:
+                domain: scene
+
+        name_4:
+          name: Event name 4
+          default: ""
+          selector:
+            text: {}
+        scene_4:
+          name: Scene 4
+          default: ""
+          selector:
+            entity:
+              filter:
+                domain: scene
+
+        name_5:
+          name: Event name 5
+          default: ""
+          selector:
+            text: {}
+        scene_5:
+          name: Scene 5
+          default: ""
+          selector:
+            entity:
+              filter:
+                domain: scene
+
+mode: single
+max_exceeded: silent
+
+variables:
+  cal_entity: !input calendar
+  pairs:
+    - name: !input name_1
+      scene: !input scene_1
+    - name: !input name_2
+      scene: !input scene_2
+    - name: !input name_3
+      scene: !input scene_3
+    - name: !input name_4
+      scene: !input scene_4
+    - name: !input name_5
+      scene: !input scene_5
+
+triggers:
+  - trigger: time
+    at: !input run_time
+
+conditions: []
+
+actions:
+  # Pull all of today's events (00:00 -> 24:00 local).
+  - action: calendar.get_events
+    target:
+      entity_id: !input calendar
+    data:
+      start_date_time: "{{ today_at('00:00') }}"
+      end_date_time: "{{ today_at('00:00') + timedelta(days=1) }}"
+    response_variable: cal
+
+  # Normalise today's event names to lower-case, trimmed strings.
+  - variables:
+      summaries: >
+        {{ (cal[cal_entity].events if cal_entity in cal else [])
+           | map(attribute='summary') | map('lower') | map('trim') | list }}
+
+  # For each configured (name -> scene) pair that is filled in, fire the scene
+  # if today has a matching event.
+  - repeat:
+      for_each: >
+        {{ pairs
+           | rejectattr('name', 'equalto', '')
+           | rejectattr('scene', 'equalto', '')
+           | list }}
+      sequence:
+        - if:
+            - condition: template
+              value_template: "{{ (repeat.item.name | lower | trim) in summaries }}"
+          then:
+            - action: scene.turn_on
+              target:
+                entity_id: "{{ repeat.item.scene }}"
