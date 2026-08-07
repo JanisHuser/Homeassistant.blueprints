@@ -1,0 +1,178 @@
+blueprint:
+  name: Room Master
+  description: >
+    A virtual "room" switch (an input_boolean) that is the single source of truth
+    for a room, exposed to Apple Home / HomeKit while the real devices stay hidden.
+
+    Two directions, one automation:
+      - Physical devices (switches, buttons, motion) write INTO the master.
+      - When the master changes, the matching scene is applied:
+            master OFF            -> "Off" scene
+            master ON + daylight  -> "Bright" scene
+            master ON + dark      -> "Dim" scene
+
+    Everything below is configured from the UI — pick your entities and scenes
+    from the dropdowns. Create one instance of this blueprint per room.
+  domain: automation
+  author: Janis
+  input:
+    master:
+      name: Room master
+      description: The input_boolean that represents this room (expose THIS to HomeKit).
+      selector:
+        entity:
+          filter:
+            domain: input_boolean
+
+    sources:
+      name: Physical input devices
+      description: >
+        Switches / buttons / motion sensors that drive the master.
+        Do NOT list the lights the scenes control here, or you'll create a loop.
+      selector:
+        entity:
+          multiple: true
+
+    map_mode:
+      name: How inputs map to the master
+      description: >
+        Follow — any source ON turns the master ON; when ALL sources are OFF the
+        master turns OFF (good for switches / motion).
+        Toggle — any source turning ON flips the master (good for push buttons).
+      default: follow
+      selector:
+        select:
+          options:
+            - label: "Follow (any on / all off)"
+              value: follow
+            - label: "Toggle (each press flips master)"
+              value: toggle
+
+    scene_off:
+      name: "Off scene"
+      selector:
+        entity:
+          filter:
+            domain: scene
+
+    scene_bright:
+      name: "Bright scene (daylight)"
+      selector:
+        entity:
+          filter:
+            domain: scene
+
+    scene_dim:
+      name: "Dim scene (dark)"
+      selector:
+        entity:
+          filter:
+            domain: scene
+
+    sun_entity:
+      name: Sun entity
+      description: Used to decide daylight vs. dark from its elevation.
+      default: sun.sun
+      selector:
+        entity:
+          filter:
+            domain: sun
+
+    elevation_threshold:
+      name: Daylight elevation threshold
+      description: >
+        Sun elevation (°) above which "Bright" is used instead of "Dim".
+        0 ≈ sunrise/sunset; raise it to require the sun higher.
+      default: 0
+      selector:
+        number:
+          min: -20
+          max: 60
+          step: 1
+          unit_of_measurement: "°"
+          mode: slider
+
+mode: queued
+max: 10
+max_exceeded: silent
+
+variables:
+  master: !input master
+  sources: !input sources
+  map_mode: !input map_mode
+  sun_entity: !input sun_entity
+  elevation_threshold: !input elevation_threshold
+
+triggers:
+  - trigger: state
+    entity_id: !input sources
+    id: source
+  - trigger: state
+    entity_id: !input master
+    id: master
+
+conditions: []
+
+actions:
+  - choose:
+      # --- Physical device changed: update the master -------------------
+      - conditions:
+          - "{{ trigger.id == 'source' }}"
+        sequence:
+          - choose:
+              # toggle: source became active -> flip master
+              - conditions:
+                  - "{{ map_mode == 'toggle' }}"
+                  - "{{ trigger.to_state.state == 'on' }}"
+                sequence:
+                  - action: input_boolean.toggle
+                    target:
+                      entity_id: !input master
+
+              # follow: source became active -> master on
+              - conditions:
+                  - "{{ map_mode == 'follow' }}"
+                  - "{{ trigger.to_state.state == 'on' }}"
+                sequence:
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: !input master
+
+              # follow: last active source went off -> master off
+              - conditions:
+                  - "{{ map_mode == 'follow' }}"
+                  - "{{ expand(sources) | selectattr('state', 'eq', 'on') | list | count == 0 }}"
+                sequence:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id: !input master
+          # else: do nothing
+
+      # --- Master changed: apply the matching scene ---------------------
+      - conditions:
+          - "{{ trigger.id == 'master' }}"
+        sequence:
+          - choose:
+              # master OFF -> off scene
+              - conditions:
+                  - "{{ is_state(master, 'off') }}"
+                sequence:
+                  - action: scene.turn_on
+                    target:
+                      entity_id: !input scene_off
+
+              # master ON + daylight -> bright scene
+              - conditions:
+                  - >
+                    {{ state_attr(sun_entity, 'elevation') | float(-90)
+                       > (elevation_threshold | float(0)) }}
+                sequence:
+                  - action: scene.turn_on
+                    target:
+                      entity_id: !input scene_bright
+
+            # master ON + dark -> dim scene
+            default:
+              - action: scene.turn_on
+                target:
+                  entity_id: !input scene_dim
