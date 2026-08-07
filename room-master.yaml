@@ -37,16 +37,19 @@ blueprint:
       name: How inputs map to the master
       description: >
         Follow — any source ON turns the master ON; when ALL sources are OFF the
-        master turns OFF (good for switches / motion).
-        Toggle — any source turning ON flips the master (good for push buttons).
-      default: follow
+        master turns OFF. Only use with sources HA can keep in sync (motion,
+        smart bulbs). A dumb wall switch will desync after a virtual OFF.
+        Toggle — every physical change (either direction) flips the master.
+        Best for bistable wall switches and push buttons: a flip always works
+        even after the master was turned off from Apple Home.
+      default: toggle
       selector:
         select:
           options:
+            - label: "Toggle (every physical change flips master) — recommended"
+              value: toggle
             - label: "Follow (any on / all off)"
               value: follow
-            - label: "Toggle (each press flips master)"
-              value: toggle
 
     scene_off:
       name: "Off scene"
@@ -120,10 +123,13 @@ actions:
           - "{{ trigger.id == 'source' }}"
         sequence:
           - choose:
-              # toggle: source became active -> flip master
+              # toggle: any real on/off change of a source -> flip master
+              # (fires on both edges so a desynced bistable switch still works)
               - conditions:
                   - "{{ map_mode == 'toggle' }}"
-                  - "{{ trigger.to_state.state == 'on' }}"
+                  - "{{ trigger.to_state.state in ['on', 'off'] }}"
+                  - "{{ trigger.from_state.state in ['on', 'off'] }}"
+                  - "{{ trigger.from_state.state != trigger.to_state.state }}"
                 sequence:
                   - action: input_boolean.toggle
                     target:
