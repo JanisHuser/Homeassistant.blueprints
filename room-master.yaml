@@ -85,22 +85,28 @@ blueprint:
     # sunrise and M hours after sunset. Outside that window it's Dim.
     bright_before_sunrise:
       name: Bright starts before sunrise
-      description: Hours before sunrise that "Bright" should begin.
+      description: >
+        Hours to shift the start of "Bright" relative to sunrise. Positive =
+        Bright begins before sunrise. Negative = Bright begins after sunrise
+        (so Dim ends later, into the morning).
       default: 0
       selector:
         number:
-          min: 0
+          min: -6
           max: 6
           step: 0.25
           unit_of_measurement: h
           mode: slider
     bright_after_sunset:
       name: Bright ends after sunset
-      description: Hours after sunset that "Bright" should still apply.
+      description: >
+        Hours to shift the end of "Bright" relative to sunset. Positive =
+        Bright still applies after sunset. Negative = Bright ends before sunset
+        (so Dim starts earlier, before dusk).
       default: 0
       selector:
         number:
-          min: 0
+          min: -6
           max: 6
           step: 0.25
           unit_of_measurement: h
@@ -180,7 +186,9 @@ actions:
                       entity_id: !input scene_off
 
               # master ON + within the time-based bright window -> bright scene
-              # Bright = daytime, plus N h before sunrise and M h after sunset.
+              # Bright window = [sunrise - pre, sunset + post]. pre/post may be
+              # negative, which shrinks the window into daylight (Dim ends later
+              # in the morning / starts earlier before dusk).
               - conditions:
                   - >
                     {% set r = as_timestamp(state_attr(sun_entity, 'next_rising')) %}
@@ -188,9 +196,13 @@ actions:
                     {% set n = as_timestamp(now()) %}
                     {% set pre = (bright_before_sunrise | float(0)) * 3600 %}
                     {% set post = (bright_after_sunset | float(0)) * 3600 %}
-                    {{ is_state(sun_entity, 'above_horizon')
-                       or (r is not none and (r - n) <= pre)
-                       or (s is not none and (n - (s - 86400)) <= post) }}
+                    {% set day = is_state(sun_entity, 'above_horizon') %}
+                    {# daytime: bound both edges so negative offsets carve into daylight.
+                       today's sunrise = r - 86400, today's sunset = s #}
+                    {{ (day and (r is none or ((r - 86400) - n) <= pre)
+                            and (s is none or (n - s) <= post))
+                       or (not day and r is not none and (r - n) <= pre)
+                       or (not day and s is not none and (n - (s - 86400)) <= post) }}
                 sequence:
                   - action: scene.turn_on
                     target:
