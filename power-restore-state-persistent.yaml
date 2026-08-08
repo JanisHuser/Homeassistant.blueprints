@@ -1,0 +1,161 @@
+blueprint:
+  name: Restore Device State After Power Loss (survives HA reboot)
+  description: >
+    Restores a single device to its pre-outage state after power comes back —
+    even if the Home Assistant host itself lost power and rebooted.
+
+    Unlike the in-memory version, the snapshot is written to a restore-backed
+    input_text helper, so it survives an HA restart. Restore happens when the
+    device responds again: either it reconnects (unavailable -> available) while
+    HA is up, or HA boots and the device becomes available.
+
+    ONE INSTANCE PER DEVICE. Each instance needs its own input_text helper.
+
+    Helper setup (once per device):
+      Settings -> Devices & Services -> Helpers -> Create Helper -> Text.
+      Set "Maximum length" to 255 (the default 100 is too short for the JSON).
+
+    Scope note: snapshots store state + the active brightness/colour/fan
+    attributes. Very exotic attributes are not captured. If the JSON ever exceeds
+    255 chars it won't be stored — raise the helper's max length.
+  domain: automation
+  author: Janis
+  input:
+    device:
+      name: Device
+      description: The single entity to protect (light, switch, fan, ...).
+      selector:
+        entity:
+          multiple: false
+
+    store:
+      name: Snapshot store
+      description: A dedicated input_text helper (max length 255) for THIS device.
+      selector:
+        entity:
+          filter:
+            domain: input_text
+
+    settle_delay:
+      name: Settle delay
+      description: Seconds to wait after the device responds before restoring.
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 60
+          step: 1
+          unit_of_measurement: s
+          mode: slider
+
+    startup_timeout:
+      name: Startup wait timeout
+      description: >
+        After an HA reboot, how long to wait for the device to become available
+        before giving up on restoring it.
+      default: 300
+      selector:
+        number:
+          min: 10
+          max: 1800
+          step: 10
+          unit_of_measurement: s
+          mode: box
+
+mode: queued
+max: 10
+max_exceeded: silent
+
+variables:
+  device: !input device
+  store: !input store
+
+triggers:
+  # Keep the on-disk snapshot fresh.
+  - trigger: state
+    entity_id: !input device
+    id: snap
+  # Device reconnected while HA was running.
+  - trigger: state
+    entity_id: !input device
+    from:
+      - unavailable
+      - unknown
+    not_to:
+      - unavailable
+      - unknown
+    id: back
+  # HA (re)started — e.g. after the host lost power.
+  - trigger: homeassistant
+    event: start
+    id: start
+
+conditions: []
+
+actions:
+  - choose:
+      # --- Snapshot: only genuine available->available changes -----------
+      - conditions:
+          - "{{ trigger.id == 'snap' }}"
+          - "{{ states(device) not in ['unavailable', 'unknown'] }}"
+          - "{{ trigger.from_state.state not in ['unavailable', 'unknown'] }}"
+        sequence:
+          - variables:
+              snap_json: >
+                {% set a = states[device].attributes %}
+                {% set cm = a.get('color_mode') %}
+                {% set colmap = {'color_temp': 'color_temp_kelvin',
+                                 'xy': 'xy_color', 'hs': 'hs_color',
+                                 'rgb': 'rgb_color', 'rgbw': 'rgbw_color',
+                                 'rgbww': 'rgbww_color'} %}
+                {% set ns = namespace(d={}) %}
+                {% if a.get('brightness') is not none %}
+                  {% set ns.d = dict(ns.d, brightness=a.brightness) %}
+                {% endif %}
+                {% if cm in colmap and a.get(colmap[cm]) is not none %}
+                  {% set ns.d = dict(ns.d, **{colmap[cm]: a[colmap[cm]]}) %}
+                {% endif %}
+                {% if a.get('effect') not in [none, 'None'] %}
+                  {% set ns.d = dict(ns.d, effect=a.effect) %}
+                {% endif %}
+                {% if a.get('percentage') is not none %}
+                  {% set ns.d = dict(ns.d, percentage=a.percentage) %}
+                {% endif %}
+                {% if a.get('preset_mode') is not none %}
+                  {% set ns.d = dict(ns.d, preset_mode=a.preset_mode) %}
+                {% endif %}
+                {{ dict(ns.d, state=states(device)) | to_json }}
+          # Only store if it fits the helper (guards the 255-char cap).
+          - condition: template
+            value_template: "{{ snap_json | length <= 255 }}"
+          - action: input_text.set_value
+            target:
+              entity_id: !input store
+            data:
+              value: "{{ snap_json }}"
+
+      # --- Restore on reconnect (HA was up) -----------------------------
+      - conditions:
+          - "{{ trigger.id == 'back' }}"
+          - "{{ states(store) | string is match('^\\s*\\{') }}"
+        sequence:
+          - delay:
+              seconds: !input settle_delay
+          - action: scene.apply
+            data:
+              entities: "{{ { device: (states(store) | from_json) } }}"
+
+      # --- Restore after HA reboot: wait for the device, then restore ----
+      - conditions:
+          - "{{ trigger.id == 'start' }}"
+          - "{{ states(store) | string is match('^\\s*\\{') }}"
+        sequence:
+          - wait_template: "{{ states(device) not in ['unavailable', 'unknown'] }}"
+            timeout:
+              seconds: !input startup_timeout
+            continue_on_timeout: false
+          - delay:
+              seconds: !input settle_delay
+          - action: scene.apply
+            data:
+              entities: "{{ { device: (states(store) | from_json) } }}"
