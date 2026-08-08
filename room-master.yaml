@@ -81,33 +81,21 @@ blueprint:
           filter:
             domain: sun
 
-    # HA blueprints have no dual-thumb range slider, so the "bright range" is
-    # expressed as two sliders: the sun elevation must sit between them for the
-    # Bright scene. Drag "low" down to extend Bright into twilight; drag "high"
-    # down if you want very high midday sun to fall back to Dim.
-    bright_low:
-      name: Bright range — low elevation
+    # A single offset slider that runs both ways from 0 (−24 … 0 … +24).
+    # "Bright" applies when the sun elevation is at or above this offset, so
+    # negative values extend Bright into dawn/dusk twilight and positive values
+    # require the sun higher before Bright kicks in.
+    bright_offset:
+      name: Daylight offset
       description: >
-        Lowest sun elevation (°) still counted as "bright". 0 ≈ sunrise/sunset;
-        go negative to extend Bright into dawn/dusk twilight.
+        Sun elevation (°) at/above which "Bright" is used instead of "Dim".
+        0 ≈ sunrise/sunset. Negative extends Bright into twilight; positive
+        delays it until the sun is higher.
       default: 0
       selector:
         number:
-          min: -20
-          max: 90
-          step: 1
-          unit_of_measurement: "°"
-          mode: slider
-    bright_high:
-      name: Bright range — high elevation
-      description: >
-        Highest sun elevation (°) counted as "bright". Leave at the top so all
-        daytime counts as Bright; lower it only if harsh midday should be Dim.
-      default: 90
-      selector:
-        number:
-          min: -20
-          max: 90
+          min: -24
+          max: 24
           step: 1
           unit_of_measurement: "°"
           mode: slider
@@ -121,8 +109,7 @@ variables:
   sources: !input sources
   map_mode: !input map_mode
   sun_entity: !input sun_entity
-  bright_low: !input bright_low
-  bright_high: !input bright_high
+  bright_offset: !input bright_offset
 
 triggers:
   - trigger: state
@@ -185,12 +172,11 @@ actions:
                     target:
                       entity_id: !input scene_off
 
-              # master ON + sun within the bright range -> bright scene
+              # master ON + sun at/above the offset -> bright scene
               - conditions:
                   - >
-                    {{ (bright_low | float(0))
-                       <= (state_attr(sun_entity, 'elevation') | float(-90))
-                       <= (bright_high | float(90)) }}
+                    {{ (state_attr(sun_entity, 'elevation') | float(-90))
+                       >= (bright_offset | float(0)) }}
                 sequence:
                   - action: scene.turn_on
                     target:
