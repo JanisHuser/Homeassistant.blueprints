@@ -81,16 +81,33 @@ blueprint:
           filter:
             domain: sun
 
-    elevation_threshold:
-      name: Daylight elevation threshold
+    # HA blueprints have no dual-thumb range slider, so the "bright range" is
+    # expressed as two sliders: the sun elevation must sit between them for the
+    # Bright scene. Drag "low" down to extend Bright into twilight; drag "high"
+    # down if you want very high midday sun to fall back to Dim.
+    bright_low:
+      name: Bright range — low elevation
       description: >
-        Sun elevation (°) above which "Bright" is used instead of "Dim".
-        0 ≈ sunrise/sunset; raise it to require the sun higher.
+        Lowest sun elevation (°) still counted as "bright". 0 ≈ sunrise/sunset;
+        go negative to extend Bright into dawn/dusk twilight.
       default: 0
       selector:
         number:
           min: -20
-          max: 60
+          max: 90
+          step: 1
+          unit_of_measurement: "°"
+          mode: slider
+    bright_high:
+      name: Bright range — high elevation
+      description: >
+        Highest sun elevation (°) counted as "bright". Leave at the top so all
+        daytime counts as Bright; lower it only if harsh midday should be Dim.
+      default: 90
+      selector:
+        number:
+          min: -20
+          max: 90
           step: 1
           unit_of_measurement: "°"
           mode: slider
@@ -104,7 +121,8 @@ variables:
   sources: !input sources
   map_mode: !input map_mode
   sun_entity: !input sun_entity
-  elevation_threshold: !input elevation_threshold
+  bright_low: !input bright_low
+  bright_high: !input bright_high
 
 triggers:
   - trigger: state
@@ -167,11 +185,12 @@ actions:
                     target:
                       entity_id: !input scene_off
 
-              # master ON + daylight -> bright scene
+              # master ON + sun within the bright range -> bright scene
               - conditions:
                   - >
-                    {{ state_attr(sun_entity, 'elevation') | float(-90)
-                       > (elevation_threshold | float(0)) }}
+                    {{ (bright_low | float(0))
+                       <= (state_attr(sun_entity, 'elevation') | float(-90))
+                       <= (bright_high | float(90)) }}
                 sequence:
                   - action: scene.turn_on
                     target:
