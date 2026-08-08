@@ -74,30 +74,36 @@ blueprint:
 
     sun_entity:
       name: Sun entity
-      description: Used to decide daylight vs. dark from its elevation.
+      description: Provides sunrise/sunset times for the Bright window.
       default: sun.sun
       selector:
         entity:
           filter:
             domain: sun
 
-    # A single offset slider that runs both ways from 0 (−24 … 0 … +24).
-    # "Bright" applies when the sun elevation is at or above this offset, so
-    # negative values extend Bright into dawn/dusk twilight and positive values
-    # require the sun higher before Bright kicks in.
-    bright_offset:
-      name: Daylight offset
-      description: >
-        Sun elevation (°) at/above which "Bright" is used instead of "Dim".
-        0 ≈ sunrise/sunset. Negative extends Bright into twilight; positive
-        delays it until the sun is higher.
+    # The Bright window is time-based: daytime, extended by N hours before
+    # sunrise and M hours after sunset. Outside that window it's Dim.
+    bright_before_sunrise:
+      name: Bright starts before sunrise
+      description: Hours before sunrise that "Bright" should begin.
       default: 0
       selector:
         number:
-          min: -24
-          max: 24
-          step: 1
-          unit_of_measurement: "°"
+          min: 0
+          max: 6
+          step: 0.25
+          unit_of_measurement: h
+          mode: slider
+    bright_after_sunset:
+      name: Bright ends after sunset
+      description: Hours after sunset that "Bright" should still apply.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 6
+          step: 0.25
+          unit_of_measurement: h
           mode: slider
 
 mode: queued
@@ -109,7 +115,8 @@ variables:
   sources: !input sources
   map_mode: !input map_mode
   sun_entity: !input sun_entity
-  bright_offset: !input bright_offset
+  bright_before_sunrise: !input bright_before_sunrise
+  bright_after_sunset: !input bright_after_sunset
 
 triggers:
   - trigger: state
@@ -172,11 +179,18 @@ actions:
                     target:
                       entity_id: !input scene_off
 
-              # master ON + sun at/above the offset -> bright scene
+              # master ON + within the time-based bright window -> bright scene
+              # Bright = daytime, plus N h before sunrise and M h after sunset.
               - conditions:
                   - >
-                    {{ (state_attr(sun_entity, 'elevation') | float(-90))
-                       >= (bright_offset | float(0)) }}
+                    {% set r = as_timestamp(state_attr(sun_entity, 'next_rising')) %}
+                    {% set s = as_timestamp(state_attr(sun_entity, 'next_setting')) %}
+                    {% set n = as_timestamp(now()) %}
+                    {% set pre = (bright_before_sunrise | float(0)) * 3600 %}
+                    {% set post = (bright_after_sunset | float(0)) * 3600 %}
+                    {{ is_state(sun_entity, 'above_horizon')
+                       or (r is not none and (r - n) <= pre)
+                       or (s is not none and (n - (s - 86400)) <= post) }}
                 sequence:
                   - action: scene.turn_on
                     target:
