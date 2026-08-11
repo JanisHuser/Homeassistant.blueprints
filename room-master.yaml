@@ -40,8 +40,9 @@ blueprint:
         master turns OFF. Only use with sources HA can keep in sync (motion,
         smart bulbs). A dumb wall switch will desync after a virtual OFF.
         Toggle — every physical change (either direction) flips the master.
-        Best for bistable wall switches and push buttons: a flip always works
-        even after the master was turned off from Apple Home.
+        Best for bistable wall switches, and the only mode that works for
+        momentary buttons (button/event entities): a flip always works even
+        after the master was turned off from Apple Home.
       default: toggle
       selector:
         select:
@@ -141,6 +142,19 @@ actions:
           - "{{ trigger.id == 'source' }}"
         sequence:
           - choose:
+              # toggle: momentary device (button / event entity) fired -> flip.
+              # These are stateless: their "state" is the timestamp of the last
+              # press, so every press is a fresh state change. Match on the
+              # domain and flip on any valid press (ignore restart -> unknown).
+              - conditions:
+                  - "{{ map_mode == 'toggle' }}"
+                  - "{{ trigger.entity_id.split('.')[0] in ['button', 'event'] }}"
+                  - "{{ trigger.to_state.state not in ['unknown', 'unavailable'] }}"
+                sequence:
+                  - action: input_boolean.toggle
+                    target:
+                      entity_id: !input master
+
               # toggle: any real on/off change of a source -> flip master
               # (fires on both edges so a desynced bistable switch still works)
               - conditions:
