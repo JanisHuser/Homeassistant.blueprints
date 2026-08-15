@@ -11,6 +11,13 @@ blueprint:
             master ON + daylight  -> "Bright" scene
             master ON + dark      -> "Dim" scene
 
+    Inputs come in three lists:
+      - Normal inputs  -> Bright/Dim decided by the time-of-day window.
+      - Force-Bright   -> always the Bright scene, time window ignored.
+      - Force-Dim      -> always the Dim scene, time window ignored.
+    If an entity ends up in more than one list, precedence is
+    Force-Bright > Force-Dim > Normal (the "stronger" list wins, no flicker).
+
     Everything below is configured from the UI — pick your entities and scenes
     from the dropdowns. Create one instance of this blueprint per room.
   domain: automation
@@ -27,11 +34,49 @@ blueprint:
     sources:
       name: Physical input devices
       description: >
-        Switches / buttons / motion sensors that drive the master.
+        Switches / buttons / motion sensors that drive the master, with the
+        Bright/Dim scene chosen by the time-of-day window.
         Do NOT list the lights the scenes control here, or you'll create a loop.
       selector:
         entity:
           multiple: true
+
+    bright_sources:
+      name: Physical inputs — force Bright
+      description: >
+        Extra inputs (ideally momentary button / event entities) that switch the
+        room and ALWAYS apply the Bright scene, ignoring the day/night window.
+        A press turns the room on in Bright; if the room is already on in Bright,
+        the next press turns it off; if it's on in Dim, it upgrades to Bright.
+        Requires the Mode helper below. Wins over the Dim and Normal lists.
+      default: []
+      selector:
+        entity:
+          multiple: true
+
+    dim_sources:
+      name: Physical inputs — force Dim
+      description: >
+        Like the Force-Bright inputs, but always apply the Dim scene. Requires
+        the Mode helper below. Wins over the Normal list, loses to Force-Bright.
+      default: []
+      selector:
+        entity:
+          multiple: true
+
+    mode_helper:
+      name: Mode helper (input_select)
+      description: >
+        Optional, but REQUIRED if you use the Force-Bright / Force-Dim lists.
+        Create an input_select with exactly three options — auto, bright, dim —
+        and pick it here. It remembers which kind of source last switched the
+        room, so the forced scene survives the separate "master changed" step.
+        Leave empty if you only use the Normal inputs.
+      default: ""
+      selector:
+        entity:
+          filter:
+            domain: input_select
 
     map_mode:
       name: How inputs map to the master
@@ -43,6 +88,8 @@ blueprint:
         Best for bistable wall switches, and the only mode that works for
         momentary buttons (button/event entities): a flip always works even
         after the master was turned off from Apple Home.
+        (This applies to the Normal list only; the Force-Bright / Force-Dim
+        lists always work like momentary toggles regardless of this setting.)
       default: toggle
       selector:
         select:
@@ -120,6 +167,10 @@ max_exceeded: silent
 variables:
   master: !input master
   sources: !input sources
+  bright_sources: !input bright_sources
+  dim_sources: !input dim_sources
+  mode_helper: !input mode_helper
+  mode_state: "{{ states(mode_helper) if mode_helper else 'auto' }}"
   map_mode: !input map_mode
   sun_entity: !input sun_entity
   bright_before_sunrise: !input bright_before_sunrise
@@ -130,6 +181,12 @@ triggers:
     entity_id: !input sources
     id: source
   - trigger: state
+    entity_id: !input bright_sources
+    id: bright_source
+  - trigger: state
+    entity_id: !input dim_sources
+    id: dim_source
+  - trigger: state
     entity_id: !input master
     id: master
 
@@ -137,9 +194,88 @@ conditions: []
 
 actions:
   - choose:
-      # --- Physical device changed: update the master -------------------
+      # --- Force-Bright input: switch room, always Bright ----------------
+      # Checked first so it wins over Dim / Normal for an overlapping entity.
+      - conditions:
+          - "{{ trigger.id == 'bright_source' }}"
+          - "{{ trigger.to_state.state not in ['unknown', 'unavailable'] }}"
+          - >
+            {{ trigger.entity_id.split('.')[0] in ['button', 'event']
+               or (trigger.to_state.state in ['on', 'off']
+                   and trigger.from_state.state in ['on', 'off']
+                   and trigger.from_state.state != trigger.to_state.state) }}
+        sequence:
+          - choose:
+              # already on AND already Bright -> a second press turns it off
+              - conditions:
+                  - "{{ is_state(master, 'on') }}"
+                  - "{{ mode_state == 'bright' }}"
+                sequence:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id: !input master
+            # otherwise: remember Bright, turn on, apply Bright now. Applying the
+            # scene directly also covers the "already on in Dim -> upgrade" case,
+            # where the master doesn't change and its handler never fires.
+            default:
+              - if:
+                  - "{{ mode_helper }}"
+                then:
+                  - action: input_select.select_option
+                    target:
+                      entity_id: !input mode_helper
+                    data:
+                      option: bright
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: !input master
+              - action: scene.turn_on
+                target:
+                  entity_id: !input scene_bright
+
+      # --- Force-Dim input: switch room, always Dim ---------------------
+      # Skipped if the same entity is also a Force-Bright input (Bright wins).
+      - conditions:
+          - "{{ trigger.id == 'dim_source' }}"
+          - "{{ trigger.entity_id not in bright_sources }}"
+          - "{{ trigger.to_state.state not in ['unknown', 'unavailable'] }}"
+          - >
+            {{ trigger.entity_id.split('.')[0] in ['button', 'event']
+               or (trigger.to_state.state in ['on', 'off']
+                   and trigger.from_state.state in ['on', 'off']
+                   and trigger.from_state.state != trigger.to_state.state) }}
+        sequence:
+          - choose:
+              # already on AND already Dim -> a second press turns it off
+              - conditions:
+                  - "{{ is_state(master, 'on') }}"
+                  - "{{ mode_state == 'dim' }}"
+                sequence:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id: !input master
+            default:
+              - if:
+                  - "{{ mode_helper }}"
+                then:
+                  - action: input_select.select_option
+                    target:
+                      entity_id: !input mode_helper
+                    data:
+                      option: dim
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: !input master
+              - action: scene.turn_on
+                target:
+                  entity_id: !input scene_dim
+
+      # --- Normal physical device changed: update the master ------------
+      # Skipped if the entity is also a Force-Bright / Force-Dim input.
       - conditions:
           - "{{ trigger.id == 'source' }}"
+          - "{{ trigger.entity_id not in bright_sources }}"
+          - "{{ trigger.entity_id not in dim_sources }}"
         sequence:
           - choose:
               # toggle: momentary device (button / event entity) fired -> flip.
@@ -191,15 +327,40 @@ actions:
           - "{{ trigger.id == 'master' }}"
         sequence:
           - choose:
-              # master OFF -> off scene
+              # master OFF -> off scene, and reset the mode back to auto so the
+              # next normal turn-on follows the time window again.
               - conditions:
                   - "{{ is_state(master, 'off') }}"
                 sequence:
                   - action: scene.turn_on
                     target:
                       entity_id: !input scene_off
+                  - if:
+                      - "{{ mode_helper }}"
+                    then:
+                      - action: input_select.select_option
+                        target:
+                          entity_id: !input mode_helper
+                        data:
+                          option: auto
 
-              # master ON + within the time-based bright window -> bright scene
+              # forced Bright wins over the time window
+              - conditions:
+                  - "{{ mode_state == 'bright' }}"
+                sequence:
+                  - action: scene.turn_on
+                    target:
+                      entity_id: !input scene_bright
+
+              # forced Dim wins over the time window
+              - conditions:
+                  - "{{ mode_state == 'dim' }}"
+                sequence:
+                  - action: scene.turn_on
+                    target:
+                      entity_id: !input scene_dim
+
+              # auto: master ON + within the time-based bright window -> bright.
               # Bright window = [sunrise - pre, sunset + post]. pre/post may be
               # negative, which shrinks the window into daylight (Dim ends later
               # in the morning / starts earlier before dusk).
@@ -222,7 +383,7 @@ actions:
                     target:
                       entity_id: !input scene_bright
 
-            # master ON + dark -> dim scene
+            # auto + dark -> dim scene
             default:
               - action: scene.turn_on
                 target:
