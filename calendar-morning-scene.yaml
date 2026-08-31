@@ -88,10 +88,14 @@ variables:
     {% set devs = [devs] if devs is string else devs %}
     {% set areas = t.get('area_id', []) %}
     {% set areas = [areas] if areas is string else areas %}
-    {{ (ents
-        + (devs | map('device_entities') | sum(start=[]) | list)
-        + (areas | map('area_entities') | sum(start=[]) | list))
-       | unique | list }}
+    {% set ns = namespace(items=ents | list) %}
+    {% for d in devs %}
+      {% set ns.items = ns.items + (device_entities(d) | list) %}
+    {% endfor %}
+    {% for a in areas %}
+      {% set ns.items = ns.items + (area_entities(a) | list) %}
+    {% endfor %}
+    {{ ns.items | unique | list }}
 
 triggers:
   - trigger: time
@@ -141,7 +145,7 @@ actions:
           for_each: "{{ target_entities }}"
           sequence:
             - variables:
-                entity_domain: "{{ repeat.item | split('.') | first }}"
+                entity_domain: "{{ repeat.item.split('.')[0] }}"
             - choose:
                 # Selects: input_select.select_option / select.select_option
                 - conditions:
