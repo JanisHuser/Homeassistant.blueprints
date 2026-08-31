@@ -23,6 +23,10 @@ blueprint:
           Master OFF -> turn master ON and apply Dim
           Master ON  -> turn master OFF and apply Off
 
+      - Optional, only while the master is ON:
+          Bright window starts -> switch to Bright
+          Bright window ends   -> switch to Dim
+
     Source precedence:
       Force-Bright > Force-Dim > Normal
 
@@ -155,10 +159,35 @@ blueprint:
           unit_of_measurement: h
           mode: slider
 
+    auto_time_switch:
+      name: Follow the time while the room is on
+      description: >
+        When the Bright window starts or ends while the room is already ON,
+        change the scene automatically:
+
+          Bright window starts -> Bright scene
+          Bright window ends   -> Dim scene
+
+        A room that is OFF is never turned on by this.
+
+        The boundary is checked about once a minute, so the change can be
+        up to a minute late.
+      default: false
+      selector:
+        boolean:
+
 
 mode: queued
 max: 10
 max_exceeded: silent
+
+
+# Inputs used inside the trigger templates below.
+trigger_variables:
+  sun_entity_t: !input sun_entity
+  bright_before_sunrise_t: !input bright_before_sunrise
+  bright_after_sunset_t: !input bright_after_sunset
+  auto_time_switch_t: !input auto_time_switch
 
 
 variables:
@@ -204,6 +233,88 @@ triggers:
   - trigger: state
     entity_id: !input master
     id: master
+
+  # ============================================================
+  # TIME BOUNDARY
+  #
+  # Fires when the Bright window starts or ends.
+  # Templates using now() are re-evaluated once a minute.
+  # ============================================================
+  - trigger: template
+    id: window_bright
+    value_template: >
+      {% set r = as_timestamp(state_attr(sun_entity_t, 'next_rising')) %}
+      {% set s = as_timestamp(state_attr(sun_entity_t, 'next_setting')) %}
+      {% set n = as_timestamp(now()) %}
+      {% set pre = (bright_before_sunrise_t | float(0)) * 3600 %}
+      {% set post = (bright_after_sunset_t | float(0)) * 3600 %}
+      {% set day = is_state(sun_entity_t, 'above_horizon') %}
+
+      {% set bright = (
+           (
+             day
+             and (
+               r is none
+               or ((r - 86400) - n) <= pre
+             )
+             and (
+               s is none
+               or (n - s) <= post
+             )
+           )
+           or
+           (
+             not day
+             and r is not none
+             and (r - n) <= pre
+           )
+           or
+           (
+             not day
+             and s is not none
+             and (n - (s - 86400)) <= post
+           )
+         ) %}
+
+      {{ auto_time_switch_t and bright }}
+
+  - trigger: template
+    id: window_dim
+    value_template: >
+      {% set r = as_timestamp(state_attr(sun_entity_t, 'next_rising')) %}
+      {% set s = as_timestamp(state_attr(sun_entity_t, 'next_setting')) %}
+      {% set n = as_timestamp(now()) %}
+      {% set pre = (bright_before_sunrise_t | float(0)) * 3600 %}
+      {% set post = (bright_after_sunset_t | float(0)) * 3600 %}
+      {% set day = is_state(sun_entity_t, 'above_horizon') %}
+
+      {% set bright = (
+           (
+             day
+             and (
+               r is none
+               or ((r - 86400) - n) <= pre
+             )
+             and (
+               s is none
+               or (n - s) <= post
+             )
+           )
+           or
+           (
+             not day
+             and r is not none
+             and (r - n) <= pre
+           )
+           or
+           (
+             not day
+             and s is not none
+             and (n - (s - 86400)) <= post
+           )
+         ) %}
+
+      {{ auto_time_switch_t and not bright }}
 
 
 conditions: []
@@ -659,6 +770,44 @@ actions:
                   - action: scene.turn_on
                     target:
                       entity_id: !input scene_off
+
+
+  # ============================================================
+  # TIME BOUNDARY CROSSED
+  #
+  # Only acts while the room is ON. A room that is OFF stays OFF.
+  # ============================================================
+  - choose:
+
+      - conditions:
+
+          - condition: template
+            value_template: >
+              {{ trigger.id in ['window_bright', 'window_dim'] }}
+
+          - condition: state
+            entity_id: !input master
+            state: "on"
+
+        sequence:
+
+          - choose:
+
+              - conditions:
+                  - condition: template
+                    value_template: "{{ trigger.id == 'window_bright' }}"
+
+                sequence:
+
+                  - action: scene.turn_on
+                    target:
+                      entity_id: !input scene_bright
+
+            default:
+
+              - action: scene.turn_on
+                target:
+                  entity_id: !input scene_dim
 
 
   # ============================================================
