@@ -182,14 +182,6 @@ max: 10
 max_exceeded: silent
 
 
-# Inputs used inside the trigger templates below.
-trigger_variables:
-  sun_entity_t: !input sun_entity
-  bright_before_sunrise_t: !input bright_before_sunrise
-  bright_after_sunset_t: !input bright_after_sunset
-  auto_time_switch_t: !input auto_time_switch
-
-
 variables:
   master: !input master
   sources: !input sources
@@ -199,6 +191,7 @@ variables:
   sun_entity: !input sun_entity
   bright_before_sunrise: !input bright_before_sunrise
   bright_after_sunset: !input bright_after_sunset
+  auto_time_switch: !input auto_time_switch
 
 
 triggers:
@@ -237,84 +230,12 @@ triggers:
   # ============================================================
   # TIME BOUNDARY
   #
-  # Fires when the Bright window starts or ends.
-  # Templates using now() are re-evaluated once a minute.
+  # A plain minute tick. The actions work out whether a Bright
+  # window boundary fell into the last minute.
   # ============================================================
-  - trigger: template
-    id: window_bright
-    value_template: >
-      {% set r = as_timestamp(state_attr(sun_entity_t, 'next_rising')) %}
-      {% set s = as_timestamp(state_attr(sun_entity_t, 'next_setting')) %}
-      {% set n = as_timestamp(now()) %}
-      {% set pre = (bright_before_sunrise_t | float(0)) * 3600 %}
-      {% set post = (bright_after_sunset_t | float(0)) * 3600 %}
-      {% set day = is_state(sun_entity_t, 'above_horizon') %}
-
-      {% set bright = (
-           (
-             day
-             and (
-               r is none
-               or ((r - 86400) - n) <= pre
-             )
-             and (
-               s is none
-               or (n - s) <= post
-             )
-           )
-           or
-           (
-             not day
-             and r is not none
-             and (r - n) <= pre
-           )
-           or
-           (
-             not day
-             and s is not none
-             and (n - (s - 86400)) <= post
-           )
-         ) %}
-
-      {{ auto_time_switch_t and bright }}
-
-  - trigger: template
-    id: window_dim
-    value_template: >
-      {% set r = as_timestamp(state_attr(sun_entity_t, 'next_rising')) %}
-      {% set s = as_timestamp(state_attr(sun_entity_t, 'next_setting')) %}
-      {% set n = as_timestamp(now()) %}
-      {% set pre = (bright_before_sunrise_t | float(0)) * 3600 %}
-      {% set post = (bright_after_sunset_t | float(0)) * 3600 %}
-      {% set day = is_state(sun_entity_t, 'above_horizon') %}
-
-      {% set bright = (
-           (
-             day
-             and (
-               r is none
-               or ((r - 86400) - n) <= pre
-             )
-             and (
-               s is none
-               or (n - s) <= post
-             )
-           )
-           or
-           (
-             not day
-             and r is not none
-             and (r - n) <= pre
-           )
-           or
-           (
-             not day
-             and s is not none
-             and (n - (s - 86400)) <= post
-           )
-         ) %}
-
-      {{ auto_time_switch_t and not bright }}
+  - trigger: time_pattern
+    id: window_tick
+    minutes: "/1"
 
 
 conditions: []
@@ -775,6 +696,11 @@ actions:
   # ============================================================
   # TIME BOUNDARY CROSSED
   #
+  # Runs once a minute, but only acts when a Bright window
+  # boundary fell into the last 60 seconds. Anything else is a
+  # no-op, so a manual Force-Bright / Force-Dim is never undone
+  # before the next real boundary.
+  #
   # Only acts while the room is ON. A room that is OFF stays OFF.
   # ============================================================
   - choose:
@@ -782,8 +708,10 @@ actions:
       - conditions:
 
           - condition: template
-            value_template: >
-              {{ trigger.id in ['window_bright', 'window_dim'] }}
+            value_template: "{{ trigger.id == 'window_tick' }}"
+
+          - condition: template
+            value_template: "{{ auto_time_switch }}"
 
           - condition: state
             entity_id: !input master
@@ -791,11 +719,49 @@ actions:
 
         sequence:
 
+          - variables:
+
+              # 'bright' when the window just started,
+              # 'dim' when it just ended,
+              # 'none' the other 1438 minutes of the day.
+              crossed: >
+                {% set nr = as_timestamp(state_attr(sun_entity, 'next_rising')) %}
+                {% set ns = as_timestamp(state_attr(sun_entity, 'next_setting')) %}
+
+                {% if nr is none or ns is none %}
+                  none
+                {% else %}
+                  {% set n = as_timestamp(now()) %}
+                  {% set pre = (bright_before_sunrise | float(0)) * 3600 %}
+                  {% set post = (bright_after_sunset | float(0)) * 3600 %}
+
+                  {# today's and tomorrow's boundary, so the one that
+                     already passed today is covered as well #}
+                  {% set starts = [nr - pre, nr - 86400 - pre] %}
+                  {% set ends = [ns + post, ns - 86400 + post] %}
+
+                  {% set hit = namespace(start=false, end=false) %}
+
+                  {% for t in starts %}
+                    {% if (n - t) >= 0 and (n - t) < 60 %}
+                      {% set hit.start = true %}
+                    {% endif %}
+                  {% endfor %}
+
+                  {% for t in ends %}
+                    {% if (n - t) >= 0 and (n - t) < 60 %}
+                      {% set hit.end = true %}
+                    {% endif %}
+                  {% endfor %}
+
+                  {% if hit.start %}bright{% elif hit.end %}dim{% else %}none{% endif %}
+                {% endif %}
+
           - choose:
 
               - conditions:
                   - condition: template
-                    value_template: "{{ trigger.id == 'window_bright' }}"
+                    value_template: "{{ crossed | trim == 'bright' }}"
 
                 sequence:
 
@@ -803,11 +769,15 @@ actions:
                     target:
                       entity_id: !input scene_bright
 
-            default:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ crossed | trim == 'dim' }}"
 
-              - action: scene.turn_on
-                target:
-                  entity_id: !input scene_dim
+                sequence:
+
+                  - action: scene.turn_on
+                    target:
+                      entity_id: !input scene_dim
 
 
   # ============================================================
