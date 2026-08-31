@@ -2,12 +2,12 @@ blueprint:
   name: Calendar Morning Scene
   description: >
     At a set time each morning, read today's events from a calendar and activate
-    a scene for each event whose name matches one you configured.
+    a scene if any of today's event names matches one from your list.
+
+    Add as many event names as you like — the automation fires the scene once if
+    at least one of today's events matches any of them.
 
     Matching is exact but case-insensitive (leading/trailing spaces ignored).
-    Each name maps to its OWN scene — fill in as many of the 5 rows as you need
-    and leave the rest blank. If several of today's events match, each matching
-    scene is activated in turn.
 
     Uses calendar.get_events so it sees ALL of today's events (all-day and timed),
     not just whatever event happens to be active at the trigger time.
@@ -29,90 +29,35 @@ blueprint:
       selector:
         time: {}
 
-    mappings:
-      name: Event name → scene
-      icon: mdi:calendar-star
-      collapsed: false
-      input:
-        name_1:
-          name: Event name 1
-          selector:
-            text: {}
-        scene_1:
-          name: Scene 1
-          selector:
-            entity:
-              filter:
-                domain: scene
+    event_names:
+      name: Event names
+      description: >
+        Event names to look for. Add as many as you need — one per row.
+        Case and surrounding spaces are ignored.
+      default: []
+      selector:
+        text:
+          multiple: true
 
-        name_2:
-          name: Event name 2
-          default: ""
-          selector:
-            text: {}
-        scene_2:
-          name: Scene 2
-          default: ""
-          selector:
-            entity:
-              filter:
-                domain: scene
-
-        name_3:
-          name: Event name 3
-          default: ""
-          selector:
-            text: {}
-        scene_3:
-          name: Scene 3
-          default: ""
-          selector:
-            entity:
-              filter:
-                domain: scene
-
-        name_4:
-          name: Event name 4
-          default: ""
-          selector:
-            text: {}
-        scene_4:
-          name: Scene 4
-          default: ""
-          selector:
-            entity:
-              filter:
-                domain: scene
-
-        name_5:
-          name: Event name 5
-          default: ""
-          selector:
-            text: {}
-        scene_5:
-          name: Scene 5
-          default: ""
-          selector:
-            entity:
-              filter:
-                domain: scene
+    scene:
+      name: Scene
+      description: Scene to activate when today has a matching event.
+      selector:
+        entity:
+          filter:
+            domain: scene
 
 mode: single
 max_exceeded: silent
 
 variables:
   cal_entity: !input calendar
-  pairs:
-    - name: !input name_1
-      scene: !input scene_1
-    - name: !input name_2
-      scene: !input scene_2
-    - name: !input name_3
-      scene: !input scene_3
-    - name: !input name_4
-      scene: !input scene_4
-    - name: !input name_5
-      scene: !input scene_5
+  raw_names: !input event_names
+  # Accept both a list and a single string, then normalise for comparison.
+  wanted: >
+    {{ (raw_names if raw_names is iterable and raw_names is not string
+        else [raw_names])
+       | map('lower') | map('trim') | reject('equalto', '') | list }}
 
 triggers:
   - trigger: time
@@ -136,19 +81,10 @@ actions:
         {{ (cal[cal_entity].events if cal_entity in cal else [])
            | map(attribute='summary') | map('lower') | map('trim') | list }}
 
-  # For each configured (name -> scene) pair that is filled in, fire the scene
-  # if today has a matching event.
-  - repeat:
-      for_each: >
-        {{ pairs
-           | rejectattr('name', 'equalto', '')
-           | rejectattr('scene', 'equalto', '')
-           | list }}
-      sequence:
-        - if:
-            - condition: template
-              value_template: "{{ (repeat.item.name | lower | trim) in summaries }}"
-          then:
-            - action: scene.turn_on
-              target:
-                entity_id: "{{ repeat.item.scene }}"
+  # Fire the scene if any of today's events matches any configured name.
+  - condition: template
+    value_template: "{{ wanted | select('in', summaries) | list | count > 0 }}"
+
+  - action: scene.turn_on
+    target:
+      entity_id: !input scene
