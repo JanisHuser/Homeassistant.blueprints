@@ -9,6 +9,8 @@ blueprint:
     one of today's events matches any of them.
 
     Matching is exact but case-insensitive (leading/trailing spaces ignored).
+    By default only events that START today count, so an all-day event from
+    yesterday — whose end date is today's date — is ignored.
 
     What happens on a match is configured with the normal action editor, so you
     can activate a scene, set a device, run a script, set a helper to a value,
@@ -44,6 +46,22 @@ blueprint:
         text:
           multiple: true
 
+    match_mode:
+      name: Match events that
+      description: >
+        "Start today" only counts events beginning today — this ignores an
+        all-day event from yesterday, whose end date is today's date.
+        "Overlap today" also counts multi-day events that began earlier and
+        still run today.
+      default: starts_today
+      selector:
+        select:
+          options:
+            - label: Start today
+              value: starts_today
+            - label: Overlap today
+              value: overlaps_today
+
     run_actions:
       name: Actions
       description: What to run when today has a matching event.
@@ -57,6 +75,7 @@ max_exceeded: silent
 variables:
   cal_entity: !input calendar
   raw_names: !input event_names
+  match_mode: !input match_mode
   # Accept both a list and a single string, then normalise for comparison.
   wanted: >
     {{ (raw_names if raw_names is iterable and raw_names is not string
@@ -79,11 +98,27 @@ actions:
       end_date_time: "{{ today_at('00:00') + timedelta(days=1) }}"
     response_variable: cal
 
-  # Normalise today's event names to lower-case, trimmed strings.
+  # Keep the events that really belong to today, then normalise their names to
+  # lower-case, trimmed strings. Dates are compared as plain ISO strings, so no
+  # timezone maths can shift an event onto the wrong day. An all-day event has
+  # an exclusive end date, hence the strict > for those.
   - variables:
       summaries: >
-        {{ (cal[cal_entity].events if cal_entity in cal else [])
-           | map(attribute='summary') | map('lower') | map('trim') | list }}
+        {% set today = now().strftime('%Y-%m-%d') %}
+        {% set ns = namespace(out=[]) %}
+        {% for e in (cal[cal_entity].events if cal_entity in cal else []) %}
+          {% set starts = (e.start | string)[:10] %}
+          {% set ends = e.end | string %}
+          {% set timed = ':' in ends %}
+          {% set keep = (starts == today) if match_mode == 'starts_today'
+                        else (starts <= today
+                              and (ends[:10] >= today if timed
+                                   else ends[:10] > today)) %}
+          {% if keep %}
+            {% set ns.out = ns.out + [e.summary | string | lower | trim] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.out }}
 
   # Stop unless one of today's events matches a configured name.
   - condition: template
