@@ -1,19 +1,18 @@
 blueprint:
   name: Calendar Morning Action
   description: >
-    At a set time each morning, read today's events from a calendar and set a
-    device, entity or helper if any of today's event names matches one from your list.
+    At a set time each morning, read today's events from a calendar and run
+    whatever you configured if any of today's event names matches one from your
+    list.
 
-    Add as many event names as you like — the automation acts once if at least
+    Add as many event names as you like — the automation runs once if at least
     one of today's events matches any of them.
 
     Matching is exact but case-insensitive (leading/trailing spaces ignored).
 
-    The target can be any entities, devices or areas. Leave "Value" at "on" (or
-    set it to "off") to simply switch the target — scene, script, light, switch,
-    input_boolean, a whole device or a whole area. Any other value is applied
-    per entity: an option for input_select/select, a number for
-    input_number/number, text for input_text/text.
+    What happens on a match is configured with the normal action editor, so you
+    can activate a scene, set a device, run a script, set a helper to a value,
+    or any combination of those.
 
     Uses calendar.get_events so it sees ALL of today's events (all-day and timed),
     not just whatever event happens to be active at the trigger time.
@@ -45,23 +44,12 @@ blueprint:
         text:
           multiple: true
 
-    target:
-      name: Target
-      description: >
-        What to set when today has a matching event — pick any entities,
-        devices or areas. Helpers (input_select, input_number, input_text, …)
-        can be given a value below.
+    run_actions:
+      name: Actions
+      description: What to run when today has a matching event.
+      default: []
       selector:
-        target: {}
-
-    target_value:
-      name: Value
-      description: >
-        What to set the entity to. "on" turns it on, "off" turns it off; any
-        other text is used as the option/number/text value for helper entities.
-      default: "on"
-      selector:
-        text: {}
+        action: {}
 
 mode: single
 max_exceeded: silent
@@ -74,28 +62,6 @@ variables:
     {{ (raw_names if raw_names is iterable and raw_names is not string
         else [raw_names])
        | map('lower') | map('trim') | reject('equalto', '') | list }}
-  raw_target: !input target
-  value: !input target_value
-  value_trimmed: "{{ value | string | trim }}"
-  value_norm: "{{ value_trimmed | lower }}"
-  # Flatten the target (entities + devices + areas) down to plain entity ids,
-  # so a value can be set on each one individually.
-  target_entities: >
-    {% set t = raw_target if raw_target is mapping else {} %}
-    {% set ents = t.get('entity_id', []) %}
-    {% set ents = [ents] if ents is string else ents %}
-    {% set devs = t.get('device_id', []) %}
-    {% set devs = [devs] if devs is string else devs %}
-    {% set areas = t.get('area_id', []) %}
-    {% set areas = [areas] if areas is string else areas %}
-    {% set ns = namespace(items=ents | list) %}
-    {% for d in devs %}
-      {% set ns.items = ns.items + (device_entities(d) | list) %}
-    {% endfor %}
-    {% for a in areas %}
-      {% set ns.items = ns.items + (area_entities(a) | list) %}
-    {% endfor %}
-    {{ ns.items | unique | list }}
 
 triggers:
   - trigger: time
@@ -123,57 +89,5 @@ actions:
   - condition: template
     value_template: "{{ wanted | select('in', summaries) | list | count > 0 }}"
 
-  # Set the target: plain on/off hits devices and areas directly; any other
-  # value is applied per entity with the service that fits its domain.
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ value_norm in ['', 'on', 'true', '1'] }}"
-        sequence:
-          - action: homeassistant.turn_on
-            target: !input target
-
-      - conditions:
-          - condition: template
-            value_template: "{{ value_norm in ['off', 'false', '0'] }}"
-        sequence:
-          - action: homeassistant.turn_off
-            target: !input target
-
-    default:
-      - repeat:
-          for_each: "{{ target_entities }}"
-          sequence:
-            - variables:
-                entity_domain: "{{ repeat.item.split('.')[0] }}"
-            - choose:
-                # Selects: input_select.select_option / select.select_option
-                - conditions:
-                    - condition: template
-                      value_template: >
-                        {{ entity_domain in ['input_select', 'select'] }}
-                  sequence:
-                    - action: "{{ entity_domain }}.select_option"
-                      target:
-                        entity_id: "{{ repeat.item }}"
-                      data:
-                        option: "{{ value_trimmed }}"
-
-                # Numbers and text helpers: <domain>.set_value
-                - conditions:
-                    - condition: template
-                      value_template: >
-                        {{ entity_domain in ['input_number', 'number',
-                                             'input_text', 'text'] }}
-                  sequence:
-                    - action: "{{ entity_domain }}.set_value"
-                      target:
-                        entity_id: "{{ repeat.item }}"
-                      data:
-                        value: "{{ value_trimmed }}"
-
-              # Domain takes no value — just turn it on.
-              default:
-                - action: homeassistant.turn_on
-                  target:
-                    entity_id: "{{ repeat.item }}"
+  - choose: []
+    default: !input run_actions
