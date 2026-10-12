@@ -735,10 +735,26 @@ actions:
                   {% set pre = (bright_before_sunrise | float(0)) * 3600 %}
                   {% set post = (bright_after_sunset | float(0)) * 3600 %}
 
-                  {# today's and tomorrow's boundary, so the one that
-                     already passed today is covered as well #}
-                  {% set starts = [nr - pre, nr - 86400 - pre] %}
-                  {% set ends = [ns + post, ns - 86400 + post] %}
+                  {# Once sunrise/sunset has passed, next_rising/next_setting
+                     already point at tomorrow, and tomorrow minus 24 h is off
+                     by the daily drift (~2 min). That is enough to miss a
+                     boundary at a small offset. The sun entity flips state
+                     exactly at the event, so its last_changed is today's real
+                     time -- used when it is close to the estimate, which
+                     rules out a last_changed reset by a restart. #}
+                  {% set lc = as_timestamp(states[sun_entity].last_changed) %}
+                  {% set rise = nr - 86400 %}
+                  {% set set_ = ns - 86400 %}
+                  {% if is_state(sun_entity, 'above_horizon') and (lc - rise) | abs < 600 %}
+                    {% set rise = lc %}
+                  {% elif is_state(sun_entity, 'below_horizon') and (lc - set_) | abs < 600 %}
+                    {% set set_ = lc %}
+                  {% endif %}
+
+                  {# the upcoming boundary and the one that already
+                     passed today #}
+                  {% set starts = [nr - pre, rise - pre] %}
+                  {% set ends = [ns + post, set_ + post] %}
 
                   {% set hit = namespace(start=false, end=false) %}
 
