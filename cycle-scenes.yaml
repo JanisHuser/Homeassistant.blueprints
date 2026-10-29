@@ -22,6 +22,16 @@ blueprint:
       name: (Optional) Custom script name
       description: Internal variable name for script instance (only needed if using multiple)
       default: cycle_script
+    transition:
+      name: Transition
+      description: Fade time when a scene is applied.
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 0.5
+          unit_of_measurement: s
 
 mode: restart
 variables:
@@ -31,6 +41,7 @@ variables:
   next_index: "{{ (scene_index + 1) % total_scenes }}"
   next_scene: "{{ scene_list.entity_id[next_index] }}"
   cycle_script: !input cycle_script
+  transition: !input transition
 
 trigger:
   - platform: state
@@ -40,6 +51,7 @@ action:
   - service: scene.turn_on
     data:
       entity_id: "{{ next_scene }}"
+      transition: "{{ transition }}"
 
   - service: script.turn_on
     data:
