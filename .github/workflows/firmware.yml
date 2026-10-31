@@ -1,4 +1,5 @@
-# Builds every home-automations/*/firmware project (site/build_firmware.sh).
+# Builds the home-automations/*/firmware projects that changed (site/build_firmware.sh); a change to the
+# build script or this workflow, or a manual run, builds them all.
 # - pull requests: checks that the firmware still builds, image downloadable from the run
 # - main: when a project's PROJECT_VER has no release yet, tags <project>-<version> (e.g. diy-valve-head-0.1.0),
 #   publishes a GitHub release with the image just built and redeploys the site, whose browser installer
@@ -14,7 +15,38 @@ on:
   workflow_dispatch:
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      projects: ${{ steps.pick.outputs.projects }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pick projects to build
+        id: pick
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          all=$(for f in home-automations/*/firmware/CMakeLists.txt; do basename "$(dirname "$(dirname "$f")")"; done)
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            projects=$all
+          else
+            changed=$(git diff --name-only "$BASE" "$GITHUB_SHA")
+            if grep -qxE 'site/build_firmware\.sh|\.github/workflows/firmware\.yml' <<<"$changed"; then
+              projects=$all
+            else
+              # only projects that still exist; a deleted one has nothing to build
+              projects=$(sed -n 's#^home-automations/\([^/]*\)/firmware/.*#\1#p' <<<"$changed" | sort -u | grep -xF "$all" || true)
+            fi
+          fi
+          projects=$(echo $projects)
+          echo "building: ${projects:-nothing}"
+          echo "projects=$projects" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: changes
+    if: needs.changes.outputs.projects != ''
     runs-on: ubuntu-latest
     container: espressif/esp-matter:release-v1.5_idf_v5.4.1
     env:
@@ -32,8 +64,10 @@ jobs:
           restore-keys: ccache-esp-matter-release-v1.5_idf_v5.4.1-
       - name: Build firmware
         shell: bash
+        env:
+          PROJECTS: ${{ needs.changes.outputs.projects }}
         run: |
-          site/build_firmware.sh
+          site/build_firmware.sh $PROJECTS
           ccache --show-stats
       - uses: actions/upload-artifact@v4
         with:

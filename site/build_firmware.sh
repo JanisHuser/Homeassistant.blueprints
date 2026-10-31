@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Builds every home-automations/*/firmware ESP-IDF project into _firmware/<project>/firmware.bin
+# Builds the home-automations/*/firmware ESP-IDF projects into _firmware/<project>/firmware.bin
 # (one merged image, flashed at offset 0 by the site's browser installer).
+# Pass project names (e.g. diy-valve-head) to build only those; with none it builds every project.
 # Runs inside the esp-matter container, in CI and locally:
-#   docker run --rm -v "$PWD":/repo espressif/esp-matter:release-v1.5_idf_v5.4.1 bash /repo/site/build_firmware.sh
+#   docker run --rm -v "$PWD":/repo espressif/esp-matter:release-v1.5_idf_v5.4.1 bash /repo/site/build_firmware.sh [project...]
 set -euo pipefail
 
 if ! command -v idf.py >/dev/null; then
@@ -11,9 +12,18 @@ if ! command -v idf.py >/dev/null; then
 fi
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-for project in "$root"/home-automations/*/firmware; do
-    [ -f "$project/CMakeLists.txt" ] || continue
+if [ $# -eq 0 ]; then
+    projects=("$root"/home-automations/*/firmware)
+else
+    projects=()
+    for name in "$@"; do projects+=("$root/home-automations/$name/firmware"); done
+fi
+for project in "${projects[@]}"; do
     name=$(basename "$(dirname "$project")")
+    if [ ! -f "$project/CMakeLists.txt" ]; then
+        [ $# -eq 0 ] && continue
+        echo "no firmware project '$name'" >&2; exit 1
+    fi
     build="$root/_firmware/build/$name"
     out="$root/_firmware/$name"
     target=$(sed -n 's/^CONFIG_IDF_TARGET="\(.*\)"/\1/p' "$project/sdkconfig.defaults")
