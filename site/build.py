@@ -318,6 +318,10 @@ def firmware(folder, out, title):
             "version": version[1] if version else None, "note": strip_md(note or ""), "manifest": None}
     image = FIRMWARE / folder.name / "firmware.bin"
     if image.exists():
+        # site.yml fetches the latest release and notes its version; that is what gets flashed
+        released = FIRMWARE / folder.name / "version"
+        if released.exists():
+            info["version"] = released.read_text().strip()
         dest = out / "files" / folder.name / "firmware"
         dest.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(image, dest / "firmware.bin")
