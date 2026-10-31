@@ -2,7 +2,7 @@
 # Builds every home-automations/*/firmware ESP-IDF project into _firmware/<project>/firmware.bin
 # (one merged image, flashed at offset 0 by the site's browser installer).
 # Runs inside the esp-matter container, in CI and locally:
-#   docker run --rm -v "$PWD":/repo -w /repo espressif/esp-matter:release-v1.5_idf_v5.4.1 bash site/build_firmware.sh
+#   docker run --rm -v "$PWD":/repo espressif/esp-matter:release-v1.5_idf_v5.4.1 bash /repo/site/build_firmware.sh
 set -euo pipefail
 
 if ! command -v idf.py >/dev/null; then
