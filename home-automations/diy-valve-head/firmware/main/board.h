@@ -37,10 +37,6 @@ void board_init(void);
 void board_motor_run(bool open, uint32_t run_ms);
 /* Battery voltage in mV (OUT+ of the TP4056). */
 int board_battery_mv(void);
-/* BOOT button: a press wakes the chip and notifies task; board_button_rearm() once handled. */
-void board_button_init(TaskHandle_t task);
-bool board_button_down(void);
-void board_button_rearm(void);
 
 #ifdef __cplusplus
 }

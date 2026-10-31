@@ -10,16 +10,17 @@ extern "C" {
 typedef struct {
     uint32_t rgb;       // 0xRRGGBB, 0 = off
     uint16_t blink_ms;  // half period, 0 = solid
+    uint32_t rgb_alt;   // colour of the other blink phase, 0 = off
 } led_look_t;
 
-#define LED_OFF       ((led_look_t){0x000000, 0})
-#define LED_PAIRING   ((led_look_t){0x0000ff, 500})  // waiting to be paired
-#define LED_JOINING   ((led_look_t){0x0000ff, 0})    // pairing in progress
-#define LED_PAIRED    ((led_look_t){0x00ff00, 0})    // shown for a moment after pairing
-#define LED_NO_THREAD ((led_look_t){0xff6000, 1000}) // paired, Thread network lost
-#define LED_IDENTIFY  ((led_look_t){0xffffff, 150})
-#define LED_RESETTING ((led_look_t){0xff0000, 0})    // BOOT held
-#define LED_RESET     ((led_look_t){0xff0000, 100})  // BOOT held long enough: clearing pairings
+#define LED_OFF       ((led_look_t){0x000000, 0, 0})
+#define LED_PAIRING   ((led_look_t){0x0000ff, 500, 0})         // waiting to be paired
+#define LED_JOINING   ((led_look_t){0x0000ff, 250, 0xffffff})  // pairing in progress: blue / white
+#define LED_PAIRED    ((led_look_t){0x00ff00, 0, 0})           // shown for a moment after pairing
+#define LED_NO_THREAD ((led_look_t){0xff6000, 1000, 0})        // paired, Thread network lost
+#define LED_IDENTIFY  ((led_look_t){0xffffff, 150, 0})
+#define LED_RESETTING ((led_look_t){0xff0000, 0, 0})           // BOOT held
+#define LED_RESET     ((led_look_t){0xff0000, 100, 0})         // BOOT held long enough: clearing pairings
 
 void led_init(void);
 /* What the device state calls for. */

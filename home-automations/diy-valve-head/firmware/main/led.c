@@ -58,7 +58,11 @@ static void blink(void *arg)
     const led_look_t look = overridden ? over : base;
     if (look.rgb && look.blink_ms) {  // the look may have changed while this tick waited
         lit = !lit;
-        show(lit ? look.rgb : 0);
+        if (lit) {
+            show(look.rgb);
+        } else {
+            show(look.rgb_alt);
+        }
     }
     xSemaphoreGive(lock);
 }

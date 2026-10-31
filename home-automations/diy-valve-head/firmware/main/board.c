@@ -6,7 +6,6 @@
 #include <esp_adc/adc_oneshot.h>
 #include <esp_log.h>
 #include <esp_pm.h>
-#include <esp_sleep.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -93,41 +92,3 @@ int board_battery_mv(void)
     return sum / 8 * 2;
 }
 
-static TaskHandle_t button_task;
-
-static void IRAM_ATTR button_isr(void *arg)
-{
-    // Level interrupt: off until the task has seen the button released.
-    gpio_intr_disable(PIN_BUTTON);
-    BaseType_t woken = pdFALSE;
-    vTaskNotifyGiveFromISR(button_task, &woken);
-    portYIELD_FROM_ISR(woken);
-}
-
-void board_button_init(TaskHandle_t task)
-{
-    button_task = task;
-    const gpio_config_t in = {
-        .pin_bit_mask = 1ULL << PIN_BUTTON,
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .intr_type = GPIO_INTR_LOW_LEVEL,
-    };
-    gpio_config(&in);
-    // Same pull-up in light sleep, and a press wakes the chip.
-    gpio_sleep_sel_dis(PIN_BUTTON);
-    gpio_wakeup_enable(PIN_BUTTON, GPIO_INTR_LOW_LEVEL);
-    esp_sleep_enable_gpio_wakeup();
-    gpio_install_isr_service(0);
-    gpio_isr_handler_add(PIN_BUTTON, button_isr, NULL);
-}
-
-bool board_button_down(void)
-{
-    return gpio_get_level(PIN_BUTTON) == 0;
-}
-
-void board_button_rearm(void)
-{
-    gpio_intr_enable(PIN_BUTTON);
-}

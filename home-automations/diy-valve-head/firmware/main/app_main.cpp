@@ -8,10 +8,13 @@
  * BOOT button: a short press opens a pairing window (15 min, over the network) so another
  * controller can join; holding it 10 s clears every pairing and restarts.
  *
- * Status LED (boards with one): blue blinking = waiting to be paired, blue = pairing,
+ * Status LED (boards with one): blue blinking = waiting to be paired, blue/white = pairing,
  * green = just paired, orange blinking = Thread network lost, white blinking = identify,
  * red = BOOT held. Off in normal operation.
  */
+
+#include <cinttypes>
+#include <cstdlib>
 
 #include <esp_err.h>
 #include <esp_log.h>
@@ -28,8 +31,12 @@
 
 #include <platform/ESP32/OpenthreadLauncher.h>
 #include <app/server/Server.h>
+#include <app-common/zap-generated/attributes/Accessors.h>
 #include <app/clusters/valve-configuration-and-control-server/valve-configuration-and-control-cluster.h>
 #include <app/clusters/valve-configuration-and-control-server/valve-configuration-and-control-delegate.h>
+
+#include <button_gpio.h>
+#include <iot_button.h>
 
 #include "board.h"
 #include "led.h"
@@ -42,14 +49,33 @@ using namespace chip::app::Clusters;
 using chip::app::DataModel::Nullable;
 using ValveState = ValveConfigurationAndControl::ValveStateEnum;
 
+/** Valve levels in percent. */
+static constexpr uint8_t kLevelClosed = 0;
+static constexpr uint8_t kLevelOpen = 100;
+
 static uint16_t valve_endpoint_id;
 static QueueHandle_t move_queue;
 
+/** Where the valve is, in percent. The startup move to the open stop makes it known; only the motor task writes it. */
+static volatile uint8_t valve_level = kLevelOpen;
+
 /* ---- Matter state updates (always on the Matter thread) ---- */
 
-static void report_valve_state(intptr_t state)
+static void report_valve_level(intptr_t level)
 {
-    ValveConfigurationAndControl::UpdateCurrentState(valve_endpoint_id, static_cast<ValveState>(state));
+    const auto percent = static_cast<chip::Percent>(level);
+    Nullable<chip::Percent> target;
+    ValveConfigurationAndControl::Attributes::TargetLevel::Get(valve_endpoint_id, target);
+    ValveConfigurationAndControl::UpdateCurrentLevel(valve_endpoint_id, percent);
+    // Reaching a commanded target level also settles the state. A move nobody commanded (the
+    // startup move, or Open without a level) has no target, so its state is set here.
+    if (target.IsNull()) {
+        ValveState state = ValveState::kOpen;
+        if (percent == kLevelClosed) {
+            state = ValveState::kClosed;
+        }
+        ValveConfigurationAndControl::UpdateCurrentState(valve_endpoint_id, state);
+    }
 }
 
 static void report_battery(intptr_t mv)
@@ -72,26 +98,48 @@ static void schedule(void (*fn)(intptr_t), intptr_t arg)
     chip::DeviceLayer::PlatformMgr().ScheduleWork(fn, arg);
 }
 
-/* ---- Motor task: runs each move to its hard stop, then reports ---- */
+/* ---- Motor task: moves the valve to the requested level, then reports ---- */
+
+/**
+ * Runs the motor from the current level to target. There is no position sensor: a move to 0 % or
+ * 100 % always runs the full stroke into the hard stop, which recalibrates the position; levels in
+ * between are reached by running the motor for the matching share of the stroke time.
+ */
+static void move_to(uint8_t target)
+{
+    bool open = target > valve_level;
+    uint32_t run_ms = 0;
+    if (target == kLevelClosed || target == kLevelOpen) {
+        open = target == kLevelOpen;
+        run_ms = CONFIG_VALVE_TRAVEL_MS + CONFIG_VALVE_OVERRUN_MS;
+    } else {
+        const int delta = abs(static_cast<int>(target) - static_cast<int>(valve_level));
+        run_ms = static_cast<uint32_t>(delta) * CONFIG_VALVE_TRAVEL_MS / kLevelOpen;
+    }
+    if (run_ms > 0) {
+        ESP_LOGI(TAG, "Moving from %u %% to %u %% (%" PRIu32 " ms)", valve_level, target, run_ms);
+        board_motor_run(open, run_ms);
+    }
+    valve_level = target;
+}
 
 static void motor_task(void *)
 {
-    bool open;
-    while (xQueueReceive(move_queue, &open, portMAX_DELAY) == pdTRUE) {
+    uint8_t target;
+    while (xQueueReceive(move_queue, &target, portMAX_DELAY) == pdTRUE) {
         // Only the latest request matters.
-        while (xQueueReceive(move_queue, &open, 0) == pdTRUE) {
+        while (xQueueReceive(move_queue, &target, 0) == pdTRUE) {
         }
-        ESP_LOGI(TAG, "Moving %s", open ? "open" : "closed");
-        board_motor_run(open, CONFIG_VALVE_TRAVEL_MS + CONFIG_VALVE_OVERRUN_MS);
-        schedule(report_valve_state, static_cast<intptr_t>(open ? ValveState::kOpen : ValveState::kClosed));
+        move_to(target);
+        schedule(report_valve_level, target);
         // Right after the move the cell is still under load, which is the honest reading.
         schedule(report_battery, board_battery_mv());
     }
 }
 
-static void request_move(bool open)
+static void request_level(uint8_t level)
 {
-    xQueueOverwrite(move_queue, &open);
+    xQueueOverwrite(move_queue, &level);
 }
 
 /* ---- Valve cluster delegate: Matter's Open/Close commands land here ---- */
@@ -100,13 +148,18 @@ class ValveDelegate : public ValveConfigurationAndControl::Delegate {
 public:
     Nullable<chip::Percent> HandleOpenValve(Nullable<chip::Percent> level) override
     {
-        request_move(true);
-        return Nullable<chip::Percent>();  // no level feature: open or closed only
+        // Open without a level means fully open.
+        uint8_t target = kLevelOpen;
+        if (!level.IsNull()) {
+            target = level.Value();
+        }
+        request_level(target);
+        return Nullable<chip::Percent>();  // the level is reported once the move is done
     }
 
     CHIP_ERROR HandleCloseValve() override
     {
-        request_move(false);
+        request_level(kLevelClosed);
         return CHIP_NO_ERROR;
     }
 
@@ -124,21 +177,22 @@ static void battery_timer_cb(void *)
 
 /* ---- Pairing state: status LED and sleep (on the Matter thread) ---- */
 
-static bool pairing_session;  // a controller is pairing the device right now
+static bool pairing_session;        // a controller is pairing the device right now
+static bool restart_after_pairing;  // paired since the last restart: restart once pairing is over
 
 static void update_status()
 {
     auto &server = chip::Server::GetInstance();
     const bool pairable = server.GetCommissioningWindowManager().IsCommissioningWindowOpen();
 
-    // No light sleep while pairing is possible: sleeping between radio events can miss the
-    // phone's Bluetooth messages and stall pairing at "connecting".
+    // No light sleep while pairing is possible (sleeping between radio events can miss the phone's
+    // Bluetooth messages and stall pairing at "connecting"), nor until the restart after a pairing.
     static esp_pm_lock_handle_t awake;
     static bool held;
     if (!awake) {
         esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "pairing", &awake);
     }
-    if ((pairable || pairing_session) != held) {
+    if ((pairable || pairing_session || restart_after_pairing) != held) {
         held = !held;
         held ? esp_pm_lock_acquire(awake) : esp_pm_lock_release(awake);
     }
@@ -190,39 +244,112 @@ static void reset_pairings(intptr_t)
     esp_matter::factory_reset();  // erases the pairings and restarts
 }
 
-static void button_task(void *)
+/** Holding BOOT this long clears every pairing; the LED turns red after kButtonHintMs. */
+static constexpr uint16_t kButtonResetMs = 10000;
+static constexpr uint16_t kButtonHintMs = 1000;
+
+static bool button_resetting;
+
+static void button_click(void *, void *)
 {
-    esp_pm_lock_handle_t awake;
-    esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "button", &awake);
-    while (true) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        esp_pm_lock_acquire(awake);  // stay awake to time the press
-        int held_ms = 0;
-        while (board_button_down() && held_ms < 10000) {
-            vTaskDelay(pdMS_TO_TICKS(50));
-            held_ms += 50;
-            if (held_ms == 1000) {
-                led_override(LED_RESETTING);  // keep holding to reset
-            }
-        }
-        if (held_ms >= 10000) {
-            ESP_LOGW(TAG, "Button held 10 s: clearing all pairings");
-            led_override(LED_RESET);
-            schedule(reset_pairings, 0);
-        } else {
-            if (held_ms >= 1000) {
-                led_override_clear();
-            }
-            if (held_ms >= 50) {  // shorter is contact bounce
-                schedule(open_pairing_window, 0);
-            }
-        }
-        while (board_button_down()) {
-            vTaskDelay(pdMS_TO_TICKS(50));
-        }
-        esp_pm_lock_release(awake);
-        board_button_rearm();
+    schedule(open_pairing_window, 0);
+}
+
+static void button_hint(void *, void *)
+{
+    led_override(LED_RESETTING);  // keep holding to reset
+}
+
+static void button_reset(void *, void *)
+{
+    ESP_LOGW(TAG, "Button held %u s: clearing all pairings", kButtonResetMs / 1000);
+    button_resetting = true;
+    led_override(LED_RESET);
+    schedule(reset_pairings, 0);
+}
+
+static void button_released(void *, void *)
+{
+    if (!button_resetting) {
+        led_override_clear();
     }
+}
+
+/**
+ * BOOT button through Espressif's button component, as in their ICD example: with power save on,
+ * it wakes the chip from light sleep on a press and lets it sleep again in between.
+ */
+static void button_init()
+{
+    const button_config_t button_config = {.long_press_time = kButtonHintMs, .short_press_time = 0};
+    const button_gpio_config_t gpio_config = {.gpio_num = PIN_BUTTON, .active_level = 0, .enable_power_save = true};
+    button_handle_t button = nullptr;
+    if (iot_button_new_gpio_device(&button_config, &gpio_config, &button) != ESP_OK) {
+        ESP_LOGE(TAG, "No BOOT button");
+        return;
+    }
+    button_event_args_t reset_args = {};
+    reset_args.long_press.press_time = kButtonResetMs;
+    iot_button_register_cb(button, BUTTON_SINGLE_CLICK, nullptr, button_click, nullptr);
+    iot_button_register_cb(button, BUTTON_LONG_PRESS_START, nullptr, button_hint, nullptr);
+    iot_button_register_cb(button, BUTTON_LONG_PRESS_START, &reset_args, button_reset, nullptr);
+    iot_button_register_cb(button, BUTTON_PRESS_UP, nullptr, button_released, nullptr);
+}
+
+/* ---- Recovery restarts (on the Matter thread) ---- */
+
+/**
+ * After pairing over Bluetooth, the ESP32-H2 stops hearing its Thread parent once it light-sleeps
+ * (Bluetooth is shut down after pairing and leaves Thread reception broken until a restart). So after
+ * a pairing the device stays awake, giving the controller time to read it in, and restarts once
+ * nothing has paired for this long.
+ */
+static constexpr int64_t kRestartAfterPairingUs = 3LL * 60 * 1000 * 1000;
+/** Without a Thread parent this long (while paired), the device restarts to recover. */
+static constexpr int64_t kRestartWhenDetachedUs = 5LL * 60 * 1000 * 1000;
+/** How often the conditions above are checked. */
+static constexpr uint64_t kRecoveryCheckUs = 10ULL * 1000 * 1000;
+
+static int64_t pairing_quiet_since_us;
+static bool detached;
+static int64_t detached_since_us;
+
+static bool pairing_busy()
+{
+    auto &server = chip::Server::GetInstance();
+    if (pairing_session || server.GetCommissioningWindowManager().IsCommissioningWindowOpen()) {
+        return true;
+    }
+    return server.GetFailSafeContext().IsFailSafeArmed();
+}
+
+static void recovery_check(intptr_t)
+{
+    const int64_t now = esp_timer_get_time();
+    if (restart_after_pairing) {
+        if (pairing_busy()) {
+            pairing_quiet_since_us = now;
+        } else if (now - pairing_quiet_since_us >= kRestartAfterPairingUs) {
+            ESP_LOGI(TAG, "Pairing done: restarting once");
+            esp_restart();
+        }
+    }
+
+    const bool paired = chip::Server::GetInstance().GetFabricTable().FabricCount() > 0;
+    if (!paired || chip::DeviceLayer::ConnectivityMgr().IsThreadAttached()) {
+        detached = false;
+    } else if (!detached) {
+        detached = true;
+        detached_since_us = now;
+    } else if (now - detached_since_us >= kRestartWhenDetachedUs) {
+        ESP_LOGW(TAG, "No Thread parent for 5 min: restarting");
+        esp_restart();
+    }
+}
+
+static void recovery_tick(void *)
+{
+    schedule(recovery_check, 0);
 }
 
 /* ---- Matter callbacks ---- */
@@ -234,6 +361,8 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
     case DeviceEventType::kCommissioningComplete:
         ESP_LOGI(TAG, "Commissioning complete");
         pairing_session = false;
+        restart_after_pairing = true;
+        pairing_quiet_since_us = esp_timer_get_time();
         show_paired();
         break;
     case DeviceEventType::kFailSafeTimerExpired:
@@ -264,7 +393,7 @@ static esp_err_t app_identification_cb(identification::callback_type_t type, uin
     // "Identify" drives the head open, so you can hear which one it is, and blinks the LED if there is one.
     if (type == identification::START) {
         led_override(LED_IDENTIFY);
-        request_move(true);
+        request_level(kLevelOpen);
     } else if (type == identification::STOP) {
         led_override_clear();
     }
@@ -294,11 +423,9 @@ extern "C" void app_main()
 
     board_init();
     led_init();
-    move_queue = xQueueCreate(1, sizeof(bool));
+    move_queue = xQueueCreate(1, sizeof(uint8_t));
     xTaskCreate(motor_task, "motor", 3072, nullptr, 5, nullptr);
-    TaskHandle_t button;
-    xTaskCreate(button_task, "button", 3072, nullptr, 5, &button);
-    board_button_init(button);
+    button_init();
 
     node::config_t node_config;
     node_t *node = node::create(&node_config, app_attribute_update_cb, app_identification_cb);
@@ -309,6 +436,13 @@ extern "C" void app_main()
     endpoint_t *valve = water_valve::create(node, &valve_config, ENDPOINT_FLAG_NONE, nullptr);
     ABORT_APP_ON_FAILURE(valve != nullptr, ESP_LOGE(TAG, "Failed to create water valve endpoint"));
     valve_endpoint_id = endpoint::get_id(valve);
+    // Level feature: controllers can set 0..100 %, e.g. Home Assistant shows a position slider.
+    cluster_t *valve_cluster = cluster::get(valve, ValveConfigurationAndControl::Id);
+    cluster::valve_configuration_and_control::feature::level::config_t level_config;
+    cluster::valve_configuration_and_control::feature::level::add(valve_cluster, &level_config);
+    esp_matter_attr_val_t feature_map = esp_matter_invalid(nullptr);
+    attribute::get_val(attribute::get(valve_cluster, Globals::Attributes::FeatureMap::Id), &feature_map);
+    ESP_LOGI(TAG, "Valve features: 0x%" PRIx32, feature_map.val.u32);
 
     cluster::power_source::config_t ps_config;
     ps_config.status = chip::to_underlying(PowerSource::PowerSourceStatusEnum::kActive);
@@ -333,10 +467,15 @@ extern "C" void app_main()
     ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to start Matter, err:%d", err));
 
     // The position is unknown after a reset: drive to "open", the safe state for heating.
-    request_move(true);
+    request_level(kLevelOpen);
 
     const esp_timer_create_args_t timer_args = {.callback = battery_timer_cb, .name = "battery"};
     esp_timer_handle_t timer;
     esp_timer_create(&timer_args, &timer);
     esp_timer_start_periodic(timer, static_cast<uint64_t>(CONFIG_VALVE_BATTERY_INTERVAL_MIN) * 60 * 1000 * 1000);
+
+    const esp_timer_create_args_t recovery_args = {.callback = recovery_tick, .name = "recovery"};
+    esp_timer_handle_t recovery;
+    esp_timer_create(&recovery_args, &recovery);
+    esp_timer_start_periodic(recovery, kRecoveryCheckUs);
 }

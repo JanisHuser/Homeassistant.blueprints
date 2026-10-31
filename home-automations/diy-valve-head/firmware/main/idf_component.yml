@@ -4,3 +4,6 @@ dependencies:
     version: "~2.5.5"
     rules:
       - if: "target == esp32h2"
+  # BOOT button, with the light-sleep wake-up handled the way Espressif's ICD example does it.
+  espressif/button:
+    version: "^4"
