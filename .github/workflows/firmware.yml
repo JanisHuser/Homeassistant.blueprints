@@ -17,11 +17,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container: espressif/esp-matter:release-v1.5_idf_v5.4.1
+    env:
+      # ccache keeps the compiled IDF/Matter SDK between runs, so only changed sources recompile
+      IDF_CCACHE_ENABLE: 1
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 2G
     steps:
       - uses: actions/checkout@v4
+      # Saved under a new key every run; tags and PRs restore the newest one from main.
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-esp-matter-release-v1.5_idf_v5.4.1-${{ github.run_id }}
+          restore-keys: ccache-esp-matter-release-v1.5_idf_v5.4.1-
       - name: Build firmware
         shell: bash
-        run: site/build_firmware.sh
+        run: |
+          site/build_firmware.sh
+          ccache --show-stats
       - uses: actions/upload-artifact@v4
         with:
           name: firmware
