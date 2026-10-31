@@ -14,8 +14,9 @@ set(MATTER_SDK_PATH ${ESP_MATTER_PATH}/connectedhomeip/connectedhomeip)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
+# Not examples/common: its app_reset needs the button driver from device_hal, which this
+# board doesn't use. main/ takes only the header-only utils from there.
 set(EXTRA_COMPONENT_DIRS
-    "${ESP_MATTER_PATH}/examples/common"
     "${MATTER_SDK_PATH}/config/esp32/components"
     "${ESP_MATTER_PATH}/components")
 

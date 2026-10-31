@@ -4,7 +4,15 @@ Flash the XIAO ESP32-C6 over USB, then add it in Home Assistant with the Matter 
 
 ## Flash
 
-**From the browser:** open the project page, plug the XIAO into the computer by USB (battery disconnected) and press **Flash from browser** (Chrome or Edge on a computer). If it doesn't connect, hold **BOOT** while plugging in.
+**From the browser:** open the project page, plug the XIAO into the computer by USB (battery disconnected) and press **Flash from browser** (Chrome or Edge on a computer). If it doesn't connect, hold **BOOT** while plugging in. It flashes the latest [release](https://github.com/JanisHuser/Homeassistant.blueprints/releases).
+
+**From a release:** download `diy-valve-head-<version>-esp32c6.bin` from the releases and flash it at offset 0 with `esptool.py --chip esp32c6 write_flash 0x0 <file>`.
+
+**Making a release:** bump `PROJECT_VER` in `CMakeLists.txt`, merge to main, then push a matching tag. GitHub builds the image, publishes the release and redeploys the page with it.
+
+```bash
+git tag diy-valve-head-v0.1.0 && git push origin diy-valve-head-v0.1.0
+```
 
 **From source** (needs Docker):
 

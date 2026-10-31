@@ -1,0 +1,68 @@
+# Builds every home-automations/*/firmware project (site/build_firmware.sh).
+# - pull requests and main: checks that the firmware still builds, image downloadable from the run
+# - tag <project>-v<version> (e.g. diy-valve-head-v0.1.0): publishes a GitHub release with the image
+#   and redeploys the site, whose browser installer flashes the latest release
+name: Firmware
+
+on:
+  pull_request:
+    paths: ["home-automations/*/firmware/**", "site/build_firmware.sh", ".github/workflows/firmware.yml"]
+  push:
+    branches: [main]
+    paths: ["home-automations/*/firmware/**", "site/build_firmware.sh", ".github/workflows/firmware.yml"]
+    tags: ["*-v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: espressif/esp-matter:release-v1.5_idf_v5.4.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build firmware
+        shell: bash
+        run: site/build_firmware.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: |
+            _firmware/*/firmware.bin
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware
+          path: _firmware
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          project=${TAG%-v*}
+          version=${TAG##*-v}
+          src=home-automations/$project/firmware
+          image=_firmware/$project/firmware.bin
+          [ -f "$image" ] || { echo "::error::no firmware project '$project' for tag $TAG"; exit 1; }
+          declared=$(sed -n 's/^set(PROJECT_VER "\(.*\)")/\1/p' "$src/CMakeLists.txt")
+          [ "$declared" = "$version" ] || { echo "::error::tag says $version, $src/CMakeLists.txt says PROJECT_VER $declared"; exit 1; }
+          target=$(sed -n 's/^CONFIG_IDF_TARGET="\(.*\)"/\1/p' "$src/sdkconfig.defaults")
+          asset=_firmware/$project-$version-$target.bin
+          cp "$image" "$asset"
+          gh release create "$TAG" "$asset" --verify-tag --title "$project $version" \
+            --notes "Merged image for the $target, flash at offset 0x0 (or use the browser installer on the project page).
+
+          \`\`\`bash
+          esptool.py --chip $target write_flash 0x0 $(basename "$asset")
+          \`\`\`"
+      - name: Redeploy site with the new release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run site.yml --ref main

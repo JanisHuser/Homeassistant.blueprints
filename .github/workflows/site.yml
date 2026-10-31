@@ -16,21 +16,32 @@ concurrency:
 
 jobs:
   firmware:
+    # The installer flashes the latest release of each project (firmware.yml), not a build of main.
     runs-on: ubuntu-latest
-    container: espressif/esp-matter:release-v1.5_idf_v5.4.1
     steps:
       - uses: actions/checkout@v4
-      - name: Build firmware
-        shell: bash
-        run: site/build_firmware.sh
+      - name: Download latest releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tags=$(gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName')
+          for src in home-automations/*/firmware; do
+            project=$(basename "$(dirname "$src")")
+            tag=$(grep -m1 "^$project-v" <<<"$tags" || true)
+            [ -n "$tag" ] || { echo "$project: no release yet"; continue; }
+            echo "$project: $tag"
+            mkdir -p "_firmware/$project"
+            gh release download "$tag" --pattern "$project-*.bin" --output "_firmware/$project/firmware.bin"
+            echo "${tag##*-v}" > "_firmware/$project/version"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: |
-            _firmware/*/firmware.bin
+          path: _firmware
+          if-no-files-found: ignore
 
   build:
-    # The page still publishes when the firmware doesn't build; it then offers no installer.
+    # The page still publishes without firmware; it then offers no installer.
     needs: firmware
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
