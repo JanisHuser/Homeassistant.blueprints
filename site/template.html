@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Projects</title>
+<style>
+:root {
+  --bg: #f6f5f2; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e1db;
+  --accent: #d9792b; --accent-ink: #ffffff; --bp: #2f6fb3; --chip: #efede8; --img: #f3f2ee;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151514; --card: #1f1f1d; --ink: #ecebe7; --muted: #a09e98; --line: #34332f;
+    --accent: #f0a03c; --accent-ink: #1d1d1b; --bp: #6aa7e8; --chip: #2a2a27; --img: #f3f2ee;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #151514; --card: #1f1f1d; --ink: #ecebe7; --muted: #a09e98; --line: #34332f;
+  --accent: #f0a03c; --accent-ink: #1d1d1b; --bp: #6aa7e8; --chip: #2a2a27; --img: #f3f2ee;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: inherit; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+header { padding: 40px 0 16px; }
+h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -.01em; }
+header p { margin: 0; color: var(--muted); }
+.bar { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 12px 0;
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--line); }
+.bar input { flex: 1 1 260px; min-width: 0; font: inherit; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+.bar input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.filters button { font: inherit; font-size: 14px; padding: 8px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.count { color: var(--muted); font-size: 13px; margin: 12px 0 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; padding: 12px 0 48px; }
+@media (max-width: 400px) { .grid { grid-template-columns: 1fr; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+  box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.hero { background: var(--img); aspect-ratio: 4/3; display: block; border: 0; padding: 0; width: 100%; cursor: zoom-in; }
+.hero img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.hero.bp { cursor: default; display: grid; place-items: center; background: color-mix(in srgb, var(--bp) 12%, var(--card)); aspect-ratio: auto; padding: 22px 0; }
+.hero.bp svg { width: 44px; height: 44px; color: var(--bp); }
+.body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.kind { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
+.kind.bp { color: var(--bp); }
+h2 { font-size: 18px; margin: 2px 0 0; line-height: 1.3; }
+.summary { margin: 0; color: var(--muted); font-size: 14px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-size: 12px; background: var(--chip); border-radius: 6px; padding: 2px 7px; font-family: ui-monospace, Menlo, monospace; }
+h3 { font-size: 13px; margin: 4px 0 0; color: var(--muted); font-weight: 600; }
+.parts { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.part { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.part button { border: 0; padding: 0; background: var(--img); cursor: zoom-in; aspect-ratio: 4/3; }
+.part img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.part .name { font-size: 12px; padding: 4px 6px 0; word-break: break-word; }
+.part a { font-size: 12px; padding: 0 6px 6px; color: var(--accent); font-weight: 600; text-decoration: none; }
+.part a:hover { text-decoration: underline; }
+.views { display: flex; gap: 6px; overflow-x: auto; }
+.views button { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 8px; padding: 0; background: var(--img);
+  width: 84px; aspect-ratio: 4/3; cursor: zoom-in; position: relative; overflow: hidden; }
+.views img { width: 100%; height: 100%; object-fit: contain; }
+.views span { position: absolute; left: 0; right: 0; bottom: 0; font-size: 10px; background: rgba(0,0,0,.55); color: #fff; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+.btn { font-size: 14px; padding: 7px 12px; border-radius: 8px; text-decoration: none; border: 1px solid var(--line); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn.primary.bp { background: var(--bp); border-color: var(--bp); color: #fff; }
+details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+details pre { white-space: pre-wrap; font: 13px/1.5 system-ui, sans-serif; margin: 6px 0 0; color: var(--ink); }
+.empty { text-align: center; color: var(--muted); padding: 60px 0; }
+dialog { border: 0; padding: 0; border-radius: 14px; background: var(--img); max-width: min(96vw, 1100px); }
+dialog::backdrop { background: rgba(0,0,0,.7); }
+dialog img { display: block; max-width: 100%; max-height: 82vh; }
+dialog p { margin: 0; padding: 8px 14px; background: var(--card); color: var(--ink); font-size: 14px; display: flex; justify-content: space-between; gap: 12px; }
+dialog form button { font: inherit; background: none; border: 0; color: var(--muted); cursor: pointer; }
+mark { background: color-mix(in srgb, var(--accent) 35%, transparent); color: inherit; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Home Projects</h1>
+    <p>Printable home automation hardware and Home Assistant blueprints. Every part is rendered from its OpenSCAD source.</p>
+  </header>
+  <div class="bar">
+    <input id="q" type="search" placeholder="Search projects, parts, blueprints…" autocomplete="off" aria-label="Search">
+    <div class="filters" role="group" aria-label="Filter">
+      <button data-kind="" aria-pressed="true">All</button>
+      <button data-kind="automation" aria-pressed="false">Home automations</button>
+      <button data-kind="blueprint" aria-pressed="false">Blueprints</button>
+    </div>
+  </div>
+  <p class="count" id="count"></p>
+  <main class="grid" id="grid"></main>
+</div>
+<dialog id="lb"><img alt=""><p><span></span><form method="dialog"><button>Close ✕</button></form></p></dialog>
+<script>
+const DATA = /*DATA*/null;
+const grid = document.getElementById("grid"), q = document.getElementById("q"), count = document.getElementById("count");
+let kind = "";
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pretty = s => s.replace(/_/g, " ");
+const BP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><circle cx="12" cy="14" r="2.2"/><path d="M12 11.8V9.5M12 16.2v2.3M9.8 14H7.5M14.2 14h2.3"/></svg>';
+
+for (const it of DATA.items) {
+  const words = [it.title, it.summary, it.description, it.domain, ...(it.files || []), ...(it.inputs || []),
+    it.kind === "blueprint" ? "blueprint home assistant" : "home automation 3d print stl"];
+  for (const m of it.models || []) for (const p of [...m.parts, ...m.views]) words.push(p.name, pretty(p.name));
+  it._text = words.filter(Boolean).join(" ").toLowerCase();
+}
+
+function zoom(src, label) {
+  const d = document.getElementById("lb");
+  d.querySelector("img").src = src;
+  d.querySelector("span").textContent = label;
+  d.showModal();
+}
+document.getElementById("lb").addEventListener("click", e => { if (e.target.tagName === "DIALOG") e.target.close(); });
+
+function card(it) {
+  if (it.kind === "blueprint") {
+    return `<article class="card">
+      <div class="hero bp">${BP_ICON}</div>
+      <div class="body">
+        <div class="kind bp">Blueprint · ${esc(it.domain)}</div>
+        <h2>${esc(it.title)}</h2>
+        <p class="summary">${esc(it.summary)}</p>
+        ${it.inputs.length ? `<h3>Inputs</h3><div class="chips">${it.inputs.map(i => `<span class="chip">${esc(i)}</span>`).join("")}</div>` : ""}
+        ${it.description && it.description !== it.summary ? `<details><summary>Full description</summary><pre>${esc(it.description)}</pre></details>` : ""}
+        <div class="actions">
+          <a class="btn primary bp" href="${esc(it.import)}" target="_blank" rel="noopener">Import to Home Assistant</a>
+          <a class="btn" href="${esc(it.source)}" target="_blank" rel="noopener">Source</a>
+        </div>
+      </div></article>`;
+  }
+  const views = it.models.flatMap(m => m.views.map(v => ({...v, file: m.file})));
+  const parts = it.models.flatMap(m => m.parts.map(p => ({...p, file: m.file})));
+  const hero = views[0] || parts[0];
+  const multi = it.models.length > 1;
+  const lbl = x => (multi ? x.file + " · " : "") + pretty(x.name);
+  return `<article class="card">
+    ${hero ? `<button class="hero" data-zoom="${esc(hero.png)}" data-label="${esc(lbl(hero))}"><img loading="lazy" src="${esc(hero.png)}" alt="${esc(it.title)}"></button>` : ""}
+    <div class="body">
+      <div class="kind">Home automation · ${parts.length} part${parts.length === 1 ? "" : "s"}</div>
+      <h2>${esc(it.title)}</h2>
+      <p class="summary">${esc(it.summary)}</p>
+      <div class="chips">${it.files.map(f => `<span class="chip">${esc(f)}</span>`).join("")}</div>
+      ${views.length > 1 ? `<h3>Views</h3><div class="views">${views.map(v =>
+        `<button data-zoom="${esc(v.png)}" data-label="${esc(lbl(v))}"><img loading="lazy" src="${esc(v.png)}" alt=""><span>${esc(lbl(v))}</span></button>`).join("")}</div>` : ""}
+      ${it.models.map(m => m.parts.length ? `<h3>${multi ? esc(m.file) + " · " : ""}Parts</h3><div class="parts">${m.parts.map(p => `
+        <div class="part">
+          <button data-zoom="${esc(p.png)}" data-label="${esc(lbl({...p, file: m.file}))}"><img loading="lazy" src="${esc(p.png)}" alt="${esc(p.name)}"></button>
+          <span class="name">${esc(pretty(p.name))}</span>
+          <a href="${esc(p.stl)}" download>STL ↓</a>
+        </div>`).join("")}</div>` : "").join("")}
+      <div class="actions">
+        ${it.doc ? `<a class="btn primary" href="${esc(it.doc)}" target="_blank" rel="noopener">Instructions</a>` : ""}
+        <a class="btn" href="${esc(it.source)}" target="_blank" rel="noopener">Source</a>
+      </div>
+    </div></article>`;
+}
+
+function render() {
+  const terms = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+  const hits = DATA.items.filter(it => (!kind || it.kind === kind) && terms.every(t => it._text.includes(t)));
+  grid.innerHTML = hits.length ? hits.map(card).join("") : `<p class="empty">Nothing matches “${esc(q.value)}”.</p>`;
+  count.textContent = `${hits.length} of ${DATA.items.length}`;
+}
+
+grid.addEventListener("click", e => {
+  const b = e.target.closest("[data-zoom]");
+  if (b) zoom(b.dataset.zoom, b.dataset.label);
+});
+q.addEventListener("input", () => {
+  render();
+  const u = new URL(location); q.value ? u.searchParams.set("q", q.value) : u.searchParams.delete("q");
+  history.replaceState(null, "", u);
+});
+document.querySelectorAll(".filters button").forEach(b => b.addEventListener("click", () => {
+  kind = b.dataset.kind;
+  document.querySelectorAll(".filters button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  render();
+}));
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && document.activeElement !== q) { e.preventDefault(); q.focus(); }
+});
+q.value = new URLSearchParams(location.search).get("q") || "";
+render();
+</script>
+</body>
+</html>
