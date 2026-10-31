@@ -310,23 +310,25 @@ def firmware(folder, out, title):
         return None
     rel = src.relative_to(ROOT).as_posix()
     _, note, _ = doc_summary(src)
-    defaults = (src / "sdkconfig.defaults").read_text() if (src / "sdkconfig.defaults").exists() else ""
-    target = re.search(r'^CONFIG_IDF_TARGET="(\w+)"', defaults, re.M)
-    chip = target[1].upper().replace("ESP32", "ESP32-").rstrip("-") if target else "ESP32"
+    # One build per sdkconfig.defaults.<target> (esp32c6, esp32h2, ...).
+    targets = sorted(f.suffix[1:] for f in src.glob("sdkconfig.defaults.*"))
+    family = lambda t: t.upper().replace("ESP32", "ESP32-").rstrip("-")
     version = re.search(r'set\(PROJECT_VER "([^"]+)"\)', (src / "CMakeLists.txt").read_text())
-    info = {"source": f"https://github.com/{REPO}/tree/{BRANCH}/{rel}", "chip": chip,
+    info = {"source": f"https://github.com/{REPO}/tree/{BRANCH}/{rel}", "chip": " / ".join(map(family, targets)) or "ESP32",
             "version": version[1] if version else None, "note": strip_md(note or ""), "manifest": None}
-    image = FIRMWARE / folder.name / "firmware.bin"
-    if image.exists():
-        # site.yml fetches the latest release and notes its version; that is what gets flashed
+    # site.yml puts the latest release's images here as <target>.bin, as site/build_firmware.sh does
+    images = [t for t in targets if (FIRMWARE / folder.name / f"{t}.bin").exists()]
+    if images:
         released = FIRMWARE / folder.name / "version"
         if released.exists():
             info["version"] = released.read_text().strip()
         dest = out / "files" / folder.name / "firmware"
         dest.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(image, dest / "firmware.bin")
+        for t in images:
+            shutil.copyfile(FIRMWARE / folder.name / f"{t}.bin", dest / f"{t}.bin")
+        # The installer flashes the build whose chip family matches the connected board.
         manifest = {"name": strip_md(title), "version": info["version"] or "dev", "new_install_prompt_erase": True,
-                    "builds": [{"chipFamily": chip, "parts": [{"path": "firmware.bin", "offset": 0}]}]}
+                    "builds": [{"chipFamily": family(t), "parts": [{"path": f"{t}.bin", "offset": 0}]} for t in images]}
         (dest / "manifest.json").write_text(json.dumps(manifest, indent=2))
         info["manifest"] = (dest / "manifest.json").relative_to(out).as_posix()
     return info

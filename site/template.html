@@ -250,23 +250,16 @@ dialog.closing::backdrop { animation: fade .28s ease-in reverse forwards; }
 .stage-col { display: flex; flex-direction: column; min-height: 0; background: var(--plate); border-right: 1px solid var(--line); }
 .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--plate); touch-action: pan-y; }
 .stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0,0,0,.08)); }
-.stage > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in;
-  transition: transform .35s var(--ease), opacity .35s; }
-.stage > img.zoomed { transform: scale(2.2); cursor: zoom-out; transition: transform .35s var(--ease), opacity .35s; }
-.stage > img.swap { opacity: 0; }
 .stage canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; cursor: grab; opacity: 0; transition: opacity .4s; }
 .stage canvas:active { cursor: grabbing; }
-.stage.mode-3d > img { opacity: 0; pointer-events: none; }
-.stage.mode-3d canvas.ready { opacity: 1; }
+.stage canvas.ready { opacity: 1; }
+.stage.mode-measure canvas { cursor: default; }
 .stage .hud { position: absolute; z-index: 3; left: 14px; right: 14px; top: 14px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
 .stage .hud > * { pointer-events: auto; }
+.stage .hud #fs { margin-left: auto; }
 .tag { font: 500 12px var(--mono); color: #3c3b38; background: rgba(255,255,255,.88); border: 1px solid rgba(0,0,0,.06); padding: 6px 10px; border-radius: 9px;
   max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag b { font-weight: 600; color: #17171a; }
-.toggle { display: flex; margin-left: auto; padding: 3px; border-radius: 11px; background: rgba(255,255,255,.88); border: 1px solid rgba(0,0,0,.06); }
-.toggle button { border: 0; background: none; padding: 5px 11px; border-radius: 8px; font-size: 13px; font-weight: 600; color: #67655f; cursor: pointer; }
-.toggle button[aria-pressed="true"] { background: #17171a; color: #fff; }
-.toggle button:disabled { opacity: .35; cursor: not-allowed; }
 .hud .icon-btn { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.88); border-color: rgba(0,0,0,.06); color: #17171a; }
 .nav-arrow { position: absolute; z-index: 3; top: 50%; translate: 0 -50%; width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgba(0,0,0,.08);
   background: rgba(255,255,255,.9); color: #17171a; display: grid; place-items: center; cursor: pointer; opacity: 0; transition: opacity .25s, transform .25s var(--ease); }
@@ -293,6 +286,9 @@ dialog.closing::backdrop { animation: fade .28s ease-in reverse forwards; }
 .thumb .cube { position: absolute; right: 6px; bottom: 6px; width: 20px; height: 20px; display: grid; place-items: center;
   border-radius: 50%; background: rgba(23,23,26,.78); color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
 .thumb .cube svg { width: 11px; height: 11px; display: block; }
+/* The three views have no picture: an icon and a name. */
+.thumb.vw { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #3c3b38; font: 600 11px/1.2 var(--sans); }
+.thumb.vw svg { width: 26px; height: 26px; color: var(--accent); }
 
 .info { overflow-y: auto; padding: 32px 30px 30px; display: flex; flex-direction: column; gap: 18px; overscroll-behavior: contain; }
 .info h2 { margin: 0; font: 700 clamp(26px, 3vw, 34px)/1.08 var(--display); letter-spacing: -.025em; padding-right: 44px; }
@@ -316,6 +312,11 @@ dialog.closing::backdrop { animation: fade .28s ease-in reverse forwards; }
   border: 1px solid var(--line-strong); text-decoration: none; color: var(--ink); transition: background .2s, color .2s, border-color .2s; }
 .row .dl:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .row .dl svg { width: 13px; height: 13px; }
+.vers .row { width: 100%; border: 0; border-top: 1px solid var(--line); background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.vers .row:first-child { border-top: 0; }
+.vers .row:hover, .vers .row.current { background: var(--bg-2); }
+.vers .row > svg { width: 20px; height: 20px; flex: 0 0 auto; color: var(--faint); margin: 0 6px; }
+.vers .row.current > svg { color: var(--accent); }
 details.older { border: 1px solid var(--line); border-radius: 14px; }
 details.older summary { cursor: pointer; padding: 12px 14px; font-weight: 600; font-size: 14px; list-style: none; display: flex; align-items: center; gap: 8px; }
 details.older summary::-webkit-details-marker { display: none; }
@@ -373,8 +374,6 @@ esp-web-install-button:not(:defined) [slot="unsupported"], esp-web-install-butto
 }
 
 /* Stage modes: assembly bar */
-.stage.mode-3d > img, .stage.mode-asm > img { opacity: 0; pointer-events: none; }
-.stage.mode-asm canvas.ready { opacity: 1; }
 .asm-bar { position: absolute; z-index: 3; left: 14px; right: 14px; bottom: 14px; display: none; gap: 10px; align-items: center; flex-wrap: wrap;
   padding: 8px 10px; border-radius: 14px; background: rgba(255,255,255,.92); border: 1px solid rgba(0,0,0,.06); color: #17171a;
   box-shadow: 0 10px 30px -12px rgba(0,0,0,.25); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
@@ -396,7 +395,7 @@ esp-web-install-button:not(:defined) [slot="unsupported"], esp-web-install-butto
 .asm-explode input { flex: 1; min-width: 80px; accent-color: #e2801f; }
 .legend { position: absolute; z-index: 3; right: 14px; top: 60px; max-height: calc(100% - 150px); overflow-y: auto; display: none; flex-direction: column; gap: 2px;
   padding: 6px; border-radius: 12px; background: rgba(255,255,255,.9); border: 1px solid rgba(0,0,0,.06); font-size: 12px; color: #17171a; }
-.stage.mode-asm .legend { display: flex; }
+.stage.mode-asm .legend, .stage.mode-complete .legend { display: flex; }
 .legend button { display: flex; align-items: center; gap: 7px; border: 0; background: none; padding: 3px 8px 3px 4px; border-radius: 7px; cursor: pointer;
   color: inherit; text-align: left; white-space: nowrap; font-size: 12px; transition: opacity .2s, background .2s; }
 .legend button:hover { background: rgba(0,0,0,.05); }
@@ -404,6 +403,29 @@ esp-web-install-button:not(:defined) [slot="unsupported"], esp-web-install-butto
 .legend button.on { background: rgba(226,128,31,.15); font-weight: 600; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
 @media (max-width: 860px) { .legend { display: none !important; } }
+/* Measurements: three orthographic views with dimensions, and a summary in the fourth quarter. */
+.measure-ov { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; display: none; pointer-events: none; overflow: visible;
+  font: 600 11px var(--mono); }
+.stage.mode-measure .measure-ov, .stage.mode-measure .measure-sum { display: block; }
+.measure-ov .pane-box { fill: none; stroke: rgba(0,0,0,.08); }
+.measure-ov .pane-lbl { fill: #8a877f; font: 600 10px var(--sans); letter-spacing: .1em; text-transform: uppercase; }
+.measure-ov .dim { stroke: #c2620f; stroke-width: 1.2; }
+.measure-ov .ext { stroke: rgba(194,98,15,.45); stroke-width: 1; }
+.measure-ov text.val { fill: #8a4a0c; paint-order: stroke; stroke: #f8f8f8; stroke-width: 4px; stroke-linejoin: round; }
+.measure-sum { position: absolute; z-index: 3; display: none; overflow-y: auto; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.9);
+  border: 1px solid rgba(0,0,0,.06); color: #17171a; font-size: 12px; }
+.measure-sum h4 { margin: 0 0 6px; font: 600 10px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: #8a877f; }
+.measure-sum button { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 7px; align-items: center; width: 100%; border: 0; background: none;
+  padding: 4px 6px; border-radius: 7px; cursor: pointer; color: inherit; text-align: left; font-size: 12px; }
+.measure-sum button:hover { background: rgba(0,0,0,.05); }
+.measure-sum button.on { background: rgba(226,128,31,.15); font-weight: 600; }
+.measure-sum button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.measure-sum button small { font: 500 11px var(--mono); color: #67655f; white-space: nowrap; }
+.measure-sum i { width: 10px; height: 10px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.measure-sum i.all { background: conic-gradient(#f0a03c 0 25%, #6c8ebf 0 50%, #7fb069 0 75%, #c9c4b8 0); }
+.measure-sum.narrow button { grid-template-columns: 10px minmax(0, 1fr); row-gap: 1px; }
+.measure-sum.narrow button small { grid-column: 2; }
+.measure-sum p { margin: 8px 0 0; color: #8a877f; font-size: 11px; }
 .live-badge { display: none; font: 600 10px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: #fff; background: #2f9e62;
   padding: 3px 7px; border-radius: 999px; margin-left: 6px; vertical-align: 1px; }
 .stage.custom .live-badge { display: inline-block; }
@@ -478,7 +500,8 @@ esp-web-install-button:not(:defined) [slot="unsupported"], esp-web-install-butto
   .sheet { display: block; }
   .stage-col > * { flex-shrink: 0; }
   /* The assembly bar needs room under the model on a phone. */
-  .stage.mode-asm, .stage.mode-3d { aspect-ratio: 1; }
+  .stage { aspect-ratio: 1; }
+  .stage.mode-measure { aspect-ratio: 3 / 4; }
 }
 
 /* Search filtering animates through the View Transitions API where available. */
@@ -568,6 +591,9 @@ const ICON = {
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
   zip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M1 3h22v5H1zM10 12h4"/></svg>',
   full: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+  explode: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M4 4l3 3M20 4l-3 3M4 20l3-3M20 20l-3-3M3 9v-5h5M21 9V4h-5M3 15v5h5M21 15v5h-5"/></svg>',
+  history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>',
+  ruler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg>',
   cube: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="m3 7 9 5 9-5M12 12v10"/></svg>',
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z"/></svg>',
   pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>',
@@ -581,21 +607,32 @@ const ICON = {
 };
 
 /* ---------- Data prep ---------- */
+const asmViewOf = m => m && (m.views.find(v => v.name === "assembly") || m.views.find(v => v.name === "plate_assembly"));
+// The detail view shows a model through these, all built from its assembly; the rendered stills are for the cards.
+const VIEW_MODES = [
+  {name: "complete", label: "Complete", mode: "complete", icon: "cube"},
+  {name: "exploded", label: "Exploded & assemble", mode: "asm", icon: "explode"},
+  {name: "measurements", label: "Measurements", mode: "measure", icon: "ruler"},
+];
+const nameOf = x => x.label || pretty(x.name);
 for (const it of DATA.items) {
   it.slug = it.id.toLowerCase().replace(/[^a-z0-9-]/g, "-");
   if (it.kind === "automation") {
     const current = it.models.filter(m => !m.version);
     const tag = (m, x, type) => ({...x, type, model: m, file: m.file, version: m.version, multi: current.length > 1});
-    it.views = current.flatMap(m => m.views.map(v => tag(m, v, "view")));
-    it.parts = current.flatMap(m => m.parts.map(p => tag(m, p, "part")));
-    it.older = it.models.filter(m => m.version).map(m => ({version: m.version, file: m.file,
-      items: [...m.views.map(v => tag(m, v, "view")), ...m.parts.map(p => tag(m, p, "part"))]}));
-    it.gallery = [...it.views, ...it.parts, ...it.older.flatMap(o => o.items)];
+    const views = m => asmViewOf(m) ? VIEW_MODES.map(v => tag(m, v, "view")) : [];
+    // One set per version, the current files first; the detail view shows one set at a time.
+    const set = (models, version) => ({version, label: version ? pretty(version) : "Current", models,
+      files: models.map(m => m.file.split("/").pop()),
+      views: models.flatMap(views), parts: models.flatMap(m => m.parts.map(p => tag(m, p, "part")))});
+    it.sets = [set(current, null), ...it.models.filter(m => m.version).map(m => set([m], m.version))].filter(v => v.models.length);
+    it.renders = current.flatMap(m => m.views.map(v => tag(m, v, "view")));
+    it.parts = it.sets[0]?.parts || [];
   }
   const words = [it.title, it.summary, it.description, it.domain, ...(it.files || []),
     ...(it.inputs || []).flatMap(i => [i.name, i.description]),
     it.kind === "blueprint" ? "blueprint home assistant automation" : "home automation hardware 3d print stl openscad"];
-  for (const g of it.gallery || []) words.push(g.name, pretty(g.name), g.file, g.version);
+  for (const g of (it.sets || []).flatMap(v => v.parts)) words.push(g.name, pretty(g.name), g.file, g.version);
   it._text = words.filter(Boolean).join(" ").toLowerCase();
 }
 const byId = Object.fromEntries(DATA.items.map(it => [it.slug, it]));
@@ -630,7 +667,7 @@ const stats = [
   [automations.length, "hardware projects"],
   [automations.reduce((n, i) => n + i.parts.length, 0), "printable parts"],
   [blueprints.length, "HA blueprints"],
-  [automations.reduce((n, i) => n + i.gallery.length, 0), "rendered images"],
+  [automations.reduce((n, i) => n + i.renders.length + i.parts.length, 0), "rendered images"],
 ];
 $("#stats").innerHTML = stats.map(([n, l]) => `<div class="stat"><b data-n="${n}">${reduced ? n : 0}</b><span>${l}</span></div>`).join("");
 if (!reduced) {
@@ -693,7 +730,7 @@ function card(it, i, hl) {
         <h2>${hl(it.title)}</h2><p>${hl(it.summary)}</p>
         <div class="meta"><div class="chips">${it.files.map(f => `<span class="chip">${hl(f)}</span>`).join("")}</div>${tail}`;
   }
-  const show = [...it.views, ...it.parts], first = show[0];
+  const show = [...it.renders, ...it.parts], first = show[0];
   return `${head}<div class="plate">
       ${first ? `<img src="${esc(first.png)}" alt="${esc(it.title)}" loading="${i < 3 ? "eager" : "lazy"}" decoding="async">` : ""}
       <span class="badge l"><i></i>3D print</span><span class="badge r">${plural(it.parts.length, "part")}</span>
@@ -750,7 +787,7 @@ grid.addEventListener("pointerover", e => {
   if (!c || cycle?.card === c || e.pointerType === "touch") return;
   stopCycle();
   const it = byId[c.dataset.id]; if (!it || it.kind !== "automation") return;
-  const show = [...it.views, ...it.parts].slice(0, 12); if (show.length < 2) return;
+  const show = [...it.renders, ...it.parts].slice(0, 12); if (show.length < 2) return;
   let k = 0;
   cycle = {card: c, timer: setInterval(() => {
     k = (k + 1) % show.length;
@@ -878,6 +915,8 @@ class Viewer {
       this.raf = requestAnimationFrame(loop);
       const now = performance.now(), dt = Math.min(.1, (now - (this.last || now)) / 1000); this.last = now;
       if (this.comps) this.animateParts(dt);
+      // The measured views hold still: drawn again only after a change.
+      if (this.measure) { if (this.measure.dirty) this.renderMeasure(); return; }
       if (this.goal) this.animateCamera(dt);
       this.controls.update(); this.renderer.render(this.scene, this.camera);
     };
@@ -886,13 +925,15 @@ class Viewer {
   resize() {
     const {clientWidth: w, clientHeight: h} = this.host; if (!w || !h) return;
     this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+    if (this.measure) this.layoutMeasure();
   }
   clear() {
     if (this.group) {
       this.scene.remove(this.group);
-      this.group.traverse(o => { if (o.material) o.material.dispose(); if (o.isMesh && o.userData.owned) o.geometry.dispose(); });
+      this.group.traverse(o => { if (o.material) o.material.dispose(); if ((o.isMesh || o.isLineSegments) && o.userData.owned) o.geometry.dispose(); });
     }
     this.group = null; this.comps = null;
+    if (this.measure) { this.measure = null; this.controls.enabled = true; this.overlay(""); }
   }
   frame(r, minY, spread = 1) {
     const T = this.T;
@@ -1006,6 +1047,120 @@ class Viewer {
       c.mesh.visible = c.opacity > .01;
     }
   }
+  /* Measurements: top, front and right views (orthographic, one scale) of the assembled model, each with
+     the bounding-box dimensions of the whole thing or of the picked component. Units are OpenSCAD's mm. */
+  showMeasure(groups) {
+    const T = this.T;
+    this.clear();
+    this.group = new T.Group(); this.scene.add(this.group);
+    const box = new T.Box3();
+    const parts = groups.map(g => {
+      const pbox = new T.Box3(), meshes = [];
+      for (const geo of g.geos) {
+        geo.computeVertexNormals(); geo.computeBoundingBox(); pbox.union(geo.boundingBox);
+        // Pushed back a little so the outline drawn on top doesn't flicker.
+        const mesh = new T.Mesh(geo, new T.MeshStandardMaterial({color: new T.Color(`rgb(${g.rgb.join(",")})`), roughness: .6, metalness: .02,
+          transparent: true, opacity: g.alpha, depthWrite: g.alpha > .99, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1}));
+        const edges = new T.LineSegments(new T.EdgesGeometry(geo, 30), new T.LineBasicMaterial({color: 0x2a2925, transparent: true, opacity: .5}));
+        mesh.userData.owned = edges.userData.owned = true;
+        this.group.add(mesh, edges);
+        meshes.push({mesh, edges, alpha: g.alpha});
+      }
+      box.union(pbox);
+      return {box: pbox, meshes, label: g.label, rgb: g.rgb};
+    });
+    this.controls.enabled = false; this.controls.autoRotate = false; this.goal = null;
+    this.measure = {box, parts, sel: -1, cams: [0, 1, 2].map(() => new T.OrthographicCamera())};
+    this.layoutMeasure();
+  }
+  measureSelect(i) {
+    const m = this.measure; if (!m) return;
+    m.sel = i === m.sel ? -1 : i;
+    m.parts.forEach((p, k) => p.meshes.forEach(({mesh, edges, alpha}) => {
+      const dim = m.sel >= 0 && k !== m.sel;
+      mesh.material.opacity = dim ? Math.min(alpha, .12) : alpha; mesh.material.depthWrite = !dim && alpha > .99;
+      edges.material.opacity = dim ? .08 : .5;
+    }));
+    this.drawMeasure(); m.dirty = true;
+  }
+  layoutMeasure() {
+    const T = this.T, m = this.measure, {clientWidth: w, clientHeight: h} = this.host;
+    if (!w || !h) return;
+    // Third-angle layout: top view above the front view, right view beside it; the summary takes the last quarter.
+    const top = 58, pad = 12, gap = 8;
+    const pw = (w - 2 * pad - gap) / 2, ph = (h - top - pad - gap) / 2;
+    const at = (c, r) => ({x: pad + c * (pw + gap), y: top + r * (ph + gap), w: pw, h: ph});
+    const size = m.box.getSize(new T.Vector3());
+    m.views = [
+      {label: "Top", ...at(0, 0), right: new T.Vector3(1, 0, 0), up: new T.Vector3(0, 0, -1), dir: new T.Vector3(0, 1, 0), axes: ["X", "Y"], ext: [size.x, size.z]},
+      {label: "Front", ...at(0, 1), right: new T.Vector3(1, 0, 0), up: new T.Vector3(0, 1, 0), dir: new T.Vector3(0, 0, 1), axes: ["X", "Z"], ext: [size.x, size.y]},
+      {label: "Right", ...at(1, 1), right: new T.Vector3(0, 0, -1), up: new T.Vector3(0, 1, 0), dir: new T.Vector3(1, 0, 0), axes: ["Y", "Z"], ext: [size.z, size.y]},
+    ];
+    m.summary = at(1, 0);
+    // One scale for all three, leaving room round the model for the dimension lines.
+    m.scale = Math.min(...m.views.map(v => Math.min((v.w - 70) / Math.max(v.ext[0], 1e-3), (v.h - 64) / Math.max(v.ext[1], 1e-3))));
+    const c = m.box.getCenter(new T.Vector3()), r = size.length() || 1;
+    m.views.forEach((v, i) => {
+      const cam = m.cams[i], hw = v.w / 2 / m.scale, hh = v.h / 2 / m.scale;
+      Object.assign(cam, {left: -hw, right: hw, top: hh, bottom: -hh, near: r * .01, far: r * 10});
+      cam.position.copy(c).addScaledVector(v.dir, r * 3); cam.up.copy(v.up); cam.lookAt(c); cam.updateProjectionMatrix();
+    });
+    this.drawMeasure(); m.dirty = true;
+  }
+  renderMeasure() {
+    const r = this.renderer, m = this.measure, {clientWidth: w, clientHeight: h} = this.host;
+    if (!m.views) return;
+    m.dirty = false;
+    r.setScissorTest(false); r.setViewport(0, 0, w, h); r.clear();
+    r.setScissorTest(true);
+    m.views.forEach((v, i) => {
+      r.setViewport(v.x, h - v.y - v.h, v.w, v.h); r.setScissor(v.x, h - v.y - v.h, v.w, v.h);
+      r.render(this.scene, m.cams[i]);
+    });
+    r.setScissorTest(false);
+  }
+  overlay(svg, summary) {
+    const ov = this.host.querySelector(".measure-ov"), sum = this.host.querySelector(".measure-sum");
+    if (ov) ov.innerHTML = svg;
+    if (sum) { sum.innerHTML = summary || ""; if (!summary) sum.removeAttribute("style"); }
+  }
+  drawMeasure() {
+    const T = this.T, m = this.measure; if (!m?.views) return;
+    const target = m.sel >= 0 ? m.parts[m.sel].box : m.box, c = m.box.getCenter(new T.Vector3());
+    const tsize = target.getSize(new T.Vector3());
+    const mm = v => `${v.toFixed(1)} mm`;
+    const corners = [0, 1, 2, 3, 4, 5, 6, 7].map(k => new T.Vector3(k & 1 ? target.max.x : target.min.x, k & 2 ? target.max.y : target.min.y, k & 4 ? target.max.z : target.min.z));
+    let svg = "";
+    for (const v of m.views) {
+      const cx = v.x + v.w / 2, cy = v.y + v.h / 2;
+      const pts = corners.map(p => { const d = p.clone().sub(c); return [cx + d.dot(v.right) * m.scale, cy - d.dot(v.up) * m.scale]; });
+      const x0 = Math.min(...pts.map(p => p[0])), x1 = Math.max(...pts.map(p => p[0]));
+      const y0 = Math.min(...pts.map(p => p[1])), y1 = Math.max(...pts.map(p => p[1]));
+      const along = a => Math.abs(tsize.dot(a));
+      const by = Math.min(y1 + 20, v.y + v.h - 16), rx = Math.min(x1 + 20, v.x + v.w - 22);
+      svg += `<rect class="pane-box" x="${v.x + .5}" y="${v.y + .5}" width="${v.w - 1}" height="${v.h - 1}" rx="10"/>`
+        + `<text class="pane-lbl" x="${v.x + 10}" y="${v.y + 18}">${v.label} · ${v.axes.join(" / ")}</text>`
+        // width, under the model
+        + `<path class="ext" d="M${x0} ${y1 + 3}V${by + 5}M${x1} ${y1 + 3}V${by + 5}"/>`
+        + `<path class="dim" d="M${x0} ${by}H${x1}M${x0 + 6} ${by - 3}L${x0} ${by}l6 3M${x1 - 6} ${by - 3}L${x1} ${by}l-6 3"/>`
+        + `<text class="val" x="${(x0 + x1) / 2}" y="${by + 14}" text-anchor="middle">${v.axes[0]} ${mm(along(v.right))}</text>`
+        // height, right of the model
+        + `<path class="ext" d="M${x1 + 3} ${y0}H${rx + 5}M${x1 + 3} ${y1}H${rx + 5}"/>`
+        + `<path class="dim" d="M${rx} ${y0}V${y1}M${rx - 3} ${y0 + 6}L${rx} ${y0}l3 6M${rx - 3} ${y1 - 6}L${rx} ${y1}l3 -6"/>`
+        + `<text class="val" transform="translate(${rx + 13} ${(y0 + y1) / 2}) rotate(-90)" text-anchor="middle">${v.axes[1]} ${mm(along(v.up))}</text>`;
+    }
+    // Back to OpenSCAD's axes: X, Y (three's -z), Z (three's y).
+    const dims = b => { const s = b.getSize(new T.Vector3()); return `${s.x.toFixed(1)} × ${s.z.toFixed(1)} × ${s.y.toFixed(1)}`; };
+    const row = (i, swatch, label, b) => `<button type="button" data-meas="${i}" class="${m.sel === i ? "on" : ""}">${swatch}<span>${esc(label)}</span><small>${dims(b)}</small></button>`;
+    const summary = `<h4>Size · X × Y × Z mm</h4>`
+      + row(-1, `<i class="all"></i>`, "Everything", m.box)
+      + m.parts.map((p, i) => row(i, `<i style="background:rgb(${p.rgb.join(",")})"></i>`, p.label, p.box)).join("")
+      + `<p>Bounding boxes, assembled. Pick a component to measure it in the views.</p>`;
+    this.overlay(svg, summary);
+    const sum = this.host.querySelector(".measure-sum");
+    sum?.classList.toggle("narrow", m.summary.w < 260);
+    if (sum) Object.assign(sum.style, {left: `${m.summary.x}px`, top: `${m.summary.y}px`, width: `${m.summary.w}px`, height: `${m.summary.h}px`});
+  }
   dispose() {
     cancelAnimationFrame(this.raf); this.ro.disconnect(); this.controls.dispose(); this.clear();
     this.cache.forEach(g => g.dispose()); this.renderer.dispose(); this.renderer.domElement.remove();
@@ -1104,8 +1259,9 @@ function openDetail(slug, push = true) {
   stopCycle();
   if (state?.viewer) state.viewer.dispose();
   clearInterval(state?.playTimer);
-  state = {it, idx: 0, mode: "img", viewer: null, values: {}, model: null, asm: null, step: 0, explode: 0, live: true, custom: null};
-  sheet.innerHTML = it.kind === "blueprint" ? blueprintSheet(it) : hardwareSheet(it);
+  state = {it, idx: 0, mode: null, set: it.sets?.[0], gallery: [], viewer: null, values: {}, model: null, asm: null, step: 0, explode: 0, live: true, custom: null};
+  if (it.kind === "automation") state.gallery = galleryOf(it, state.set);
+  sheet.innerHTML = it.kind === "blueprint" ? blueprintSheet(it) : hardwareSheet(it, state.set, state.gallery);
   if (push && location.hash !== `#/p/${slug}`) history.pushState({d: slug}, "", `#/p/${slug}`);
   document.title = `${it.title} · Home Projects`;
   if (!detail.open) detail.showModal();
@@ -1146,36 +1302,47 @@ addEventListener("popstate", () => {
   else if (detail.open) { closingFromHistory = true; closeDetail(); }
 });
 
-const asmViewOf = m => m && (m.views.find(v => v.name === "assembly") || m.views.find(v => v.name === "plate_assembly"));
+// What the stage and the strip step through for one version: its views, then its parts.
+const galleryOf = (it, set) => [...set.views, ...set.parts];
 
-function hardwareSheet(it) {
-  const idxOf = x => it.gallery.indexOf(x);
-  const thumb = x => `<button class="thumb" type="button" data-g="${idxOf(x)}" aria-label="${esc(pretty(x.name))}"><img src="${esc(x.png)}" alt="" loading="lazy">${x.stl ? `<span class="cube">${ICON.cube}</span>` : ""}</button>`;
-  const rail = [["Views", it.views], ["Parts", it.parts], ...it.older.map(o => [`Older · ${o.version}`, o.items])]
+// Shows another version: the whole sheet (strip, parts, customizer) is rebuilt for its models.
+function setVersion(v) {
+  const s = state; if (!s || v === s.set) return;
+  if (s.viewer) { s.viewer.dispose(); s.viewer = null; }
+  clearInterval(s.playTimer);
+  Object.assign(s, {set: v, gallery: galleryOf(s.it, v), idx: 0, mode: null, model: null, asm: null, playTimer: null});
+  const info = $(".info", sheet), top = [info.scrollTop, sheet.scrollTop];
+  sheet.innerHTML = hardwareSheet(s.it, v, s.gallery);
+  $(".info", sheet).scrollTop = top[0]; sheet.scrollTop = top[1];
+  select(0);
+}
+
+function hardwareSheet(it, set, gallery) {
+  const idxOf = x => gallery.indexOf(x);
+  const thumb = x => x.icon
+    ? `<button class="thumb vw" type="button" data-g="${idxOf(x)}" aria-label="${esc(nameOf(x))}">${ICON[x.icon]}${esc(nameOf(x))}</button>`
+    : `<button class="thumb" type="button" data-g="${idxOf(x)}" aria-label="${esc(pretty(x.name))}"><img src="${esc(x.png)}" alt="" loading="lazy"><span class="cube">${ICON.cube}</span></button>`;
+  const rail = [["Views", set.views], ["Parts", set.parts]]
     .filter(([, l]) => l.length).map(([g, l]) => `<span class="group">${esc(g)}</span>${l.map(thumb).join("")}`).join("");
   const row = x => `<div class="row" data-g="${idxOf(x)}">
       <img src="${esc(x.png)}" alt="" loading="lazy">
       <div class="txt"><div class="nm">${esc(pretty(x.name))}</div><div class="fl">${esc(x.file)}</div></div>
       ${x.stl ? `<a class="dl" href="${esc(x.stl)}" download>${ICON.down}STL</a>` : ""}</div>`;
-  const stls = it.gallery.filter(g => g.stl && !g.version).length;
-  const nParams = it.models.filter(m => !m.version).reduce((n, m) => n + m.params.length, 0);
+  const stls = set.parts.length;
+  const nParams = set.models.reduce((n, m) => n + m.params.length, 0);
   return `<div class="stage-col">
-      <div class="stage" id="stage">
-        <img alt="" id="stage-img">
+      <div class="stage loading" id="stage">
+        <svg class="measure-ov" aria-hidden="true"></svg>
+        <div class="measure-sum"></div>
         <div class="hud">
           <span class="tag" id="stage-tag"></span>
-          <div class="toggle" role="group" aria-label="Display">
-            <button type="button" data-mode="img" aria-pressed="true">Image</button>
-            <button type="button" data-mode="3d" aria-pressed="false">3D</button>
-            <button type="button" data-mode="asm" aria-pressed="false">Assemble</button>
-          </div>
           <button class="icon-btn" type="button" id="fs" aria-label="Fullscreen">${ICON.full}</button>
         </div>
         <div class="legend" id="legend"></div>
         <button class="nav-arrow prev" type="button" data-step="-1" aria-label="Previous">${ICON.left}</button>
         <button class="nav-arrow next" type="button" data-step="1" aria-label="Next">${ICON.right}</button>
         <div class="loader"><i></i></div>
-        <span class="hint" id="hint">Click to zoom · ← → to browse</span>
+        <span class="hint" id="hint"></span>
         <div class="asm-bar" id="asm-bar">
           <button type="button" data-asm="-1" aria-label="Previous step">${ICON.left}</button>
           <button type="button" class="play" data-asm="play" aria-label="Play assembly">${ICON.play}</button>
@@ -1197,10 +1364,9 @@ function hardwareSheet(it) {
       <div class="pane" data-pane="overview">
         <p class="lead">${esc(it.summary)}</p>
         <div class="facts">
-          <span class="fact"><b>${it.parts.length}</b> parts</span>
-          <span class="fact"><b>${it.views.length}</b> views</span>
+          <span class="fact"><b>${set.parts.length}</b> parts</span>
           ${nParams ? `<span class="fact"><b>${nParams}</b> parameters</span>` : ""}
-          ${it.older.length ? `<span class="fact"><b>${it.older.length}</b> older</span>` : ""}
+          ${it.sets.length > 1 ? `<span class="fact"><b>${it.sets.length}</b> versions</span>` : ""}
         </div>
         <div class="actions">
           ${it.doc ? `<button class="btn primary" type="button" data-goto="build">${ICON.doc}Build instructions</button>` : ""}
@@ -1208,12 +1374,13 @@ function hardwareSheet(it) {
           <a class="btn" href="${esc(it.source)}" target="_blank" rel="noopener">${ICON.ext}Source</a>
         </div>
         ${it.firmware ? firmwareBlock(it.firmware) : ""}
-        ${it.parts.length ? `<div class="section-title"><span>Printable parts</span><span>${it.parts.length}</span></div><div class="list">${it.parts.map(row).join("")}</div>` : ""}
-        ${it.views.length ? `<div class="section-title"><span>Views</span><span>${it.views.length}</span></div><div class="list">${it.views.map(row).join("")}</div>` : ""}
+        ${set.parts.length ? `<div class="section-title"><span>Printable parts${set.version ? ` · ${esc(set.label)}` : ""}</span><span>${set.parts.length}</span></div><div class="list">${set.parts.map(row).join("")}</div>` : ""}
         ${(it.bom || []).length ? `<div class="section-title"><span>Bill of materials</span><span>${it.bom.reduce((n, g) => n + g.rows.length, 0)}</span></div>
           ${it.bom.map(bomTable).join("")}` : ""}
-        ${it.older.map(o => `<details class="older"><summary>${ICON.chev}Older version · ${esc(o.version)} <span class="chip" style="margin-left:auto">${esc(o.file.split("/").pop())}</span></summary>
-          <div class="list">${o.items.map(row).join("")}</div></details>`).join("")}
+        ${it.sets.length > 1 ? `<div class="section-title"><span>Version</span><span>${it.sets.length}</span></div>
+          <div class="list vers">${it.sets.map((v, i) => `<button type="button" class="row${v === set ? " current" : ""}" data-version="${i}" aria-pressed="${v === set}">
+            ${ICON.history}<div class="txt"><div class="nm">${esc(v.label)}</div><div class="fl">${esc(v.files.join(", "))}</div></div>
+            <span class="chip">${plural(v.parts.length, "part")}</span></button>`).join("")}</div>` : ""}
       </div>
       ${it.doc ? `<div class="pane doc" data-pane="build" hidden>${it.doc}</div>` : ""}
       <div class="pane" data-pane="custom" hidden id="custom"></div>
@@ -1276,7 +1443,7 @@ function customPane() {
     if (!g) groups.push(g = {name: p.group, params: []});
     g.params.push(p);
   }
-  const models = state.it.models;
+  const models = state.set.models;
   const control = p => {
     const v = p.name in vals ? vals[p.name] : p.default, id = `p-${p.name.replace(/\W/g, "_")}`;
     if (p.type === "bool") return `<label class="switch"><input type="checkbox" id="${id}" data-p="${esc(p.name)}" ${v ? "checked" : ""}><span></span></label>`;
@@ -1347,10 +1514,7 @@ function engineStatus(kind, html) {
 async function liveRender() {
   const s = state; if (!s || s.it.kind !== "automation") return;
   const m = s.model, vals = s.values[m.file] || {};
-  const asm = s.mode === "asm";
-  let x = s.it.gallery[s.idx];
-  if (!asm && !x.stl && asmViewOf(m)?.name === x.name) { setMode("asm", true); return liveRender(); }
-  if (!asm && !x.stl) { x = s.it.gallery.find(g => g.stl && g.model === m); if (!x) return; select(s.it.gallery.indexOf(x)); }
+  const asm = s.mode !== "3d", x = s.gallery[s.idx];
   const target = asm ? asmViewOf(m)?.name : x.define ? x.name : null;
   if (asm && !target) return;
   const label = asm ? "assembly" : pretty(x.name);
@@ -1379,7 +1543,6 @@ async function liveRender() {
       if (!s.viewer) s.viewer = new Viewer($("#stage"), lib);
       const b = res.bytes;
       s.viewer.showPart(new lib.STLLoader().parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)), true);
-      if (s.mode !== "3d") setMode("3d", true);
       s.viewer.renderer.domElement.classList.add("ready");
     }
   } catch (err) {
@@ -1394,44 +1557,29 @@ async function liveRender() {
 }
 
 function select(i) {
-  const it = state.it, g = it.gallery; if (!g.length) return;
-  state.idx = (i + g.length) % g.length;
-  const x = g[state.idx], stage = $("#stage"), img = $("#stage-img");
-  img.classList.remove("zoomed");
-  if (img.getAttribute("src") !== x.png) {
-    img.classList.add("swap");
-    const pre = new Image();
-    pre.onload = pre.onerror = () => { if (state?.it === it && state.idx === g.indexOf(x)) { img.src = x.png; img.alt = pretty(x.name); img.classList.remove("swap"); } };
-    pre.src = x.png;
-  }
-  $("#stage-tag").innerHTML = `<b>${esc(pretty(x.name))}</b> · ${esc(x.version ? x.version + "/" : "")}${esc(x.file.split("/").pop())}<span class="live-badge">custom</span>`;
+  const g = state.gallery; if (!g.length) return;
+  const x = g[(i + g.length) % g.length];
+  state.idx = g.indexOf(x);
+  const model = x.model;
+  $("#stage-tag").innerHTML = `<b>${esc(nameOf(x))}</b> · ${esc(model.version ? model.version + "/" : "")}${esc(model.file.split("/").pop())}<span class="live-badge">custom</span>`;
   $$("[data-g]", sheet).forEach(el => {
-    const on = +el.dataset.g === state.idx;
+    const on = g[+el.dataset.g] === x;
     el.classList.contains("thumb") ? el.setAttribute("aria-current", on) : el.classList.toggle("current", on);
     if (on && el.classList.contains("thumb")) el.scrollIntoView({block: "nearest", inline: "center", behavior: reduced ? "auto" : "smooth"});
   });
-  const modelChanged = state.model !== x.model;
-  if (modelChanged) { state.model = x.model; state.asm = null; customPane(); }
-  const b3d = $('[data-mode="3d"]', stage), basm = $('[data-mode="asm"]', stage);
-  b3d.disabled = !x.stl; b3d.title = x.stl ? "Spin the part in 3D" : "Views have no 3D model — pick a part";
-  const av = asmViewOf(x.model);
-  basm.disabled = !av; basm.title = av ? "Exploded view and step-by-step assembly" : "This model has no assembly view";
+  if (state.model !== model) { state.model = model; state.asm = null; customPane(); }
   markChanged();
-  if (state.mode === "3d") x.stl ? show3d(x) : setMode("img");
-  else if (state.mode === "asm" && (modelChanged || !av)) av ? showAsmMode() : setMode("img");
+  setMode(x.mode || "3d");
 }
 
-function setMode(mode, quiet) {
+// 3d: one part · complete: the assembled model · asm: exploded view and steps · measure: dimensioned views
+function setMode(mode) {
   const stage = $("#stage"); if (!stage) return;
   clearInterval(state.playTimer); state.playTimer = null; paintPlay();
   state.mode = mode;
-  stage.classList.toggle("mode-3d", mode === "3d");
-  stage.classList.toggle("mode-asm", mode === "asm");
-  $$("[data-mode]", stage).forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === mode));
-  $("#hint").textContent = mode === "img" ? "Click to zoom · ← → to browse" : mode === "3d" ? "Drag to orbit · scroll to zoom" : "Drag to orbit · ← → step through";
-  if (quiet) return;
-  if (mode === "3d") show3d(state.it.gallery[state.idx]);
-  if (mode === "asm") showAsmMode();
+  for (const k of ["3d", "complete", "asm", "measure"]) stage.classList.toggle(`mode-${k}`, mode === k);
+  $("#hint").textContent = mode === "asm" ? "Drag to orbit · ← → step through" : mode === "measure" ? "← → to browse" : "Drag to orbit · scroll to zoom · ← → to browse";
+  mode === "3d" ? show3d(state.gallery[state.idx]) : showAsmMode();
 }
 
 const isCustom = () => Object.keys(state.values[state.model?.file] || {}).length > 0;
@@ -1445,13 +1593,12 @@ async function show3d(x) {
     if (state !== s) return;
     if (!s.viewer) s.viewer = new Viewer(stage, lib);
     const geo = await s.viewer.load(x.stl);
-    if (state !== s || s.it.gallery[s.idx] !== x) return;
+    if (state !== s || s.gallery[s.idx] !== x) return;
     s.viewer.showPart(geo);
     s.viewer.renderer.domElement.classList.add("ready");
   } catch (err) {
     console.error(err);
     toast("Couldn't load the 3D model");
-    if (state === s) setMode("img");
   } finally {
     stage.classList.remove("loading");
   }
@@ -1481,11 +1628,17 @@ async function showAssembly(offText, keepView) {
   const labels = colorLabels(src);
   const groups = parseOFF(offText, lib.T).map((g, i) => ({...g, label: (labels.get(g.key) || [`Component ${i + 1}`]).join(", ")}));
   if (!s.viewer) s.viewer = new Viewer($("#stage"), lib);
+  if (s.mode === "measure") {
+    s.viewer.showMeasure(groups); s.asm = null;
+    s.viewer.renderer.domElement.classList.add("ready");
+    return;
+  }
   s.viewer.showAssembly(groups, keepView && s.asm);
   s.asm = groups;
   $("#asm-dots").innerHTML = groups.map((g, i) => `<i data-to="${i}" title="${esc(g.label)}"></i>`).join("") + `<i data-to="${groups.length}" title="Complete"></i>`;
   $("#legend").innerHTML = groups.map((g, i) => `<button type="button" data-to="${i}"><i style="background:rgb(${g.rgb.join(",")})"></i>${esc(g.label)}</button>`).join("");
   s.viewer.renderer.domElement.classList.add("ready");
+  if (s.mode === "complete") { s.step = groups.length; s.explode = 0; return goStep(s.step); }
   if (keepView) return goStep(s.step);
   // Open on the complete model, then ease it apart once so the parts read.
   s.step = groups.length; s.explode = 0; $("#explode").value = 0;
@@ -1532,6 +1685,7 @@ sheet.addEventListener("click", async e => {
     $$("[data-pane]", sheet).forEach(p => p.hidden = p.dataset.pane !== tab.dataset.tab);
     return;
   }
+  const ver = t.closest("[data-version]"); if (ver) return setVersion(state.it.sets[+ver.dataset.version]);
   const g = t.closest("[data-g]");
   if (g) {
     select(+g.dataset.g);
@@ -1543,23 +1697,18 @@ sheet.addEventListener("click", async e => {
   const to = t.closest("[data-to]"); if (to) { clearInterval(state.playTimer); state.playTimer = null; paintPlay(); return goStep(+to.dataset.to, true); }
   const a = t.closest("[data-asm]");
   if (a) { if (a.dataset.asm === "play") return togglePlay(); clearInterval(state.playTimer); state.playTimer = null; paintPlay(); return goStep(state.step + +a.dataset.asm); }
-  const mode = t.closest("[data-mode]"); if (mode && !mode.disabled) return setMode(mode.dataset.mode);
+  const meas = t.closest("[data-meas]"); if (meas) return state.viewer?.measureSelect(+meas.dataset.meas);
   if (t.closest("#fs")) { const st = $("#stage"); document.fullscreenElement ? document.exitFullscreen() : st.requestFullscreen?.(); return; }
-  if (t.id === "stage-img") {
-    const r = t.getBoundingClientRect();
-    t.style.transformOrigin = `${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`;
-    t.classList.toggle("zoomed"); return;
-  }
   const rs = t.closest("[data-reset]");
   if (rs) { e.preventDefault(); const p = state.model.params.find(p => p.name === rs.dataset.reset); return setParam(p.name, p.default); }
   if (t.closest("#render")) return liveRender();
-  if (t.closest("#reset-all")) { state.values[state.model.file] = {}; customPane(); return state.live && state.mode !== "img" ? (state.mode === "asm" ? showAsmMode() : show3d(state.it.gallery[state.idx])) : null; }
+  if (t.closest("#reset-all")) { state.values[state.model.file] = {}; customPane(); return state.live ? setMode(state.mode) : null; }
   if (t.closest("#dl-custom") && state.custom) {
     const a = Object.assign(document.createElement("a"), {href: state.custom.url, download: state.custom.name}); a.click(); return;
   }
   if (t.closest("#cli")) {
-    const m = state.model, x = state.it.gallery[state.idx], vals = state.values[m.file] || {};
-    const part = state.mode === "asm" ? asmViewOf(m)?.name : (x.model === m && x.define ? x.name : null);
+    const m = state.model, x = state.gallery[state.idx], vals = state.values[m.file] || {};
+    const part = state.mode !== "3d" ? asmViewOf(m)?.name : (x.model === m && x.define ? x.name : null);
     const d = defines(m, vals, part); let cmd = "openscad";
     for (let i = 0; i < d.length; i += 2) cmd += ` -D '${d[i + 1]}'`;
     cmd += ` -o ${part || "out"}.stl ${m.file}`;
@@ -1592,23 +1741,10 @@ sheet.addEventListener("input", e => {
 });
 sheet.addEventListener("change", e => {
   if (e.target.id === "model") {
-    const m = state.it.models.find(m => m.file === e.target.value);
-    const x = state.it.gallery.find(g => g.model === m && g.stl) || state.it.gallery.find(g => g.model === m);
-    if (x) select(state.it.gallery.indexOf(x));
+    const m = state.set.models.find(m => m.file === e.target.value);
+    const x = state.gallery.find(g => g.model === m && g.stl) || state.gallery.find(g => g.model === m);
+    if (x) select(state.gallery.indexOf(x));
   }
-});
-sheet.addEventListener("pointermove", e => {
-  const img = e.target.id === "stage-img" && e.target.classList.contains("zoomed") ? e.target : null;
-  if (!img) return;
-  const r = img.getBoundingClientRect();
-  img.style.transformOrigin = `${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`;
-});
-let swipeX = null;
-sheet.addEventListener("pointerdown", e => { if (e.target.id === "stage-img" && e.pointerType === "touch") swipeX = e.clientX; });
-sheet.addEventListener("pointerup", e => {
-  if (swipeX === null) return;
-  const dx = e.clientX - swipeX; swipeX = null;
-  if (Math.abs(dx) > 40) select(state.idx + (dx < 0 ? 1 : -1));
 });
 detail.addEventListener("keydown", e => {
   if (!state || state.it.kind !== "automation" || e.target.closest("input, select, summary, textarea")) return;
@@ -1616,8 +1752,6 @@ detail.addEventListener("keydown", e => {
   if (e.key === "ArrowRight") { e.preventDefault(); asm ? goStep(state.step + 1) : select(state.idx + 1); }
   if (e.key === "ArrowLeft") { e.preventDefault(); asm ? goStep(state.step - 1) : select(state.idx - 1); }
   if (e.key === " " && asm) { e.preventDefault(); togglePlay(); }
-  if (e.key === "3" && state.it.gallery[state.idx].stl) setMode(state.mode === "3d" ? "img" : "3d");
-  if (e.key === "a" && !$('[data-mode="asm"]').disabled) setMode(state.mode === "asm" ? "img" : "asm");
   if (e.key === "f") $("#fs")?.click();
 });
 
@@ -1634,7 +1768,7 @@ async function downloadZip(btn) {
   btn.disabled = true; btn.textContent = "Zipping…";
   try {
     const JSZip = await loadJSZip(), zip = new JSZip();
-    const parts = it.gallery.filter(g => g.stl && !g.version);
+    const parts = state.set.parts;
     let done = 0;
     await Promise.all(parts.map(async p => {
       const res = await fetch(p.stl); if (!res.ok) throw new Error(p.stl);

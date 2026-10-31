@@ -1,4 +1,5 @@
-# Builds every home-automations/*/firmware project (site/build_firmware.sh).
+# Builds the home-automations/*/firmware projects that changed (site/build_firmware.sh); a change to the
+# build script or this workflow, or a manual run, builds them all.
 # - pull requests: checks that the firmware still builds, image downloadable from the run
 # - main: when a project's PROJECT_VER has no release yet, tags <project>-<version> (e.g. diy-valve-head-0.1.0),
 #   publishes a GitHub release with the image just built and redeploys the site, whose browser installer
@@ -14,7 +15,38 @@ on:
   workflow_dispatch:
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      projects: ${{ steps.pick.outputs.projects }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pick projects to build
+        id: pick
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          all=$(for f in home-automations/*/firmware/CMakeLists.txt; do basename "$(dirname "$(dirname "$f")")"; done)
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            projects=$all
+          else
+            changed=$(git diff --name-only "$BASE" "$GITHUB_SHA")
+            if grep -qxE 'site/build_firmware\.sh|\.github/workflows/firmware\.yml' <<<"$changed"; then
+              projects=$all
+            else
+              # only projects that still exist; a deleted one has nothing to build
+              projects=$(sed -n 's#^home-automations/\([^/]*\)/firmware/.*#\1#p' <<<"$changed" | sort -u | grep -xF "$all" || true)
+            fi
+          fi
+          projects=$(echo $projects)
+          echo "building: ${projects:-nothing}"
+          echo "projects=$projects" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: changes
+    if: needs.changes.outputs.projects != ''
     runs-on: ubuntu-latest
     container: espressif/esp-matter:release-v1.5_idf_v5.4.1
     env:
@@ -32,14 +64,16 @@ jobs:
           restore-keys: ccache-esp-matter-release-v1.5_idf_v5.4.1-
       - name: Build firmware
         shell: bash
+        env:
+          PROJECTS: ${{ needs.changes.outputs.projects }}
         run: |
-          site/build_firmware.sh
+          site/build_firmware.sh $PROJECTS
           ccache --show-stats
       - uses: actions/upload-artifact@v4
         with:
           name: firmware
           path: |
-            _firmware/*/firmware.bin
+            _firmware/*/*.bin
 
   release:
     if: github.ref == 'refs/heads/main'
@@ -60,8 +94,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           released=false
-          for image in _firmware/*/firmware.bin; do
-            project=$(basename "$(dirname "$image")")
+          for dir in _firmware/*/; do
+            project=$(basename "$dir")
             src=home-automations/$project/firmware
             version=$(sed -n 's/^set(PROJECT_VER "\(.*\)")/\1/p' "$src/CMakeLists.txt")
             tag=$project-$version
@@ -69,15 +103,19 @@ jobs:
               echo "$tag: already released"
               continue
             fi
-            target=$(sed -n 's/^CONFIG_IDF_TARGET="\(.*\)"/\1/p' "$src/sdkconfig.defaults")
-            asset=_firmware/$tag-$target.bin
-            cp "$image" "$asset"
-            gh release create "$tag" "$asset" --target "$GITHUB_SHA" --title "$project $version" \
-              --notes "Merged image for the $target, flash at offset 0x0 (or use the browser installer on the project page).
+            # One merged image per chip: <project>-<version>-<target>.bin
+            assets=() flash=""
+            for image in "$dir"*.bin; do
+              target=$(basename "$image" .bin)
+              assets+=("_firmware/$tag-$target.bin")
+              cp "$image" "${assets[-1]}"
+              flash+="esptool.py --chip $target write_flash 0x0 $tag-$target.bin"$'\n'
+            done
+            gh release create "$tag" "${assets[@]}" --target "$GITHUB_SHA" --title "$project $version" \
+              --notes "Merged images, one per chip, flashed at offset 0x0 (or use the browser installer on the project page, which picks the right one).
 
           \`\`\`bash
-          esptool.py --chip $target write_flash 0x0 $(basename "$asset")
-          \`\`\`"
+          ${flash}\`\`\`"
             echo "$tag: released"
             released=true
           done

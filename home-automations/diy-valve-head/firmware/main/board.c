@@ -19,20 +19,23 @@ static esp_pm_lock_handle_t motor_lock;
 void board_init(void)
 {
     const gpio_config_t out = {
-        .pin_bit_mask = (1ULL << PIN_MOTOR_IN1) | (1ULL << PIN_MOTOR_IN2) | (1ULL << PIN_MOTOR_SLEEP) |
-                        (1ULL << PIN_RF_SWITCH) | (1ULL << PIN_RF_ANTENNA),
+        .pin_bit_mask = (1ULL << PIN_MOTOR_IN1) | (1ULL << PIN_MOTOR_IN2) | (1ULL << PIN_MOTOR_SLEEP),
         .mode = GPIO_MODE_OUTPUT,
     };
     gpio_config(&out);
     gpio_set_level(PIN_MOTOR_SLEEP, 0);
     gpio_set_level(PIN_MOTOR_IN1, 0);
     gpio_set_level(PIN_MOTOR_IN2, 0);
-    gpio_set_level(PIN_RF_SWITCH, 0);
-    gpio_set_level(PIN_RF_ANTENNA, 0);
     // Keep the driver asleep (and the motor pins low) through light sleep.
     gpio_hold_en(PIN_MOTOR_SLEEP);
+#ifdef PIN_RF_SWITCH
+    // XIAO RF switch: powered, on-board antenna.
+    gpio_config(&(gpio_config_t){.pin_bit_mask = (1ULL << PIN_RF_SWITCH) | (1ULL << PIN_RF_ANTENNA), .mode = GPIO_MODE_OUTPUT});
+    gpio_set_level(PIN_RF_SWITCH, 0);
+    gpio_set_level(PIN_RF_ANTENNA, 0);
     gpio_hold_en(PIN_RF_SWITCH);
     gpio_hold_en(PIN_RF_ANTENNA);
+#endif
 
     // No light sleep while the motor runs: the driver pins must stay driven.
     esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "motor", &motor_lock);

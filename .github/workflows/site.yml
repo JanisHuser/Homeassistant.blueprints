@@ -31,7 +31,9 @@ jobs:
             [ -n "$tag" ] || { echo "$project: no release yet"; continue; }
             echo "$project: $tag"
             mkdir -p "_firmware/$project"
-            gh release download "$tag" --pattern "$project-*.bin" --output "_firmware/$project/firmware.bin"
+            gh release download "$tag" --pattern "$tag-*.bin" --dir "_firmware/$project"
+            # <tag>-<target>.bin -> <target>.bin, as site/build_firmware.sh writes them
+            for f in "_firmware/$project/$tag"-*.bin; do mv "$f" "_firmware/$project/${f##*/$tag-}"; done
             echo "${tag##*-}" > "_firmware/$project/version"
           done
       - uses: actions/upload-artifact@v4
