@@ -1,6 +1,6 @@
 # Builds every home-automations/*/firmware project (site/build_firmware.sh).
 # - pull requests and main: checks that the firmware still builds, image downloadable from the run
-# - tag <project>-v<version> (e.g. diy-valve-head-v0.1.0): publishes a GitHub release with the image
+# - tag <project>-<version> (e.g. diy-valve-head-0.1.0): publishes a GitHub release with the image
 #   and redeploys the site, whose browser installer flashes the latest release
 name: Firmware
 
@@ -10,7 +10,7 @@ on:
   push:
     branches: [main]
     paths: ["home-automations/*/firmware/**", "site/build_firmware.sh", ".github/workflows/firmware.yml"]
-    tags: ["*-v*"]
+    tags: ["*-[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
 
 jobs:
@@ -46,8 +46,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          project=${TAG%-v*}
-          version=${TAG##*-v}
+          project=${TAG%-*}
+          version=${TAG##*-}
           src=home-automations/$project/firmware
           image=_firmware/$project/firmware.bin
           [ -f "$image" ] || { echo "::error::no firmware project '$project' for tag $TAG"; exit 1; }

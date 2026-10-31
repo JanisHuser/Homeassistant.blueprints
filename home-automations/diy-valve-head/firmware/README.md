@@ -11,7 +11,7 @@ Flash the XIAO ESP32-C6 over USB, then add it in Home Assistant with the Matter 
 **Making a release:** bump `PROJECT_VER` in `CMakeLists.txt`, merge to main, then push a matching tag. GitHub builds the image, publishes the release and redeploys the page with it.
 
 ```bash
-git tag diy-valve-head-v0.1.0 && git push origin diy-valve-head-v0.1.0
+git tag diy-valve-head-0.1.0 && git push origin diy-valve-head-0.1.0
 ```
 
 **From source** (needs Docker):
