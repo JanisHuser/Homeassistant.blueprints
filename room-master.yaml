@@ -176,6 +176,17 @@ blueprint:
       selector:
         boolean:
 
+    transition:
+      name: Transition
+      description: Fade time when a scene is applied.
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 0.5
+          unit_of_measurement: s
+
 
 mode: queued
 max: 10
@@ -192,6 +203,7 @@ variables:
   bright_before_sunrise: !input bright_before_sunrise
   bright_after_sunset: !input bright_after_sunset
   auto_time_switch: !input auto_time_switch
+  transition: !input transition
 
 
 triggers:
@@ -293,6 +305,8 @@ actions:
                   - action: scene.turn_on
                     target:
                       entity_id: !input scene_off
+                    data:
+                      transition: "{{ transition }}"
 
             # ----------------------------------------------------
             # Master currently OFF
@@ -309,6 +323,8 @@ actions:
               - action: scene.turn_on
                 target:
                   entity_id: !input scene_bright
+                data:
+                  transition: "{{ transition }}"
 
 
   # ============================================================
@@ -361,6 +377,8 @@ actions:
                   - action: scene.turn_on
                     target:
                       entity_id: !input scene_off
+                    data:
+                      transition: "{{ transition }}"
 
             # ----------------------------------------------------
             # Master currently OFF -> ON + Dim
@@ -374,6 +392,8 @@ actions:
               - action: scene.turn_on
                 target:
                   entity_id: !input scene_dim
+                data:
+                  transition: "{{ transition }}"
 
 
   # ============================================================
@@ -435,6 +455,8 @@ actions:
                           - action: scene.turn_on
                             target:
                               entity_id: !input scene_off
+                            data:
+                              transition: "{{ transition }}"
 
                     # --------------------------------------------
                     # Master OFF -> ON + time-based scene
@@ -489,6 +511,8 @@ actions:
                               - action: scene.turn_on
                                 target:
                                   entity_id: !input scene_bright
+                                data:
+                                  transition: "{{ transition }}"
 
                         # Dark
                         default:
@@ -496,6 +520,8 @@ actions:
                           - action: scene.turn_on
                             target:
                               entity_id: !input scene_dim
+                            data:
+                              transition: "{{ transition }}"
 
 
               # ==================================================
@@ -535,6 +561,8 @@ actions:
                           - action: scene.turn_on
                             target:
                               entity_id: !input scene_off
+                            data:
+                              transition: "{{ transition }}"
 
                     # --------------------------------------------
                     # Master OFF -> ON + time-based scene
@@ -588,12 +616,16 @@ actions:
                               - action: scene.turn_on
                                 target:
                                   entity_id: !input scene_bright
+                                data:
+                                  transition: "{{ transition }}"
 
                         default:
 
                           - action: scene.turn_on
                             target:
                               entity_id: !input scene_dim
+                            data:
+                              transition: "{{ transition }}"
 
 
               # ==================================================
@@ -657,12 +689,16 @@ actions:
                           - action: scene.turn_on
                             target:
                               entity_id: !input scene_bright
+                            data:
+                              transition: "{{ transition }}"
 
                     default:
 
                       - action: scene.turn_on
                         target:
                           entity_id: !input scene_dim
+                        data:
+                          transition: "{{ transition }}"
 
 
               # ==================================================
@@ -691,6 +727,8 @@ actions:
                   - action: scene.turn_on
                     target:
                       entity_id: !input scene_off
+                    data:
+                      transition: "{{ transition }}"
 
 
   # ============================================================
@@ -784,6 +822,8 @@ actions:
                   - action: scene.turn_on
                     target:
                       entity_id: !input scene_bright
+                    data:
+                      transition: "{{ transition }}"
 
               - conditions:
                   - condition: template
@@ -794,6 +834,8 @@ actions:
                   - action: scene.turn_on
                     target:
                       entity_id: !input scene_dim
+                    data:
+                      transition: "{{ transition }}"
 
 
   # ============================================================
@@ -835,6 +877,8 @@ actions:
                   - action: scene.turn_on
                     target:
                       entity_id: !input scene_off
+                    data:
+                      transition: "{{ transition }}"
 
             # ----------------------------------------------------
             # Master ON
@@ -887,6 +931,8 @@ actions:
                       - action: scene.turn_on
                         target:
                           entity_id: !input scene_bright
+                        data:
+                          transition: "{{ transition }}"
 
                 # ==================================================
                 # DARK
@@ -896,3 +942,5 @@ actions:
                   - action: scene.turn_on
                     target:
                       entity_id: !input scene_dim
+                    data:
+                      transition: "{{ transition }}"

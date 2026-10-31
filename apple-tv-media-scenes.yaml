@@ -1,0 +1,243 @@
+blueprint:
+  name: Apple TV Media Scenes
+  description: >
+    Switch the room lighting with what the Apple TV is doing.
+
+    - Playing → "Playing" scene (e.g. dim the TV lights, everything else in
+      Wohnzimmer and Esszimmer off).
+
+    - Paused → "Paused" scene (e.g. every light in Wohnzimmer dimmed).
+
+    - Stopped → "Stopped" scene (e.g. moodlight on).
+
+    Apps on the ignore list (Spotify by default) never change the lights. An
+    app is ignored when its name or app ID contains one of the entries,
+    case-insensitive — so "spotify" matches both "Spotify" and
+    "com.spotify.client".
+
+    "Stopped" fires when playback of a non-ignored app ends: the Apple TV goes
+    idle, to standby or off, or falls back to an ignored app. Turning the
+    Apple TV off after an ignored app leaves the lights alone, and so does
+    the Apple TV falling asleep after sitting paused for a long time.
+
+    Each state has to hold for a few seconds before its scene is applied, so
+    skipping or scrubbing (which briefly reports paused) does not flicker the
+    lights.
+  domain: automation
+  author: Janis
+  input:
+    media_player:
+      name: Apple TV
+      description: The Apple TV media player.
+      selector:
+        entity:
+          filter:
+            domain: media_player
+
+    ignored_apps:
+      name: Ignored apps
+      description: >
+        Apps that never change the lights. One per row; matched as a
+        case-insensitive substring of the app name or app ID.
+      default:
+        - spotify
+      selector:
+        text:
+          multiple: true
+
+    scene_playing:
+      name: Playing scene
+      description: Scene applied when playback starts or resumes.
+      selector:
+        entity:
+          filter:
+            domain: scene
+
+    scene_paused:
+      name: Paused scene
+      description: Scene applied when playback is paused.
+      selector:
+        entity:
+          filter:
+            domain: scene
+
+    scene_stopped:
+      name: Stopped scene
+      description: Scene applied when playback stops.
+      selector:
+        entity:
+          filter:
+            domain: scene
+
+    playing_delay:
+      name: Playing delay
+      description: How long the Apple TV must be playing before the scene is applied.
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 30
+          unit_of_measurement: s
+
+    paused_delay:
+      name: Paused delay
+      description: >
+        How long the Apple TV must stay paused before the scene is applied.
+        Keeps skipping/scrubbing from triggering it.
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: s
+
+    stopped_delay:
+      name: Stopped delay
+      description: How long the Apple TV must stay stopped before the scene is applied.
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 120
+          unit_of_measurement: s
+
+    max_paused:
+      name: Max pause before stop
+      description: >
+        When the Apple TV turns off or goes idle after being paused longer
+        than this, the stopped scene is skipped — it fell asleep on its own
+        rather than someone ending the movie. 0 always applies it.
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 600
+          unit_of_measurement: min
+
+    transition:
+      name: Transition
+      description: Fade time when a scene is applied.
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 0.5
+          unit_of_measurement: s
+
+mode: restart
+
+# Ignored apps count as "stopped", so falling back to an ignored app after
+# leaving a movie stops it just like going idle or off. Template
+# triggers only fire when their result turns true, which gives the edges.
+# "unavailable" counts as stopped as well, so the Apple TV reconnecting
+# does not fake a stop; the stopped branch skips a disconnect mid-movie.
+# It looks at the state that ended playback, not the current one: an Apple TV
+# that is turned off drops its connection shortly after reporting "off", so
+# by the time the stopped delay has passed it is already "unavailable".
+trigger_variables:
+  player: !input media_player
+  ignored_apps: !input ignored_apps
+
+variables:
+  transition: !input transition
+  max_paused: !input max_paused
+
+triggers:
+  - trigger: template
+    value_template: >
+      {% set e = player %}
+      {% set raw = ignored_apps if ignored_apps is iterable
+                   and ignored_apps is not string else [ignored_apps] %}
+      {% set app = ((state_attr(e, 'app_name') or '') ~ ' '
+                    ~ (state_attr(e, 'app_id') or '')) | lower %}
+      {% set ignored = raw | map('lower') | map('trim')
+                       | reject('equalto', '') | select('in', app)
+                       | list | count > 0 %}
+      {% set st = states(e) %}
+      {% set status = st if st in ['playing', 'paused'] and not ignored
+                      else 'stopped' %}
+      {{ status == 'playing' }}
+    for:
+      seconds: !input playing_delay
+    id: playing
+  - trigger: template
+    value_template: >
+      {% set e = player %}
+      {% set raw = ignored_apps if ignored_apps is iterable
+                   and ignored_apps is not string else [ignored_apps] %}
+      {% set app = ((state_attr(e, 'app_name') or '') ~ ' '
+                    ~ (state_attr(e, 'app_id') or '')) | lower %}
+      {% set ignored = raw | map('lower') | map('trim')
+                       | reject('equalto', '') | select('in', app)
+                       | list | count > 0 %}
+      {% set st = states(e) %}
+      {% set status = st if st in ['playing', 'paused'] and not ignored
+                      else 'stopped' %}
+      {{ status == 'paused' }}
+    for:
+      seconds: !input paused_delay
+    id: paused
+  - trigger: template
+    value_template: >
+      {% set e = player %}
+      {% set raw = ignored_apps if ignored_apps is iterable
+                   and ignored_apps is not string else [ignored_apps] %}
+      {% set app = ((state_attr(e, 'app_name') or '') ~ ' '
+                    ~ (state_attr(e, 'app_id') or '')) | lower %}
+      {% set ignored = raw | map('lower') | map('trim')
+                       | reject('equalto', '') | select('in', app)
+                       | list | count > 0 %}
+      {% set st = states(e) %}
+      {% set status = st if st in ['playing', 'paused'] and not ignored
+                      else 'stopped' %}
+      {{ status == 'stopped' }}
+    for:
+      seconds: !input stopped_delay
+    id: stopped
+
+conditions: []
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: playing
+        sequence:
+          - action: scene.turn_on
+            target:
+              entity_id: !input scene_playing
+            data:
+              transition: "{{ transition }}"
+      - conditions:
+          - condition: trigger
+            id: paused
+        sequence:
+          - action: scene.turn_on
+            target:
+              entity_id: !input scene_paused
+            data:
+              transition: "{{ transition }}"
+      - conditions:
+          - condition: trigger
+            id: stopped
+          - condition: template
+            value_template: >
+              {{ trigger.to_state is none or trigger.to_state.state
+                 not in ['unavailable', 'unknown'] }}
+          # A paused Apple TV goes to sleep by itself after a while; that
+          # is not someone ending the movie, so leave the lights alone.
+          - condition: template
+            value_template: >
+              {% set f = trigger.from_state %}
+              {% set t = trigger.to_state %}
+              {{ max_paused | float(0) <= 0 or f is none or t is none
+                 or f.state != 'paused'
+                 or (t.last_changed - f.last_changed).total_seconds()
+                    <= max_paused | float(0) * 60 }}
+        sequence:
+          - action: scene.turn_on
+            target:
+              entity_id: !input scene_stopped
+            data:
+              transition: "{{ transition }}"
