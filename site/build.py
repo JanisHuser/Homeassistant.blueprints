@@ -24,11 +24,14 @@ from datetime import date
 from pathlib import Path
 
 import yaml
+from html import escape
 
 ROOT = Path(__file__).resolve().parent.parent
 AUTOMATIONS = ROOT / "home-automations"
 BLUEPRINTS = ROOT / "homeassistant.blueprints"
 TEMPLATE = Path(__file__).resolve().parent / "template.html"
+# Merged firmware images from site/build_firmware.sh, one folder per project.
+FIRMWARE = ROOT / "_firmware"
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JanisHuser/Homeassistant.blueprints")
 BRANCH = os.environ.get("SITE_SOURCE_BRANCH", "main")
@@ -165,6 +168,166 @@ def doc_summary(folder):
     return None, None, None
 
 
+def md_cell(s):
+    """Table cell as plain text, plus the first link in it."""
+    link = re.search(r"\[[^\]]+\]\(([^)]+)\)", s)
+    return {"text": strip_md(s).strip(), "url": link.group(1) if link else None}
+
+
+def doc_bom(folder, doc_name):
+    """Tables under the README's "## Bill of materials", grouped by their ### headings."""
+    if not doc_name:
+        return []
+    groups, inside, head = [], False, None
+    for line in (folder / doc_name).read_text().splitlines():
+        if line.startswith("## "):
+            inside = line[3:].strip().lower() in ("bill of materials", "bom")
+        elif inside and line.startswith("### "):
+            groups.append({"name": line[4:].strip(), "columns": [], "rows": []})
+            head = None
+        elif inside and line.startswith("|"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if all(re.fullmatch(r":?-+:?", c) for c in cells):
+                continue
+            if not groups:
+                groups.append({"name": "Parts", "columns": [], "rows": []})
+            g = groups[-1]
+            if head is None:
+                head = g["columns"] = [strip_md(c) for c in cells]
+            else:
+                g["rows"].append([md_cell(c) for c in cells])
+        elif inside:
+            head = None  # any other line ends the table
+    return [g for g in groups if g["rows"]]
+
+
+def doc_html(folder, doc_name, out, rendered):
+    """The README/ANLEITUNG as HTML for the page's Build tab.
+
+    Leaves out the title (the page shows it) and the bill of materials (shown in the overview).
+    Images are copied next to the page when they exist, or replaced by the rendered view of the
+    same name; otherwise they are dropped. Other relative links point at the file on GitHub.
+    """
+    if not doc_name:
+        return None
+    rel = folder.relative_to(ROOT).as_posix()
+    dest = out / "files" / folder.name / "doc"
+
+    def image(alt, src):
+        f = (folder / src).resolve()
+        if f.is_file() and folder in f.parents:
+            target = dest / f.relative_to(folder)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(f, target)
+            url = target.relative_to(out).as_posix()
+        elif Path(src).stem in rendered:
+            url = rendered[Path(src).stem]
+        else:
+            return ""
+        return f'<img src="{escape(url)}" alt="{escape(alt)}" loading="lazy">'
+
+    def link(text, href):
+        if not re.match(r"[a-z]+:|#", href):
+            kind = "tree" if (folder / href).is_dir() else "blob"
+            href = f"https://github.com/{REPO}/{kind}/{BRANCH}/{rel}/{href}"
+        return f'<a href="{escape(href)}" target="_blank" rel="noopener">{text}</a>'
+
+    def inline(t):
+        # Code spans are set aside first, so nothing inside them is formatted.
+        spans = []
+        t = re.sub(r"`([^`]+)`", lambda m: spans.append(f"<code>{escape(m[1])}</code>") or f"\0{len(spans) - 1}\0", t)
+        t = escape(t)
+        t = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", lambda m: image(m[1], m[2]), t)
+        t = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", lambda m: link(m[1], m[2]), t)
+        t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
+        t = re.sub(r"(?<![\w*])\*(?!\s)(.+?)\*(?!\w)", r"<em>\1</em>", t)
+        return re.sub(r"\0(\d+)\0", lambda m: spans[int(m[1])], t)
+
+    html, para, items, kind, table, code = [], [], [], None, [], None
+    skip = False
+
+    def flush():
+        nonlocal para, items, kind, table
+        if para:
+            html.append(f"<p>{inline(' '.join(para))}</p>")
+        if items:
+            html.append(f"<{kind}>" + "".join(f"<li>{inline(i)}</li>" for i in items) + f"</{kind}>")
+        if table:
+            head, *rows = table
+            html.append('<div class="tbl"><table><thead><tr>' + "".join(f"<th>{inline(c)}</th>" for c in head)
+                        + "</tr></thead><tbody>" + "".join("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r)
+                                                         + "</tr>" for r in rows) + "</tbody></table></div>")
+        para, items, kind, table = [], [], None, []
+
+    lines = (folder / doc_name).read_text().splitlines()
+    for line in lines:
+        if code is not None:
+            if line.startswith("```"):
+                html.append(f"<pre><code>{escape(chr(10).join(code))}</code></pre>")
+                code = None
+            else:
+                code.append(line)
+            continue
+        if line.startswith("## "):
+            skip = line[3:].strip().lower() in ("bill of materials", "bom")
+        if skip or line.startswith("# "):
+            continue
+        if line.startswith("```"):
+            flush()
+            code = []
+        elif m := re.match(r"(#{2,4}) (.*)", line):
+            flush()
+            n = len(m[1]) + 1
+            html.append(f"<h{n}>{inline(m[2])}</h{n}>")
+        elif line.startswith("|"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if not all(re.fullmatch(r":?-+:?", c) for c in cells):
+                if not table:
+                    flush()
+                table.append(cells)
+        elif m := re.match(r"\s*(?:([-*])|\d+\.) (.*)", line):
+            k = "ul" if m[1] else "ol"
+            if kind != k or para or table:
+                flush()
+            kind = k
+            items.append(m[2])
+        elif not line.strip():
+            flush()
+        elif items and line.startswith("  "):
+            items[-1] += " " + line.strip()
+        else:
+            if items or table:
+                flush()
+            para.append(line.strip())
+    flush()
+    return "\n".join(h for h in html if h != "<p></p>")
+
+
+def firmware(folder, out, title):
+    """The project's firmware/ (an ESP-IDF project): source link, and a browser installer if it was built."""
+    src = folder / "firmware"
+    if not (src / "CMakeLists.txt").exists():
+        return None
+    rel = src.relative_to(ROOT).as_posix()
+    _, note, _ = doc_summary(src)
+    defaults = (src / "sdkconfig.defaults").read_text() if (src / "sdkconfig.defaults").exists() else ""
+    target = re.search(r'^CONFIG_IDF_TARGET="(\w+)"', defaults, re.M)
+    chip = target[1].upper().replace("ESP32", "ESP32-").rstrip("-") if target else "ESP32"
+    version = re.search(r'set\(PROJECT_VER "([^"]+)"\)', (src / "CMakeLists.txt").read_text())
+    info = {"source": f"https://github.com/{REPO}/tree/{BRANCH}/{rel}", "chip": chip,
+            "version": version[1] if version else None, "note": strip_md(note or ""), "manifest": None}
+    image = FIRMWARE / folder.name / "firmware.bin"
+    if image.exists():
+        dest = out / "files" / folder.name / "firmware"
+        dest.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(image, dest / "firmware.bin")
+        manifest = {"name": strip_md(title), "version": info["version"] or "dev", "new_install_prompt_erase": True,
+                    "builds": [{"chipFamily": chip, "parts": [{"path": "firmware.bin", "offset": 0}]}]}
+        (dest / "manifest.json").write_text(json.dumps(manifest, indent=2))
+        info["manifest"] = (dest / "manifest.json").relative_to(out).as_posix()
+    return info
+
+
 def strip_md(s):
     s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
     return re.sub(r"[*`_]", "", s)
@@ -227,8 +390,11 @@ def build_automation(folder, out, pool):
         "summary": strip_md(summary),
         "files": [f.name for f in files],
         "source": f"https://github.com/{REPO}/tree/{BRANCH}/{rel}",
-        "doc": f"https://github.com/{REPO}/blob/{BRANCH}/{rel}/{doc_name}" if doc_name else None,
+        "doc": doc_html(folder, doc_name, out, {x["name"]: x["png"] for m in models if not m["version"]
+                                                 for x in m["views"] + m["parts"]}),
         "models": models,
+        "bom": doc_bom(folder, doc_name),
+        "firmware": firmware(folder, out, title),
     }
     return item, jobs
 
