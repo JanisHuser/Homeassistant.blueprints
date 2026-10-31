@@ -1,0 +1,24 @@
+menu "Valve head"
+
+    config VALVE_TRAVEL_MS
+        int "Motor run time for a full stroke (ms)"
+        default 4000
+        help
+            Time the lock motor needs for the 3.4 mm stroke. Measure it once; the motor
+            runs this long plus VALVE_OVERRUN_MS and then stalls against the hard stop.
+
+    config VALVE_OVERRUN_MS
+        int "Extra run time against the hard stop (ms)"
+        default 500
+
+    config VALVE_REVERSE
+        bool "Swap motor direction"
+        default n
+        help
+            Same as swapping the two motor wires.
+
+    config VALVE_BATTERY_INTERVAL_MIN
+        int "Battery reading interval (minutes)"
+        default 60
+
+endmenu

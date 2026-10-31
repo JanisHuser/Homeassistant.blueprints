@@ -1,16 +1,16 @@
-# DIY valve head for floor heating (battery, Zigbee)
+# DIY valve head for floor heating (battery, Matter)
 
 A slim, battery-powered valve head for M30×1.5 floor-heating manifold valves. It is for manifolds where off-the-shelf heads (≈80–100 mm) stick out too far.
 
 Layout along the body: **drive | logic | battery | charger**.
 
 - **Drive:** an N20 lock motor stands upright at the valve end. Its lead screw points straight at the valve pin. The nut sits in a printed pusher that presses the pin directly. The pusher's rectangular tip runs in the adapter's bore, so it can't turn or tilt. The lead screw holds its position, so the valve stays put with no power.
-- **Brain:** XIAO ESP32-C6 as a sleepy Zigbee end device. Home Assistant sets each head open/closed based on a room sensor.
+- **Brain:** XIAO ESP32-C6 as a sleepy **Matter-over-Thread** end device. It shows up in Home Assistant's Matter integration as a valve (open/closed) with a battery level, and Home Assistant sets each head based on a room sensor. Pairing is over Bluetooth with the Matter QR code, the same as any store-bought Matter device.
 - **Power:** one 18650 with USB-C charging. The motor runs directly from the cell (3–4.2 V).
 - **Housing:** a one-piece **tray** (printed front-face-down, open towards the valve), a **lid** on the valve side that slides in from the back, and an **adapter** that twist-locks into the tray. No screws, no clips across a seam, no supports.
 - **Size (defaults):** 26 × 132 mm, **35.7 mm deep** from the valve's thread face.
 
-The model is [`valve_head_tray.scad`](valve_head_tray.scad). The older left/right clamshell version is [`versions/clamshell/valve_head.scad`](versions/clamshell/valve_head.scad).
+The model is [`valve_head_tray.scad`](valve_head_tray.scad), the firmware is in [`firmware/`](firmware) and can be flashed straight from the project page in the browser. The older left/right clamshell version is [`versions/clamshell/valve_head.scad`](versions/clamshell/valve_head.scad).
 
 ![assembly](renders/assembly.png)
 
@@ -75,39 +75,54 @@ Nothing crosses a seam, so nothing is loaded across the layer lines: the tray is
 
 **Charging port:** the USB-C in the **front face** at the battery end is the **TP4056's** (battery charger). The ESP's own USB-C stays inside and is only for flashing with the lid open, never with the battery connected.
 
-## Shopping list
+## Bill of materials
 
-AliExpress prices are from October 2026 and change daily.
+AliExpress prices are from October 2026 and change daily. Wires and the resistors are cut from packs, so they count only a few cents per head.
 
-Per head:
+### Per head
 
-| Part | Link | ~CHF |
-|---|---|---|
-| N20 lock motor with lead screw + nut, 3–4.2 V, 130 rpm | [AliExpress](https://de.aliexpress.com/item/1005007468668750.html) | 1–2 |
-| XIAO ESP32-C6 | [AliExpress](https://de.aliexpress.com/item/1005012424312980.html) | 7.50 |
-| DRV8833 motor driver | [AliExpress](https://de.aliexpress.com/item/1005006370873675.html) | 1 |
-| 18650 holder + TP4056 USB-C **with protection** (6 pads) | [AliExpress (5 sets)](https://de.aliexpress.com/item/1005013088690628.html) | 0.20–1.60 |
-| Resistors 1 MΩ (assortment) | [AliExpress](https://de.aliexpress.com/item/1005011888190705.html) | — |
-| 18650 cell, Samsung 35E / LG MJ1 / Molicel | Galaxus or a Swiss battery shop, **not AliExpress** | 6–8 |
+| # | Part | Qty | Source | ~CHF |
+|---|---|---|---|---|
+| 1 | N20 lock motor with lead screw + nut, 3–4.2 V, 130 rpm | 1 | [AliExpress](https://de.aliexpress.com/item/1005007468668750.html) | 1–2 |
+| 2 | XIAO ESP32-C6 (Thread + Bluetooth for Matter) | 1 | [AliExpress](https://de.aliexpress.com/item/1005012424312980.html) | 7.50 |
+| 3 | DRV8833 motor driver board | 1 | [AliExpress](https://de.aliexpress.com/item/1005006370873675.html) | 1 |
+| 4 | 18650 holder | 1 | [AliExpress (5 sets, with 5)](https://de.aliexpress.com/item/1005013088690628.html) | 0.20–1.60 |
+| 5 | TP4056 USB-C charger board **with protection** (6 pads) | 1 | same set as 4 | — |
+| 6 | 18650 cell, Samsung 35E / LG MJ1 / Molicel | 1 | Galaxus or a Swiss battery shop, **not AliExpress** | 6–8 |
+| 7 | Resistor 1 MΩ (battery divider) | 2 | [AliExpress (assortment)](https://de.aliexpress.com/item/1005011888190705.html) | — |
+| 8 | Silicone wire 26–28 AWG, red + black | ~40 cm | any | — |
+| 9 | Heat-shrink tube, 2–3 mm | ~5 cm | any | — |
+| 10 | Printed tray | 1 | `stl/tray.stl` | — |
+| 11 | Printed lid | 1 | `stl/lid.stl` | — |
+| 12 | Printed adapter | 1 | `stl/adapter.stl` | — |
+| 13 | Printed pusher | 1 | `stl/pusher.stl` | — |
+| 14 | Printed ring nut (M30×1.5) | 1 | `stl/nut.stl` | — |
+| 15 | PETG or ASA filament (all five printed parts) | 40–60 g | — | 1–1.50 |
+| 16 | Drop of glue (CA) for the motor nut in the pusher | — | — | — |
 
-Once for the system:
+Roughly **CHF 17–22 per head**.
 
-| Part | Link | ~CHF |
-|---|---|---|
-| Zigbee USB stick for Home Assistant (Sonoff ZBDongle-E) | [AliExpress](https://de.aliexpress.com/item/1005004555444559.html) | 15 |
-| Room sensor per room (Sonoff SNZB-02D) | [AliExpress](https://de.aliexpress.com/item/1005006666027385.html) | 7–12 |
-| PETG or ASA filament | — | — |
+### Once for the system
+
+| # | Part | Qty | Source | ~CHF |
+|---|---|---|---|---|
+| 1 | Thread border router: Home Assistant Connect ZBT-2, or an Apple TV 4K / HomePod mini / Nest hub you already have | 1 | Home Assistant shop / Galaxus | 0–45 |
+| 2 | Room temperature sensor, any that Home Assistant sees (Matter-over-Thread, e.g. Aqara Climate Sensor W100, keeps it all on one network) | 1 per room | Galaxus | 7–35 |
+| 3 | Phone with the Home Assistant app and Bluetooth, for pairing | 1 | — | — |
+| 4 | USB-C data cable and Chrome or Edge on a computer, for flashing | 1 | — | — |
 
 **Force:** the pusher presses the pin directly, so the motor has to supply the full closing force of the valve (often 80–120 N). The seller doesn't state the motor's force. **Test one motor against a valve before building more.**
 
 ## Wiring
 
+Pairing and flashing are in [`firmware/README.md`](firmware/README.md).
+
 ```
 18650 ─ TP4056 B+/B−     TP4056 OUT+ ─┬─ XIAO BAT+          (OUT− ─ common GND)
                                       └─ DRV8833 VM
-XIAO D1, D2 ─ DRV8833 IN1, IN2   → motor on OUT1/OUT2
-XIAO D3     ─ DRV8833 nSLEEP (HIGH = on, LOW = ~1 µA sleep)
-XIAO A5     ─ OUT+ through 2× 1 MΩ divider (battery level)
+XIAO D2, D3 ─ DRV8833 IN1, IN2   → motor on OUT1/OUT2
+XIAO D4     ─ DRV8833 nSLEEP (HIGH = on, LOW = ~1 µA sleep)
+XIAO D1/A1  ─ OUT+ through 2× 1 MΩ divider (battery level)
 ```
 
 Always use the TP4056 **OUT** pads, not B+/B−, or the protection does nothing.
@@ -118,6 +133,8 @@ Always use the TP4056 **OUT** pads, not B+/B−, or the protection does nothing.
 
 Both ends of the travel are **hard stops**: the nut against the gear plates for "open", the pusher's chamfered shoulder (all the way round its tip, narrower on the motor side) in the countersink of the adapter for "closed", so the closing force goes straight into the valve.
 
+This is what the [firmware](firmware) does:
+
 - **Close / open:** wake the DRV8833, drive the motor in the wanted direction for a fixed time (travel time + ~0.5 s), then sleep. At the end the motor stalls briefly against the stop, which lock motors are made for.
 - Measure the travel time once (3.4 mm; depends on the screw pitch) and set the timeout from it.
 - The push reaction goes from the gear plates into the tray's front face, through its walls into the ears that carry the bayonet, and through the adapter into the valve. All of it is inside the one-piece tray; the lid is not in that path.
@@ -127,4 +144,4 @@ Both ends of the travel are **hard stops**: the nut against the gear plates for 
 
 - Geometry checked in OpenSCAD: all parts render as valid solids. Checked: nothing collides when assembled, open or closed; the drive unit, the boards, the adapter (push in and turn) and the lid (slide in) all go in without hitting anything; the locks hold (the adapter can't turn back with the lid on, its lugs catch, the lid's tab catches, the front face stops the gear plates).
 - **Not printed or tested yet.** The motor dimensions and force are unknown until it arrives.
-- Firmware (Zigbee, XIAO ESP32-C6) is not written yet.
+- Firmware: [`firmware/`](firmware), Matter over Thread with esp-matter: a Water Valve endpoint with a Power Source cluster for the battery, sleepy end device polling every 5 s. **Not run on hardware yet**; the motor travel time and battery life are not measured yet.

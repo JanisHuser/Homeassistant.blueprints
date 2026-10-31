@@ -322,6 +322,36 @@ details.older summary::-webkit-details-marker { display: none; }
 details.older summary svg { width: 16px; height: 16px; transition: transform .3s var(--ease); color: var(--faint); }
 details.older[open] summary svg { transform: rotate(90deg); }
 details.older .list { border: 0; border-top: 1px solid var(--line); border-radius: 0 0 14px 14px; }
+.fw { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg-2); }
+.fw p { margin: 0; font-size: 14px; color: var(--muted); }
+.fw-msg { font-size: 13px; color: var(--muted); align-self: center; }
+esp-web-install-button:not(:defined) [slot="unsupported"], esp-web-install-button:not(:defined) [slot="not-allowed"] { display: none; }
+.bom { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bom th { text-align: left; font: 600 11px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--faint); padding: 9px 10px; background: var(--bg-2); }
+.bom td { padding: 8px 10px; border-top: 1px solid var(--line); vertical-align: top; color: var(--ink); }
+.bom td.num, .bom th.num { font-family: var(--mono); color: var(--muted); white-space: nowrap; width: 1%; }
+.bom td a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.bom td a:hover { text-decoration: underline; }
+.bom caption { caption-side: top; text-align: left; padding: 10px 10px 8px; font-weight: 600; font-size: 14px; }
+.list.bomwrap { overflow-x: auto; }
+.doc { font-size: 14px; line-height: 1.6; color: var(--ink); overflow-wrap: break-word; }
+.doc > :first-child { margin-top: 0; }
+.doc h3 { margin: 26px 0 8px; font: 700 19px/1.2 var(--display); letter-spacing: -.01em; }
+.doc h4 { margin: 20px 0 6px; font: 600 15px var(--sans); }
+.doc h5 { margin: 16px 0 4px; font: 600 14px var(--sans); color: var(--muted); }
+.doc p, .doc ul, .doc ol { margin: 0 0 12px; }
+.doc ul, .doc ol { padding-left: 22px; }
+.doc li { margin: 4px 0; }
+.doc a { color: var(--accent); }
+.doc code { font: 12.5px var(--mono); background: var(--bg-2); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; }
+.doc pre { margin: 0 0 12px; padding: 12px 14px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+.doc pre code { background: none; border: 0; padding: 0; white-space: pre; }
+.doc img { display: block; width: 100%; height: auto; border-radius: 12px; background: var(--plate); margin: 4px 0 8px; }
+.doc .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; margin: 0 0 12px; }
+.doc table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.doc th { text-align: left; font: 600 12px var(--sans); color: var(--muted); background: var(--bg-2); padding: 8px 10px; }
+.doc td { padding: 8px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+.doc td code { white-space: nowrap; }
 .desc { margin: 0; white-space: pre-wrap; font: 14px/1.6 var(--sans); color: var(--ink); background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
 .inputs .row { cursor: default; align-items: flex-start; padding: 12px 14px; }
 .inputs .row:hover { background: none; }
@@ -379,8 +409,13 @@ details.older .list { border: 0; border-top: 1px solid var(--line); border-radiu
 .stage.custom .live-badge { display: inline-block; }
 
 /* Info tabs */
-.tabs { position: sticky; top: -32px; z-index: 2; display: flex; gap: 4px; padding: 4px; margin: -8px 0 0; border-radius: 12px; background: var(--bg-2);
-  border: 1px solid var(--line); width: fit-content; }
+.tabs { position: sticky; top: -32px; z-index: 2; display: flex; gap: 4px; padding: 4px; margin: -8px 0 0; border-radius: 12px;
+  border: 1px solid transparent; width: fit-content; }
+/* While stuck, a strip of sheet colour hides what scrolls underneath; the pill is drawn above it. */
+.tabs::before { content: ""; position: absolute; z-index: -2; inset: -16px 0 -12px; background: var(--card); pointer-events: none;
+  /* Widened by a shadow, not by its size: shadows don't make the panel scroll sideways. */
+  box-shadow: 0 0 0 100vmax var(--card); clip-path: inset(0 -100vmax); }
+.tabs::after { content: ""; position: absolute; z-index: -1; inset: -1px; border-radius: 12px; background: var(--bg-2); border: 1px solid var(--line); pointer-events: none; }
 .tabs button { border: 0; background: none; cursor: pointer; padding: 7px 14px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--muted); }
 .tabs button[aria-selected="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-sm), 0 0 0 1px var(--line); }
 .tabs button small { font: 500 11px var(--mono); color: var(--accent); margin-left: 4px; }
@@ -438,6 +473,7 @@ details.older .list { border: 0; border-top: 1px solid var(--line); border-radiu
 
 @media (max-width: 860px) {
   .tabs { position: static; }
+  .tabs::before { display: none; }
   /* The sheet scrolls as a whole on a phone; the stage column keeps its natural height. */
   .sheet { display: block; }
   .stage-col > * { flex-shrink: 0; }
@@ -522,6 +558,7 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const ICON = {
+  bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
   arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
   left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg>',
   right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>',
@@ -1075,6 +1112,10 @@ function openDetail(slug, push = true) {
   detail.classList.remove("closing");
   $(".info", sheet).scrollTop = 0; sheet.scrollTop = 0;
   if (it.kind === "automation") select(0);
+  if (it.firmware?.manifest) import(EWT_URL).catch(() => {
+    const b = $("esp-web-install-button", sheet);
+    if (b) b.outerHTML = `<span class="fw-msg">Couldn't load the browser flasher.</span>`;
+  });
 }
 
 let closingFromHistory = false;
@@ -1150,6 +1191,7 @@ function hardwareSheet(it) {
       <h2 id="d-title">${esc(it.title)}</h2>
       <div class="tabs" role="tablist">
         <button type="button" role="tab" aria-selected="true" data-tab="overview">Overview</button>
+        ${it.doc ? `<button type="button" role="tab" aria-selected="false" data-tab="build">Build</button>` : ""}
         ${nParams ? `<button type="button" role="tab" aria-selected="false" data-tab="custom">Customize <small id="nchanged"></small></button>` : ""}
       </div>
       <div class="pane" data-pane="overview">
@@ -1161,17 +1203,47 @@ function hardwareSheet(it) {
           ${it.older.length ? `<span class="fact"><b>${it.older.length}</b> older</span>` : ""}
         </div>
         <div class="actions">
-          ${it.doc ? `<a class="btn primary" href="${esc(it.doc)}" target="_blank" rel="noopener">${ICON.doc}Build instructions</a>` : ""}
+          ${it.doc ? `<button class="btn primary" type="button" data-goto="build">${ICON.doc}Build instructions</button>` : ""}
           ${stls ? `<button class="btn" type="button" id="zip">${ICON.zip}All STLs (.zip)</button>` : ""}
           <a class="btn" href="${esc(it.source)}" target="_blank" rel="noopener">${ICON.ext}Source</a>
         </div>
+        ${it.firmware ? firmwareBlock(it.firmware) : ""}
         ${it.parts.length ? `<div class="section-title"><span>Printable parts</span><span>${it.parts.length}</span></div><div class="list">${it.parts.map(row).join("")}</div>` : ""}
         ${it.views.length ? `<div class="section-title"><span>Views</span><span>${it.views.length}</span></div><div class="list">${it.views.map(row).join("")}</div>` : ""}
+        ${(it.bom || []).length ? `<div class="section-title"><span>Bill of materials</span><span>${it.bom.reduce((n, g) => n + g.rows.length, 0)}</span></div>
+          ${it.bom.map(bomTable).join("")}` : ""}
         ${it.older.map(o => `<details class="older"><summary>${ICON.chev}Older version · ${esc(o.version)} <span class="chip" style="margin-left:auto">${esc(o.file.split("/").pop())}</span></summary>
           <div class="list">${o.items.map(row).join("")}</div></details>`).join("")}
       </div>
+      ${it.doc ? `<div class="pane doc" data-pane="build" hidden>${it.doc}</div>` : ""}
       <div class="pane" data-pane="custom" hidden id="custom"></div>
     </div>`;
+}
+
+/* Firmware card: the browser installer (ESP Web Tools, Web Serial) when a build was published. */
+const EWT_URL = "https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module";
+function firmwareBlock(fw) {
+  const install = fw.manifest
+    ? `<esp-web-install-button manifest="${esc(fw.manifest)}">
+        <button slot="activate" class="btn primary" type="button">${ICON.bolt}Flash from browser</button>
+        <span slot="unsupported" class="fw-msg">Flashing needs Chrome or Edge on a computer (Web Serial).</span>
+        <span slot="not-allowed" class="fw-msg">Flashing needs the page served over HTTPS.</span>
+      </esp-web-install-button>`
+    : `<span class="fw-msg">No build is published yet; build it from the source.</span>`;
+  return `<div class="section-title"><span>Firmware</span><span>${esc(fw.chip)}${fw.version ? ` · v${esc(fw.version)}` : ""}</span></div>
+    <div class="fw">
+      ${fw.note ? `<p>${esc(fw.note)}</p>` : ""}
+      <div class="actions">${install}<a class="btn" href="${esc(fw.source)}" target="_blank" rel="noopener">${ICON.ext}Firmware source</a></div>
+    </div>`;
+}
+
+/* One BOM group from the README as a table; short columns (#, qty, price) stay narrow. */
+function bomTable(g) {
+  const narrow = g.columns.map(c => /^(#|qty|~?chf|price)$/i.test(c.trim()));
+  const cell = (c, i) => `<td${narrow[i] ? ' class="num"' : ""}>${c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.text)}</a>` : esc(c.text)}</td>`;
+  return `<div class="list bomwrap"><table class="bom"><caption>${esc(g.name)}</caption>
+    <thead><tr>${g.columns.map((c, i) => `<th${narrow[i] ? ' class="num"' : ""}>${esc(c)}</th>`).join("")}</tr></thead>
+    <tbody>${g.rows.map(r => `<tr>${r.map(cell).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
 function blueprintSheet(it) {
@@ -1452,6 +1524,8 @@ function togglePlay() {
 sheet.addEventListener("click", async e => {
   const t = e.target;
   if (t.closest(".dl, a")) return;
+  const go = t.closest("[data-goto]");
+  if (go) { $(`[data-tab="${go.dataset.goto}"]`, sheet)?.click(); $(".info", sheet)?.scrollTo({top: 0}); return; }
   const tab = t.closest("[data-tab]");
   if (tab) {
     $$("[data-tab]", sheet).forEach(b => b.setAttribute("aria-selected", b === tab));
