@@ -1,6 +1,6 @@
 // DIY battery valve head for floor-heating manifolds (M30x1.5) - tray version
 // N20 lock motor standing upright, lead screw on the valve axis, nut + pusher press the pin.
-// (The older left/right clamshell version is valve_head.scad.)
+// (The older left/right clamshell version is versions/clamshell/valve_head.scad.)
 //
 // Layout along the body:  [ drive | logic | battery | charger ]
 //

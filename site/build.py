@@ -110,6 +110,8 @@ def strip_md(s):
 def build_automation(folder, out, pool):
     rel = folder.relative_to(ROOT).as_posix()
     files = sorted(folder.glob("*.scad"))
+    # Older designs live in versions/<name>/; they are listed apart from the current parts.
+    older = sorted(folder.glob("versions/**/*.scad"))
     if not files:
         return None, []
     doc_title, doc_text, doc_name = doc_summary(folder)
@@ -118,11 +120,13 @@ def build_automation(folder, out, pool):
     summary = doc_text or " ".join(first_header[1:4])
 
     jobs, models = [], []
-    for scad in files:
+    for scad in files + older:
         text = scad.read_text()
         parts = scad_parts(text)
-        model = {"file": scad.name, "views": [], "parts": []}
-        dest = out / "files" / folder.name / scad.stem
+        sub = scad.parent.relative_to(folder)
+        model = {"file": (sub / scad.name).as_posix(), "views": [], "parts": [],
+                 "version": sub.name if scad in older else None}
+        dest = out / "files" / folder.name / sub / scad.stem
         dest.mkdir(parents=True, exist_ok=True)
         if not parts:
             parts = [None]
@@ -134,13 +138,13 @@ def build_automation(folder, out, pool):
             if part in VIEWS:
                 model["views"].append({"name": name, "png": png_url})
                 jobs.append(pool.submit(run_openscad, define + png_args(png) + [str(scad)],
-                                        f"{rel}/{scad.name} view {name}"))
+                                        f"{rel}/{model['file']} view {name}"))
             else:
                 stl = dest / f"{name}.stl"
                 model["parts"].append({"name": name, "png": png_url,
                                        "stl": stl.relative_to(out).as_posix()})
                 jobs.append(pool.submit(render_part, scad, define, stl, png,
-                                        f"{rel}/{scad.name} part {name}"))
+                                        f"{rel}/{model['file']} part {name}"))
         models.append(model)
 
     item = {
