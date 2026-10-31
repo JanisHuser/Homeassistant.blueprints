@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -36,6 +37,8 @@ BRANCH = os.environ.get("SITE_SOURCE_BRANCH", "main")
 VIEWS = {"assembly", "exploded", "section", "cutaway", "plate_assembly", "print"}
 IMG_SIZE = "1024,768"
 PART_COLOR = "#f0a03c"
+# Views exported as coloured meshes too; the page splits them into parts for the assembly guide.
+ASSEMBLIES = ("assembly", "plate_assembly")
 
 
 def openscad_cmd():
@@ -83,6 +86,66 @@ def scad_header(text):
     return lines
 
 
+LITERAL = r'-?\d+(?:\.\d+)?(?:[eE]-?\d+)?|true|false|"(?:[^"\\]|\\.)*"'
+ASSIGN = re.compile(rf'^\s*(\$?[A-Za-z_]\w*)\s*=\s*({LITERAL})\s*;\s*(?://\s*(.*))?$')
+
+
+def scad_params(text):
+    """Top-level literal assignments, grouped like the OpenSCAD Customizer.
+
+    Groups come from `/* [Name] */` or `/* ---- name ---- */` headers ("Hidden" is
+    skipped). A trailing `// [a, b]` comment makes a dropdown, `// [min:max]` or
+    `// [min:step:max]` a slider; other comment text becomes the description.
+    Computed values (anything that is not a literal) are left out.
+    """
+    params, group, depth, above = [], "Parameters", 0, []
+    for line in text.splitlines():
+        s = line.strip()
+        head = re.fullmatch(r"/\*\s*\[([^\]]+)\]\s*\*/", s) or re.fullmatch(r"/\*\s*-{3,}\s*(.+?)\s*-{3,}\s*\*/", s)
+        if depth == 0 and head:
+            group, above = head.group(1).strip(), []
+            continue
+        m = ASSIGN.match(line) if depth == 0 else None
+        if m and m.group(1) != "part" and group.lower() != "hidden":
+            name, raw, comment = m.group(1), m.group(2), (m.group(3) or "").strip()
+            if raw in ("true", "false"):
+                p = {"type": "bool", "default": raw == "true"}
+            elif raw.startswith('"'):
+                p = {"type": "string", "default": json.loads(raw)}
+            else:
+                p = {"type": "number", "default": float(raw) if re.search(r"[.eE]", raw) else int(raw)}
+            hint = re.match(r"\[([^\]]*)\]\s*(.*)", comment)
+            if hint:
+                comment = hint.group(2)
+                body = hint.group(1)
+                if ":" in body and p["type"] == "number" and "," not in body:
+                    nums = [float(x) for x in body.split(":") if x.strip()]
+                    if len(nums) == 2:
+                        p.update(min=nums[0], max=nums[1])
+                    elif len(nums) == 3:
+                        p.update(min=nums[0], step=nums[1], max=nums[2])
+                elif body.strip():
+                    opts = []
+                    for o in body.split(","):
+                        val, _, label = o.strip().partition(":")
+                        val = val.strip().strip('"')
+                        if p["type"] == "number":
+                            try:
+                                val = float(val) if "." in val else int(val)
+                            except ValueError:
+                                continue
+                        opts.append({"value": val, "label": (label or str(val)).strip()})
+                    if opts:
+                        p.update(type="enum", options=opts)
+            desc = comment or " ".join(above)
+            params.append({"name": name, "group": group, "description": desc, **p})
+        above = [s.lstrip("/").strip()] if s.startswith("//") and not re.fullmatch(r"//[\s=\-*]*", s) else []
+        # Track braces outside comments and strings so only top-level assignments count.
+        code = re.sub(r'"(?:[^"\\]|\\.)*"', "", line.split("//")[0])
+        depth = max(0, depth + code.count("{") - code.count("}"))
+    return params
+
+
 def doc_summary(folder):
     """(title, summary) from the project's README/ANLEITUNG, if there is one."""
     for name in ("README.md", "ANLEITUNG.md"):
@@ -124,10 +187,13 @@ def build_automation(folder, out, pool):
         text = scad.read_text()
         parts = scad_parts(text)
         sub = scad.parent.relative_to(folder)
-        model = {"file": (sub / scad.name).as_posix(), "views": [], "parts": [],
-                 "version": sub.name if scad in older else None}
         dest = out / "files" / folder.name / sub / scad.stem
         dest.mkdir(parents=True, exist_ok=True)
+        # The source ships with the page so the browser can re-render it with other values.
+        shutil.copyfile(scad, dest / scad.name)
+        model = {"file": (sub / scad.name).as_posix(), "views": [], "parts": [],
+                 "version": sub.name if scad in older else None,
+                 "scad": (dest / scad.name).relative_to(out).as_posix(), "params": scad_params(text)}
         if not parts:
             parts = [None]
         for part in parts:
@@ -136,12 +202,19 @@ def build_automation(folder, out, pool):
             png = dest / f"{name}.png"
             png_url = png.relative_to(out).as_posix()
             if part in VIEWS:
-                model["views"].append({"name": name, "png": png_url})
+                view = {"name": name, "png": png_url}
                 jobs.append(pool.submit(run_openscad, define + png_args(png) + [str(scad)],
                                         f"{rel}/{model['file']} view {name}"))
+                if part in ASSEMBLIES:
+                    off = dest / f"{name}.off"
+                    view["off"] = off.relative_to(out).as_posix()
+                    jobs.append(pool.submit(run_openscad, define + ["--backend=manifold", "--enable=lazy-union",
+                                                                    "-o", str(off), str(scad)],
+                                            f"{rel}/{model['file']} view {name} (off)"))
+                model["views"].append(view)
             else:
                 stl = dest / f"{name}.stl"
-                model["parts"].append({"name": name, "png": png_url,
+                model["parts"].append({"name": name, "png": png_url, "define": bool(part),
                                        "stl": stl.relative_to(out).as_posix()})
                 jobs.append(pool.submit(render_part, scad, define, stl, png,
                                         f"{rel}/{model['file']} part {name}"))
@@ -195,7 +268,10 @@ def build_blueprint(path):
         "summary": desc.split("\n")[0],
         "description": desc,
         "domain": bp.get("domain", "automation"),
-        "inputs": [v.get("name", k) for k, v in (bp.get("input") or {}).items() if isinstance(v, dict)],
+        "inputs": [{"name": v.get("name", k),
+                    "description": (v.get("description") or "").strip(),
+                    "type": next(iter(v.get("selector") or {}), None)}
+                   for k, v in (bp.get("input") or {}).items() if isinstance(v, dict)],
         "files": [path.name],
         "source": raw,
         "import": "https://my.home-assistant.io/create-link/?redirect=blueprint_import&blueprint_url="
@@ -229,10 +305,14 @@ def main():
     for item in items:
         for model in item.get("models", []):
             model["views"] = [v for v in model["views"] if (out / v["png"]).exists()]
+            for v in model["views"]:
+                if "off" in v and not (out / v["off"]).exists():
+                    del v["off"]
             model["parts"] = [p for p in model["parts"] if (out / p["stl"]).exists()]
 
     page = TEMPLATE.read_text().replace(
-        "/*DATA*/null", json.dumps({"repo": REPO, "items": items}, ensure_ascii=False)
+        "/*DATA*/null", json.dumps({"repo": REPO, "built": date.today().isoformat(), "items": items},
+                                   ensure_ascii=False)
                                 .replace("</", "<\\/"))
     (out / "index.html").write_text(page)
     (out / ".nojekyll").write_text("")
