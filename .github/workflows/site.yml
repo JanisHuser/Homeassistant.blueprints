@@ -1,0 +1,37 @@
+# Renders every part (STL + PNG) and publishes the project page to the gh-pages branch.
+name: Project site
+
+on:
+  push:
+    branches: [main]
+    paths: ["home-automations/**", "homeassistant.blueprints/**", "site/**", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: site
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: openscad/openscad:dev
+    steps:
+      - name: Install tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates python3 python3-yaml xvfb xauth
+      - uses: actions/checkout@v4
+      - name: Render parts and build page
+        env:
+          SITE_SOURCE_BRANCH: ${{ github.ref_name }}
+        run: xvfb-run -a python3 site/build.py --out _site
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: _site
+          force_orphan: true
