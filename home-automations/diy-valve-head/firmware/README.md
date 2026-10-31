@@ -17,7 +17,7 @@ git tag diy-valve-head-v0.1.0 && git push origin diy-valve-head-v0.1.0
 **From source** (needs Docker):
 
 ```bash
-docker run --rm -v "$PWD":/repo -w /repo espressif/esp-matter:release-v1.5_idf_v5.4.1 bash site/build_firmware.sh
+docker run --rm -v "$PWD":/repo espressif/esp-matter:release-v1.5_idf_v5.4.1 bash /repo/site/build_firmware.sh
 ```
 
 Run it from the repository root. The image lands in `_firmware/diy-valve-head/firmware.bin`, flashed at offset 0. With ESP-IDF and esp-matter installed you can also run `idf.py set-target esp32c6 build flash monitor` in this folder.
