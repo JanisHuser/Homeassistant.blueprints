@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <sdkconfig.h>
 
 #ifdef __cplusplus
@@ -24,15 +26,21 @@ extern "C" {
 #define PIN_MOTOR_IN1   2   // -> DRV8833 IN1
 #define PIN_MOTOR_IN2   3   // -> DRV8833 IN2
 #define PIN_MOTOR_SLEEP 4   // -> DRV8833 nSLEEP (high = on)
+#define PIN_RGB_LED     8   // WS2812 status LED of the ESP32-H2 dev board (main/led.c)
 #else
 #error "No pin map for this target"
 #endif
+#define PIN_BUTTON      9   // BOOT button on both boards (low = pressed)
 
 void board_init(void);
 /* Runs the motor towards open or closed for run_ms, then brakes and sleeps the driver. */
 void board_motor_run(bool open, uint32_t run_ms);
 /* Battery voltage in mV (OUT+ of the TP4056). */
 int board_battery_mv(void);
+/* BOOT button: a press wakes the chip and notifies task; board_button_rearm() once handled. */
+void board_button_init(TaskHandle_t task);
+bool board_button_down(void);
+void board_button_rearm(void);
 
 #ifdef __cplusplus
 }

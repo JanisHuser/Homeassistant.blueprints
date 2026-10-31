@@ -1,0 +1,6 @@
+dependencies:
+  # WS2812 status LED of the ESP32-H2 board (main/led.c); the XIAO ESP32-C6 has none.
+  espressif/led_strip:
+    version: "~2.5.5"
+    rules:
+      - if: "target == esp32h2"

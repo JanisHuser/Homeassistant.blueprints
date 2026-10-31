@@ -36,6 +36,9 @@ CONFIG_MBEDTLS_SSL_PROTO_DTLS=y
 
 CONFIG_ENABLE_OTA_REQUESTOR=y
 
+# Vendor and product name the controllers show (main/CHIPProjectConfig.h)
+CONFIG_CHIP_PROJECT_CONFIG="main/CHIPProjectConfig.h"
+
 # Light sleep between polls
 CONFIG_PM_ENABLE=y
 CONFIG_PM_DFS_INIT_AUTO=y

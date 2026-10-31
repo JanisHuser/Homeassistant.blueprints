@@ -4,6 +4,13 @@
  * Endpoint 1 is a Matter Water Valve (open/closed) with a Power Source cluster for the
  * 18650. The device is a sleepy Thread end device (ICD): it light-sleeps between polls,
  * wakes the motor driver only to move, and reads the battery once an hour.
+ *
+ * BOOT button: a short press opens a pairing window (15 min, over the network) so another
+ * controller can join; holding it 10 s clears every pairing and restarts.
+ *
+ * Status LED (boards with one): blue blinking = waiting to be paired, blue = pairing,
+ * green = just paired, orange blinking = Thread network lost, white blinking = identify,
+ * red = BOOT held. Off in normal operation.
  */
 
 #include <esp_err.h>
@@ -20,10 +27,12 @@
 #include <common_macros.h>
 
 #include <platform/ESP32/OpenthreadLauncher.h>
+#include <app/server/Server.h>
 #include <app/clusters/valve-configuration-and-control-server/valve-configuration-and-control-cluster.h>
 #include <app/clusters/valve-configuration-and-control-server/valve-configuration-and-control-delegate.h>
 
 #include "board.h"
+#include "led.h"
 
 static const char *TAG = "valve_head";
 
@@ -113,28 +122,151 @@ static void battery_timer_cb(void *)
     schedule(report_battery, board_battery_mv());
 }
 
+/* ---- Pairing state: status LED and sleep (on the Matter thread) ---- */
+
+static bool pairing_session;  // a controller is pairing the device right now
+
+static void update_status()
+{
+    auto &server = chip::Server::GetInstance();
+    const bool pairable = server.GetCommissioningWindowManager().IsCommissioningWindowOpen();
+
+    // No light sleep while pairing is possible: sleeping between radio events can miss the
+    // phone's Bluetooth messages and stall pairing at "connecting".
+    static esp_pm_lock_handle_t awake;
+    static bool held;
+    if (!awake) {
+        esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "pairing", &awake);
+    }
+    if ((pairable || pairing_session) != held) {
+        held = !held;
+        held ? esp_pm_lock_acquire(awake) : esp_pm_lock_release(awake);
+    }
+
+    if (pairing_session) {
+        led_set(LED_JOINING);
+    } else if (pairable) {
+        led_set(LED_PAIRING);
+    } else if (server.GetFabricTable().FabricCount() > 0 && !chip::DeviceLayer::ConnectivityMgr().IsThreadAttached()) {
+        led_set(LED_NO_THREAD);
+    } else {
+        led_set(LED_OFF);
+    }
+}
+
+static void paired_shown(void *)
+{
+    led_override_clear();
+}
+
+static void show_paired()
+{
+    static esp_timer_handle_t timer;
+    if (!timer) {
+        const esp_timer_create_args_t args = {.callback = paired_shown, .name = "paired"};
+        esp_timer_create(&args, &timer);
+    }
+    led_override(LED_PAIRED);
+    esp_timer_stop(timer);
+    esp_timer_start_once(timer, 2 * 1000 * 1000);
+}
+
+/* ---- BOOT button ---- */
+
+static void open_pairing_window(intptr_t)
+{
+    auto &window = chip::Server::GetInstance().GetCommissioningWindowManager();
+    if (window.IsCommissioningWindowOpen()) {
+        return;
+    }
+    // Over the network only: Bluetooth is released once the device is paired.
+    CHIP_ERROR err = window.OpenBasicCommissioningWindow(chip::System::Clock::Seconds16(15 * 60),
+                                                         chip::CommissioningWindowAdvertisement::kDnssdOnly);
+    ESP_LOGI(TAG, "Pairing window %s", err == CHIP_NO_ERROR ? "open for 15 min" : "failed to open");
+}
+
+static void reset_pairings(intptr_t)
+{
+    esp_matter::factory_reset();  // erases the pairings and restarts
+}
+
+static void button_task(void *)
+{
+    esp_pm_lock_handle_t awake;
+    esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "button", &awake);
+    while (true) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        esp_pm_lock_acquire(awake);  // stay awake to time the press
+        int held_ms = 0;
+        while (board_button_down() && held_ms < 10000) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            held_ms += 50;
+            if (held_ms == 1000) {
+                led_override(LED_RESETTING);  // keep holding to reset
+            }
+        }
+        if (held_ms >= 10000) {
+            ESP_LOGW(TAG, "Button held 10 s: clearing all pairings");
+            led_override(LED_RESET);
+            schedule(reset_pairings, 0);
+        } else {
+            if (held_ms >= 1000) {
+                led_override_clear();
+            }
+            if (held_ms >= 50) {  // shorter is contact bounce
+                schedule(open_pairing_window, 0);
+            }
+        }
+        while (board_button_down()) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+        esp_pm_lock_release(awake);
+        board_button_rearm();
+    }
+}
+
 /* ---- Matter callbacks ---- */
 
 static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 {
+    namespace DeviceEventType = chip::DeviceLayer::DeviceEventType;
     switch (event->Type) {
-    case chip::DeviceLayer::DeviceEventType::kCommissioningComplete:
+    case DeviceEventType::kCommissioningComplete:
         ESP_LOGI(TAG, "Commissioning complete");
+        pairing_session = false;
+        show_paired();
         break;
-    case chip::DeviceLayer::DeviceEventType::kFailSafeTimerExpired:
+    case DeviceEventType::kFailSafeTimerExpired:
         ESP_LOGW(TAG, "Commissioning failed, fail safe timer expired");
+        pairing_session = false;
+        break;
+    case DeviceEventType::kCommissioningSessionStarted:
+        pairing_session = true;
+        break;
+    case DeviceEventType::kCommissioningSessionStopped:
+        pairing_session = false;
+        break;
+    case DeviceEventType::kServerReady:
+    case DeviceEventType::kCommissioningWindowOpened:
+    case DeviceEventType::kCommissioningWindowClosed:
+    case DeviceEventType::kFabricRemoved:
+    case DeviceEventType::kThreadStateChange:
         break;
     default:
-        break;
+        return;
     }
+    update_status();
 }
 
 static esp_err_t app_identification_cb(identification::callback_type_t type, uint16_t endpoint_id, uint8_t effect_id,
                                        uint8_t effect_variant, void *priv_data)
 {
-    // No LED on the head; "identify" drives it open, so you can hear which one it is.
+    // "Identify" drives the head open, so you can hear which one it is, and blinks the LED if there is one.
     if (type == identification::START) {
+        led_override(LED_IDENTIFY);
         request_move(true);
+    } else if (type == identification::STOP) {
+        led_override_clear();
     }
     return ESP_OK;
 }
@@ -152,13 +284,21 @@ extern "C" void app_main()
     esp_pm_config_t pm_config = {
         .max_freq_mhz = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ,
         .min_freq_mhz = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ,
+#ifdef CONFIG_VALVE_LIGHT_SLEEP
         .light_sleep_enable = true,
+#else
+        .light_sleep_enable = false,
+#endif
     };
     esp_pm_configure(&pm_config);
 
     board_init();
+    led_init();
     move_queue = xQueueCreate(1, sizeof(bool));
     xTaskCreate(motor_task, "motor", 3072, nullptr, 5, nullptr);
+    TaskHandle_t button;
+    xTaskCreate(button_task, "button", 3072, nullptr, 5, &button);
+    board_button_init(button);
 
     node::config_t node_config;
     node_t *node = node::create(&node_config, app_attribute_update_cb, app_identification_cb);

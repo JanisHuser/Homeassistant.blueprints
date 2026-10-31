@@ -17,6 +17,13 @@ menu "Valve head"
         help
             Same as swapping the two motor wires.
 
+    config VALVE_LIGHT_SLEEP
+        bool "Light-sleep between Thread polls"
+        default y
+        help
+            Saves the battery. Turn it off to rule out sleep problems: the device then stays
+            awake (still a sleepy Thread device that polls its parent).
+
     config VALVE_BATTERY_INTERVAL_MIN
         int "Battery reading interval (minutes)"
         default 60

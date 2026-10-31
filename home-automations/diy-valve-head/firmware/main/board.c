@@ -6,6 +6,7 @@
 #include <esp_adc/adc_oneshot.h>
 #include <esp_log.h>
 #include <esp_pm.h>
+#include <esp_sleep.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -26,8 +27,8 @@ void board_init(void)
     gpio_set_level(PIN_MOTOR_SLEEP, 0);
     gpio_set_level(PIN_MOTOR_IN1, 0);
     gpio_set_level(PIN_MOTOR_IN2, 0);
-    // Keep the driver asleep (and the motor pins low) through light sleep.
-    gpio_hold_en(PIN_MOTOR_SLEEP);
+    // No gpio_hold_en() here: holding a pad through light sleep stops the ESP32-H2 from hearing its
+    // Thread parent. The DRV8833's internal pull-downs on nSLEEP and IN1/IN2 keep it asleep instead.
 #ifdef PIN_RF_SWITCH
     // XIAO RF switch: powered, on-board antenna.
     gpio_config(&(gpio_config_t){.pin_bit_mask = (1ULL << PIN_RF_SWITCH) | (1ULL << PIN_RF_ANTENNA), .mode = GPIO_MODE_OUTPUT});
@@ -60,7 +61,6 @@ void board_motor_run(bool open, uint32_t run_ms)
     open = !open;
 #endif
     esp_pm_lock_acquire(motor_lock);
-    gpio_hold_dis(PIN_MOTOR_SLEEP);
     gpio_set_level(PIN_MOTOR_SLEEP, 1);
     vTaskDelay(pdMS_TO_TICKS(2));  // DRV8833 wake-up time
     gpio_set_level(PIN_MOTOR_IN1, open ? 1 : 0);
@@ -73,7 +73,6 @@ void board_motor_run(bool open, uint32_t run_ms)
     gpio_set_level(PIN_MOTOR_IN1, 0);
     gpio_set_level(PIN_MOTOR_IN2, 0);
     gpio_set_level(PIN_MOTOR_SLEEP, 0);
-    gpio_hold_en(PIN_MOTOR_SLEEP);
     esp_pm_lock_release(motor_lock);
 }
 
@@ -92,4 +91,43 @@ int board_battery_mv(void)
     }
     // 1:2 divider, 1 MOhm + 1 MOhm.
     return sum / 8 * 2;
+}
+
+static TaskHandle_t button_task;
+
+static void IRAM_ATTR button_isr(void *arg)
+{
+    // Level interrupt: off until the task has seen the button released.
+    gpio_intr_disable(PIN_BUTTON);
+    BaseType_t woken = pdFALSE;
+    vTaskNotifyGiveFromISR(button_task, &woken);
+    portYIELD_FROM_ISR(woken);
+}
+
+void board_button_init(TaskHandle_t task)
+{
+    button_task = task;
+    const gpio_config_t in = {
+        .pin_bit_mask = 1ULL << PIN_BUTTON,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .intr_type = GPIO_INTR_LOW_LEVEL,
+    };
+    gpio_config(&in);
+    // Same pull-up in light sleep, and a press wakes the chip.
+    gpio_sleep_sel_dis(PIN_BUTTON);
+    gpio_wakeup_enable(PIN_BUTTON, GPIO_INTR_LOW_LEVEL);
+    esp_sleep_enable_gpio_wakeup();
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(PIN_BUTTON, button_isr, NULL);
+}
+
+bool board_button_down(void)
+{
+    return gpio_get_level(PIN_BUTTON) == 0;
+}
+
+void board_button_rearm(void)
+{
+    gpio_intr_enable(PIN_BUTTON);
 }
