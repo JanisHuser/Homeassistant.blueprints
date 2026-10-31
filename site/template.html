@@ -74,6 +74,10 @@ h3 { font-size: 13px; margin: 4px 0 0; color: var(--muted); font-weight: 600; }
 .btn.primary.bp { background: var(--bp); border-color: var(--bp); color: #fff; }
 details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 details pre { white-space: pre-wrap; font: 13px/1.5 system-ui, sans-serif; margin: 6px 0 0; color: var(--ink); }
+details.older { border-top: 1px solid var(--line); padding-top: 10px; }
+details.older .version { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+details.older .kind { color: var(--muted); }
+details.older .chip { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink); }
 .empty { text-align: center; color: var(--muted); padding: 60px 0; }
 dialog { border: 0; padding: 0; border-radius: 14px; background: var(--img); max-width: min(96vw, 1100px); }
 dialog::backdrop { background: rgba(0,0,0,.7); }
@@ -113,7 +117,10 @@ const BP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 for (const it of DATA.items) {
   const words = [it.title, it.summary, it.description, it.domain, ...(it.files || []), ...(it.inputs || []),
     it.kind === "blueprint" ? "blueprint home assistant" : "home automation 3d print stl"];
-  for (const m of it.models || []) for (const p of [...m.parts, ...m.views]) words.push(p.name, pretty(p.name));
+  for (const m of it.models || []) {
+    words.push(m.file, m.version);
+    for (const p of [...m.parts, ...m.views]) words.push(p.name, pretty(p.name));
+  }
   it._text = words.filter(Boolean).join(" ").toLowerCase();
 }
 
@@ -124,6 +131,21 @@ function zoom(src, label) {
   d.showModal();
 }
 document.getElementById("lb").addEventListener("click", e => { if (e.target.tagName === "DIALOG") e.target.close(); });
+
+function label(x, withFile) { return (withFile ? x.file + " · " : "") + pretty(x.name); }
+
+// Views strip and parts grid for a list of models; file names only when there is more than one.
+function models(list, showViews, fileHeadings = list.length > 1) {
+  const views = list.flatMap(m => m.views.map(v => ({...v, file: m.file})));
+  return (showViews && views.length ? `<h3>Views</h3><div class="views">${views.map(v =>
+      `<button data-zoom="${esc(v.png)}" data-label="${esc(label(v, fileHeadings))}"><img loading="lazy" src="${esc(v.png)}" alt=""><span>${esc(label(v, fileHeadings))}</span></button>`).join("")}</div>` : "")
+    + list.map(m => m.parts.length ? `<h3>${fileHeadings ? esc(m.file) + " · " : ""}Parts</h3><div class="parts">${m.parts.map(p => `
+      <div class="part">
+        <button data-zoom="${esc(p.png)}" data-label="${esc(label({...p, file: m.file}, fileHeadings))}"><img loading="lazy" src="${esc(p.png)}" alt="${esc(p.name)}"></button>
+        <span class="name">${esc(pretty(p.name))}</span>
+        <a href="${esc(p.stl)}" download>STL ↓</a>
+      </div>`).join("")}</div>` : "").join("");
+}
 
 function card(it) {
   if (it.kind === "blueprint") {
@@ -141,26 +163,22 @@ function card(it) {
         </div>
       </div></article>`;
   }
-  const views = it.models.flatMap(m => m.views.map(v => ({...v, file: m.file})));
-  const parts = it.models.flatMap(m => m.parts.map(p => ({...p, file: m.file})));
+  const current = it.models.filter(m => !m.version);
+  const older = it.models.filter(m => m.version);
+  const views = current.flatMap(m => m.views.map(v => ({...v, file: m.file})));
+  const parts = current.flatMap(m => m.parts.map(p => ({...p, file: m.file})));
   const hero = views[0] || parts[0];
-  const multi = it.models.length > 1;
-  const lbl = x => (multi ? x.file + " · " : "") + pretty(x.name);
   return `<article class="card">
-    ${hero ? `<button class="hero" data-zoom="${esc(hero.png)}" data-label="${esc(lbl(hero))}"><img loading="lazy" src="${esc(hero.png)}" alt="${esc(it.title)}"></button>` : ""}
+    ${hero ? `<button class="hero" data-zoom="${esc(hero.png)}" data-label="${esc(label(hero, current.length > 1))}"><img loading="lazy" src="${esc(hero.png)}" alt="${esc(it.title)}"></button>` : ""}
     <div class="body">
       <div class="kind">Home automation · ${parts.length} part${parts.length === 1 ? "" : "s"}</div>
       <h2>${esc(it.title)}</h2>
       <p class="summary">${esc(it.summary)}</p>
-      <div class="chips">${it.files.map(f => `<span class="chip">${esc(f)}</span>`).join("")}</div>
-      ${views.length > 1 ? `<h3>Views</h3><div class="views">${views.map(v =>
-        `<button data-zoom="${esc(v.png)}" data-label="${esc(lbl(v))}"><img loading="lazy" src="${esc(v.png)}" alt=""><span>${esc(lbl(v))}</span></button>`).join("")}</div>` : ""}
-      ${it.models.map(m => m.parts.length ? `<h3>${multi ? esc(m.file) + " · " : ""}Parts</h3><div class="parts">${m.parts.map(p => `
-        <div class="part">
-          <button data-zoom="${esc(p.png)}" data-label="${esc(lbl({...p, file: m.file}))}"><img loading="lazy" src="${esc(p.png)}" alt="${esc(p.name)}"></button>
-          <span class="name">${esc(pretty(p.name))}</span>
-          <a href="${esc(p.stl)}" download>STL ↓</a>
-        </div>`).join("")}</div>` : "").join("")}
+      <div class="chips">${current.map(m => `<span class="chip">${esc(m.file)}</span>`).join("")}</div>
+      ${models(current, views.length > 1)}
+      ${older.length ? `<details class="older"><summary>Older version${older.length === 1 ? "" : "s"}: ${esc(older.map(m => m.version).join(", "))}</summary>
+        ${older.map(m => `<div class="version"><div class="kind">${esc(m.version)} <span class="chip">${esc(m.file.split("/").pop())}</span></div>${models([m], true, false)}</div>`).join("")}
+      </details>` : ""}
       <div class="actions">
         ${it.doc ? `<a class="btn primary" href="${esc(it.doc)}" target="_blank" rel="noopener">Instructions</a>` : ""}
         <a class="btn" href="${esc(it.source)}" target="_blank" rel="noopener">Source</a>

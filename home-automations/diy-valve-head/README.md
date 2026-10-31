@@ -10,7 +10,7 @@ Layout along the body: **drive | logic | battery | charger**.
 - **Housing:** a one-piece **tray** (printed front-face-down, open towards the valve), a **lid** on the valve side that slides in from the back, and an **adapter** that twist-locks into the tray. No screws, no clips across a seam, no supports.
 - **Size (defaults):** 26 × 132 mm, **35.7 mm deep** from the valve's thread face.
 
-The model is [`valve_head_tray.scad`](valve_head_tray.scad). The older left/right clamshell version is [`valve_head.scad`](valve_head.scad), with its STLs in `stl/clamshell/` and pictures in `renders/clamshell/`.
+The model is [`valve_head_tray.scad`](valve_head_tray.scad). The older left/right clamshell version is [`versions/clamshell/valve_head.scad`](versions/clamshell/valve_head.scad).
 
 ![assembly](renders/assembly.png)
 
