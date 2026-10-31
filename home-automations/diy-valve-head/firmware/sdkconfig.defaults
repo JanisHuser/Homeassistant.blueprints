@@ -1,4 +1,4 @@
-CONFIG_IDF_TARGET="esp32c6"
+# Shared by every board; sdkconfig.defaults.<target> adds what one chip needs and lists it for the build.
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESP_PHY_MAC_BB_PD=y
 

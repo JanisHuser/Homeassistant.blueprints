@@ -1,12 +1,12 @@
 # Valve head firmware (Matter over Thread)
 
-Flash the XIAO ESP32-C6 over USB, then add it in Home Assistant with the Matter code 3497-011-2332. It shows up as a water valve with a battery level.
+Runs on a XIAO ESP32-C6 or an ESP32-H2 board. Flash it over USB, then add it in Home Assistant with the Matter code 3497-011-2332. It shows up as a water valve with a battery level.
 
 ## Flash
 
-**From the browser:** open the project page, plug the XIAO into the computer by USB (battery disconnected) and press **Flash from browser** (Chrome or Edge on a computer). If it doesn't connect, hold **BOOT** while plugging in. It flashes the latest [release](https://github.com/JanisHuser/Homeassistant.blueprints/releases).
+**From the browser:** open the project page, plug the board into the computer by USB (battery disconnected) and press **Flash from browser** (Chrome or Edge on a computer). It detects the chip and flashes the matching image of the latest [release](https://github.com/JanisHuser/Homeassistant.blueprints/releases). If it fails to connect, put the chip in download mode: hold **BOOT**, tap **RESET**, release **BOOT**, then try again.
 
-**From a release:** download `diy-valve-head-<version>-esp32c6.bin` from the releases and flash it at offset 0 with `esptool.py --chip esp32c6 write_flash 0x0 <file>`.
+**From a release:** download `diy-valve-head-<version>-<chip>.bin` (`esp32c6` or `esp32h2`) from the releases and flash it at offset 0 with `esptool.py --chip <chip> write_flash 0x0 <file>`.
 
 **Making a release:** bump `PROJECT_VER` in `CMakeLists.txt` and merge to main. GitHub builds the image, tags it `diy-valve-head-<version>`, publishes the release and redeploys the page with it. Merges that leave `PROJECT_VER` alone only check the build.
 
@@ -16,7 +16,7 @@ Flash the XIAO ESP32-C6 over USB, then add it in Home Assistant with the Matter 
 docker run --rm -v "$PWD":/repo espressif/esp-matter:release-v1.5_idf_v5.4.1 bash /repo/site/build_firmware.sh
 ```
 
-Run it from the repository root. The image lands in `_firmware/diy-valve-head/firmware.bin`, flashed at offset 0. With ESP-IDF and esp-matter installed you can also run `idf.py set-target esp32c6 build flash monitor` in this folder.
+Run it from the repository root. It builds one image per `sdkconfig.defaults.<chip>` file into `_firmware/diy-valve-head/<chip>.bin`, flashed at offset 0. With ESP-IDF and esp-matter installed you can also run `idf.py set-target esp32h2 build flash monitor` (or `esp32c6`) in this folder.
 
 ## Pair
 
@@ -43,6 +43,17 @@ The code comes from the test certificates in esp-matter. Home Assistant accepts 
 | D3 | 21 | DRV8833 IN2 |
 | D4 | 22 | DRV8833 nSLEEP |
 | — | 3, 14 | RF switch on, on-board antenna |
+
+## Pins (ESP32-H2)
+
+| GPIO | Connected to |
+|---|---|
+| 1 | battery divider (OUT+ through 2× 1 MΩ) |
+| 2 | DRV8833 IN1 |
+| 3 | DRV8833 IN2 |
+| 4 | DRV8833 nSLEEP |
+
+The pins live in `main/board.h`; the build target picks the set.
 
 ## Settings
 

@@ -1,5 +1,5 @@
 /*
- * DIY valve head: Matter-over-Thread water valve on a XIAO ESP32-C6.
+ * DIY valve head: Matter-over-Thread water valve on a XIAO ESP32-C6 or an ESP32-H2.
  *
  * Endpoint 1 is a Matter Water Valve (open/closed) with a Power Source cluster for the
  * 18650. The device is a sleepy Thread end device (ICD): it light-sleeps between polls,

@@ -73,7 +73,7 @@ jobs:
         with:
           name: firmware
           path: |
-            _firmware/*/firmware.bin
+            _firmware/*/*.bin
 
   release:
     if: github.ref == 'refs/heads/main'
@@ -94,8 +94,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           released=false
-          for image in _firmware/*/firmware.bin; do
-            project=$(basename "$(dirname "$image")")
+          for dir in _firmware/*/; do
+            project=$(basename "$dir")
             src=home-automations/$project/firmware
             version=$(sed -n 's/^set(PROJECT_VER "\(.*\)")/\1/p' "$src/CMakeLists.txt")
             tag=$project-$version
@@ -103,15 +103,19 @@ jobs:
               echo "$tag: already released"
               continue
             fi
-            target=$(sed -n 's/^CONFIG_IDF_TARGET="\(.*\)"/\1/p' "$src/sdkconfig.defaults")
-            asset=_firmware/$tag-$target.bin
-            cp "$image" "$asset"
-            gh release create "$tag" "$asset" --target "$GITHUB_SHA" --title "$project $version" \
-              --notes "Merged image for the $target, flash at offset 0x0 (or use the browser installer on the project page).
+            # One merged image per chip: <project>-<version>-<target>.bin
+            assets=() flash=""
+            for image in "$dir"*.bin; do
+              target=$(basename "$image" .bin)
+              assets+=("_firmware/$tag-$target.bin")
+              cp "$image" "${assets[-1]}"
+              flash+="esptool.py --chip $target write_flash 0x0 $tag-$target.bin"$'\n'
+            done
+            gh release create "$tag" "${assets[@]}" --target "$GITHUB_SHA" --title "$project $version" \
+              --notes "Merged images, one per chip, flashed at offset 0x0 (or use the browser installer on the project page, which picks the right one).
 
           \`\`\`bash
-          esptool.py --chip $target write_flash 0x0 $(basename "$asset")
-          \`\`\`"
+          ${flash}\`\`\`"
             echo "$tag: released"
             released=true
           done
