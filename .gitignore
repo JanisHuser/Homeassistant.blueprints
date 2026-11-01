@@ -7,3 +7,9 @@
 _site/
 _firmware/
 .ccache/
+
+# KiCad local state
+*-backups/
+*.kicad_prl
+fp-info-cache
+*.lck

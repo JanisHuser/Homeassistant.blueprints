@@ -119,7 +119,7 @@ Roughly **CHF 17–22 per head**.
 
 ## Wiring
 
-Pairing and flashing are in [`firmware/README.md`](firmware/README.md).
+Pairing and flashing are in [`firmware/README.md`](firmware/README.md). The same wiring as a KiCad schematic is [`electronics/valve_head.kicad_sch`](electronics/valve_head.kicad_sch), and it opens in the project page's viewer.
 
 ```
 18650 ─ TP4056 B+/B−     TP4056 OUT+ ─┬─ XIAO BAT+          (OUT− ─ common GND)

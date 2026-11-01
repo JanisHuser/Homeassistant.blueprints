@@ -4,7 +4,8 @@
 For every .scad file under home-automations/ it renders one STL and one PNG per
 printable part, plus a PNG for each view (assembly, exploded, ...). Blueprints
 under homeassistant.blueprints/ get a card with an "Import to Home Assistant"
-link. Everything lands in _site/.
+link. KiCad schematics and boards in a project's folder open in the page's viewer.
+Everything lands in _site/.
 
     python3 site/build.py                 # needs openscad on PATH
     OPENSCAD=/path/to/openscad python3 site/build.py
@@ -30,6 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 AUTOMATIONS = ROOT / "home-automations"
 BLUEPRINTS = ROOT / "homeassistant.blueprints"
 TEMPLATE = Path(__file__).resolve().parent / "template.html"
+KICAD_VIEWER = Path(__file__).resolve().parent / "kicad.js"
 # Merged firmware images from site/build_firmware.sh, one folder per project.
 FIRMWARE = ROOT / "_firmware"
 
@@ -303,6 +305,31 @@ def doc_html(folder, doc_name, out, rendered):
     return "\n".join(h for h in html if h != "<p></p>")
 
 
+def kicad(folder, out):
+    """The project's KiCad schematics and boards, copied next to the page for the viewer.
+
+    A schematic that another one uses as a sub-sheet is only reached through that one.
+    """
+    files = [f for pattern in ("*.kicad_sch", "*.kicad_pcb") for f in folder.rglob(pattern)
+             if not {"versions"} & set(f.relative_to(folder).parts) and not any(p.endswith("-backups") for p in f.parts)]
+    used = set()
+    for f in files:
+        if f.suffix == ".kicad_sch":
+            for name in re.findall(r'\(property "Sheet ?file" "([^"]+)"', f.read_text()):
+                used.add((f.parent / name).resolve())
+    items = []
+    for f in sorted(files):
+        rel = f.relative_to(folder)
+        target = out / "files" / folder.name / "kicad" / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(f, target)
+        if f.resolve() not in used:
+            items.append({"kind": "sch" if f.suffix == ".kicad_sch" else "pcb", "name": f.stem, "file": rel.as_posix(),
+                          "url": target.relative_to(out).as_posix()})
+    # Schematic first, as you read a design.
+    return sorted(items, key=lambda x: (x["kind"] != "sch", x["file"]))
+
+
 def firmware(folder, out, title):
     """The project's firmware/ (an ESP-IDF project): source link, and a browser installer if it was built."""
     src = folder / "firmware"
@@ -401,6 +428,7 @@ def build_automation(folder, out, pool):
         "models": models,
         "bom": doc_bom(folder, doc_name),
         "firmware": firmware(folder, out, title),
+        "kicad": kicad(folder, out),
     }
     return item, jobs
 
@@ -487,6 +515,7 @@ def main():
                                    ensure_ascii=False)
                                 .replace("</", "<\\/"))
     (out / "index.html").write_text(page)
+    shutil.copyfile(KICAD_VIEWER, out / KICAD_VIEWER.name)
     (out / ".nojekyll").write_text("")
     failed = ok.count(False)
     print(f"\n{len(items)} cards, {len(ok) - failed}/{len(ok)} renders ok -> {out}")
