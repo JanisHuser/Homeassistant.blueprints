@@ -890,6 +890,48 @@ function parseOFF(text, T) {
   return out;
 }
 
+// OpenSCAD axes in the viewer, which turns the model Z-up into three.js Y-up.
+const SCAD_AXES = {x: [1, 0, 0], y: [0, 0, -1], z: [0, 1, 0]};
+const scadAxis = (T, s) => {
+  const m = /^([+-]?)([xyz])$/i.exec(s || "");
+  return m && new T.Vector3(...SCAD_AXES[m[2].toLowerCase()]).multiplyScalar(m[1] === "-" ? -1 : 1);
+};
+// `// assembly: up=-z explode=z` anywhere in a .scad sets how the assembly guide shows it:
+// up = the model axis that points up (-z: built upside down, from the bottom), explode = the axis parts move along
+// (z: both ways from the first part, -z / +z: all of them out that way).
+function assemblyHints(src) {
+  const line = src.match(/^\s*\/\/\s*assembly:(.*)$/m)?.[1] || "";
+  return Object.fromEntries([...line.matchAll(/(\w+)\s*=\s*([+-]?\w+)/g)].map(m => [m[1], m[2]]));
+}
+
+// Explode along one axis: the first part stays put, the others move away from it in the order they sit
+// along the axis, each just clear of the one before. Returns each group's offset along `axis`; one-way moves
+// everything out towards +axis.
+function stackOffsets(groups, axis, r, oneWay) {
+  const span = groups.map(g => {
+    let lo = Infinity, hi = -Infinity;
+    for (const geo of g.geos) {
+      const b = geo.boundingBox, a = b.min.dot(axis), z = b.max.dot(axis);
+      lo = Math.min(lo, a, z); hi = Math.max(hi, a, z);
+    }
+    return {lo, hi};
+  });
+  const order = groups.map((_, i) => i).sort((a, b) => (span[a].lo + span[a].hi) - (span[b].lo + span[b].hi));
+  if (oneWay) order.splice(order.indexOf(0), 1), order.unshift(0);
+  const at = order.indexOf(0), gap = r * .1, off = groups.map(() => 0);
+  for (const s of oneWay ? [1] : [1, -1]) {
+    // Walk outwards from the first part; with s = -1 the axis is flipped so the same rule applies.
+    let edge = s > 0 ? span[0].hi : -span[0].lo, prev = 0;
+    for (let k = at + s; k >= 0 && k < order.length; k += s) {
+      const i = order[k], lo = s > 0 ? span[i].lo : -span[i].hi, hi = s > 0 ? span[i].hi : -span[i].lo;
+      prev = Math.max(prev + gap, edge + gap - lo);
+      edge = hi + prev;
+      off[i] = s * prev;
+    }
+  }
+  return off;
+}
+
 class Viewer {
   constructor(host, lib) {
     const {T, OrbitControls} = lib;
@@ -966,40 +1008,51 @@ class Viewer {
     this.group = new T.Group(); this.group.add(mesh); this.scene.add(this.group);
     this.frame(geo.boundingSphere.radius, geo.boundingBox.min.y);
   }
-  // groups: [{rgb, alpha, geos, label}] in assembly order.
-  showAssembly(groups, keepView) {
+  // groups: [{rgb, alpha, geos, label}] in assembly order. hints: {up, explode} from assemblyHints().
+  showAssembly(groups, keepView, hints = {}) {
     const T = this.T;
     this.clear();
+    const up = scadAxis(T, hints.up), turn = new T.Quaternion();
+    if (up) turn.setFromUnitVectors(up, new T.Vector3(0, 1, 0));
     const box = new T.Box3();
-    for (const g of groups) for (const geo of g.geos) { geo.computeBoundingBox(); box.union(geo.boundingBox); }
+    for (const g of groups) for (const geo of g.geos) { if (up) geo.applyQuaternion(turn); geo.computeBoundingBox(); box.union(geo.boundingBox); }
     const center = box.getCenter(new T.Vector3()), size = box.getSize(new T.Vector3());
     const r = size.length() / 2 || 1;
     const axis = new T.Vector3(...(size.x >= size.y && size.x >= size.z ? [1, 0, 0] : size.y >= size.z ? [0, 1, 0] : [0, 0, 1]));
+    const stack = scadAxis(T, hints.explode)?.applyQuaternion(turn).round();
+    const offsets = stack && stackOffsets(groups, stack, r, /^[+-]/.test(hints.explode));
+    // How the fully exploded stack shifts and grows, so the camera can keep it in view.
+    this.spread = offsets && {mid: stack.clone().multiplyScalar((Math.max(...offsets) + Math.min(...offsets)) / 2),
+      grow: (Math.max(...offsets) - Math.min(...offsets)) / (2 * r)};
     this.group = new T.Group(); this.scene.add(this.group);
     this.comps = [];
     groups.forEach((g, gi) => g.geos.forEach(geo => {
       geo.translate(-center.x, -center.y, -center.z); geo.computeVertexNormals(); geo.computeBoundingBox();
       const c = geo.boundingBox.getCenter(new T.Vector3());
-      let dir = c.clone();
-      // Parts sitting on the centre (stacked on one axis) spread along the longest axis by their order.
-      if (dir.length() < r * .08) dir = axis.clone().multiplyScalar(((gi + .5) / groups.length - .5) * r * 1.4);
-      const len = dir.length();
-      dir.normalize().multiplyScalar(r * (.35 + len / r));
       const base = g.alpha;
       const mat = new T.MeshStandardMaterial({color: new T.Color(`rgb(${g.rgb.join(",")})`), roughness: .55, metalness: .05,
         transparent: true, opacity: base, depthWrite: base > .99, emissive: new T.Color(0xf0a03c), emissiveIntensity: 0});
       const mesh = new T.Mesh(geo, mat); mesh.userData.owned = true;
       this.group.add(mesh);
-      this.comps.push({mesh, gi, dir, base, pos: new T.Vector3(), opacity: base, glow: 0, tPos: new T.Vector3(), tOpacity: base, tGlow: 0});
+      this.comps.push({mesh, gi, dir: offsets ? stack.clone().multiplyScalar(offsets[gi]) : this.spreadDir(c, gi, groups.length, r, axis),
+        base, pos: new T.Vector3(), opacity: base, glow: 0, tPos: new T.Vector3(), tOpacity: base, tGlow: 0});
     }));
     this.groupCount = groups.length;
     if (!keepView) this.frame(r * .9, -size.y / 2, 1.5);
     else { const grid = new T.GridHelper(r * 4.5, 20, 0xc9c4b8, 0xe2ded5); grid.position.y = -size.y / 2 - r * .02; grid.material.transparent = true; grid.material.opacity = .7; this.group.add(grid); }
   }
+  // Without an explode axis each part moves out from the centre, the way it sits.
+  spreadDir(c, gi, n, r, axis) {
+    let dir = c.clone();
+      // Parts sitting on the centre (stacked on one axis) spread along the longest axis by their order.
+    if (dir.length() < r * .08) dir = axis.clone().multiplyScalar(((gi + .5) / n - .5) * r * 1.4);
+    const len = dir.length();
+    return dir.normalize().multiplyScalar(r * (.35 + len / r));
+  }
   // step === groupCount shows everything, exploded by `explode` (0..1).
   setAssembly(step, explode, jump) {
     if (!this.comps) return;
-    this.focus(step);
+    this.focus(step, step >= this.groupCount ? explode : 0);
     for (const c of this.comps) {
       if (step >= this.groupCount) { c.tPos.copy(c.dir).multiplyScalar(explode); c.tOpacity = c.base; c.tGlow = 0; }
       else if (c.gi < step) { c.tPos.set(0, 0, 0); c.tOpacity = c.base; c.tGlow = 0; }
@@ -1010,10 +1063,11 @@ class Viewer {
     }
   }
   // Swing the camera round to the side the step's part comes in from, slightly above it.
-  focus(step) {
-    const T = this.T, comps = this.comps.filter(c => c.gi === step);
+  focus(step, explode = 0) {
+    const T = this.T, comps = this.comps.filter(c => c.gi === step), sp = this.spread;
     if (!comps.length) {
-      this.goal = {target: new T.Vector3(), dir: this.camera.position.clone().sub(this.controls.target).normalize(), dist: this.dist};
+      this.goal = {target: sp ? sp.mid.clone().multiplyScalar(explode) : new T.Vector3(),
+        dir: this.camera.position.clone().sub(this.controls.target).normalize(), dist: this.dist * (1 + (sp ? sp.grow * explode * .6 : 0))};
       return;
     }
     const target = new T.Vector3(), dir = new T.Vector3();
@@ -1021,7 +1075,13 @@ class Viewer {
     target.divideScalar(comps.length);
     dir.normalize();
     if (!Number.isFinite(dir.x)) dir.set(1, 0, 0);
-    const up = new T.Vector3(0, 1, 0), side = new T.Vector3().crossVectors(up, dir);
+    const up = new T.Vector3(0, 1, 0);
+    // Parts that come in from above or below: keep the current side, seen from a little above.
+    if (Math.abs(dir.y) > .9) {
+      const cam = this.camera.position.clone().sub(this.controls.target).setY(0);
+      dir.copy(cam.lengthSq() > 1e-6 ? cam.normalize() : new T.Vector3(1, 0, 0)).multiplyScalar(.6);
+    }
+    const side = new T.Vector3().crossVectors(up, dir);
     if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
     // A three-quarter view: from the approach side, turned a little sideways and raised.
     const view = dir.clone().add(side.normalize().multiplyScalar(.6)).add(up.multiplyScalar(.7)).normalize();
@@ -1633,7 +1693,7 @@ async function showAssembly(offText, keepView) {
     s.viewer.renderer.domElement.classList.add("ready");
     return;
   }
-  s.viewer.showAssembly(groups, keepView && s.asm);
+  s.viewer.showAssembly(groups, keepView && s.asm, s.mode === "asm" ? assemblyHints(src) : {});
   s.asm = groups;
   $("#asm-dots").innerHTML = groups.map((g, i) => `<i data-to="${i}" title="${esc(g.label)}"></i>`).join("") + `<i data-to="${groups.length}" title="Complete"></i>`;
   $("#legend").innerHTML = groups.map((g, i) => `<button type="button" data-to="${i}"><i style="background:rgb(${g.rgb.join(",")})"></i>${esc(g.label)}</button>`).join("");

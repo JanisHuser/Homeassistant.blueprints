@@ -463,6 +463,7 @@ module ghost_parts(s = 0) {
 /* ---------------- output ---------------- */
 show_travel = 0; // set to travel to see the closed position
 
+// assembly: up=-z explode=-z   (site assembly guide: built upside down, everything goes in from the valve side)
 if (part == "assembly") {
     color("white") tray();
     color("lightsteelblue") lid();

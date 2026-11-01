@@ -439,6 +439,7 @@ module reel(ex=0, show_inner=true) {
     }
 }
 
+// assembly: explode=z    (Montageanleitung auf der Website: Teile vertikal auseinanderziehen)
 if (part == "assembly") reel();
 else if (part == "exploded") reel(ex=24);
 else if (part == "cutaway") difference() { reel(); translate([-200,-200,-50]) cube([200,200,200]); }
