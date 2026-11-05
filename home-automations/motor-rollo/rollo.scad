@@ -5,11 +5,11 @@
 //  Rastnase und ein Filament-Stift.
 //
 //  Aufbau (Achse = X, Motorseite links bei x = 0 = Wand):
-//   [Halter]─[Kopf Ø28: USB-C (unten) │ ESP32-C6 + TP4056]─[Endkappe]═ IKEA-Rohr ═[608 direkt im Rohr]─[Achse]─[Halter]
-//                     └─ Journal ─ Kartusche: 18650 │ DRV8833 │ N20 ─ Mitnehmer (dreht Rohr)
+//   [Halter]─[Kopf Ø28: USB-C (unten) │ Motorplatine (../motor-board)]─[Endkappe]═ IKEA-Rohr ═[608 direkt im Rohr]─[Achse]─[Halter]
+//                     └─ Journal ─ Kartusche: 18650 │ N20 ─ Mitnehmer (dreht Rohr)
 //
 //  Kopf, Journal und Kartusche stehen fest (Vierkantkeil im Halter),
-//  das Rohr dreht sich darum. Der ESP32-C6 sitzt ausserhalb des
+//  das Rohr dreht sich darum. Die Platine mit dem ESP32-H2 sitzt ausserhalb des
 //  Alu-Rohrs, sonst kommt kein Funk durch.
 //
 //  Vor dem Druck nachmessen: tube_id, tube_od, Motor (mot_*),
@@ -56,9 +56,8 @@ head_wall   = 1.6;
 face_t      = 3.5;  // Boden zur Wand
 key_pocket  = 3;
 usb_l       = 10;   // Abschnitt für die USB-C-Einbaubuchse
-board_l     = 27;   // TP4056 (26) / ESP32-C6 Super Mini (22.5), längs
+board_l     = 33;   // Motorplatine: Antenne 3.03 + Platine 27.6 + Platz für die Kabel Richtung Journal
 lid_t       = 3;
-div_key     = 2;
 hook_angles = [90, 210, 330];
 hook_w      = 5;
 hook_t      = 1.2;
@@ -67,6 +66,18 @@ journal_od  = 14;
 journal_id  = 9;    // Kabeldurchgang
 key_z       = 4.8;  // Abflachung = Verdrehsicherung Journal ↔ Kartusche
 jour_engage = 7;
+
+/* [Motorplatine, siehe ../motor-board] */
+brd_l      = 27.6;
+brd_w      = 21;
+brd_t      = 0.8;
+brd_z      = -2;     // Unterkante Platine; darunter 1.7 mm Bauteile, darüber 4.6 mm Super Mini mit USB-C
+brd_under  = 1.7;
+esp_stack  = 4.6;
+esp_w      = 18.4;
+esp_over   = 3.03;   // Antenne des Super Mini ragt so weit über die Platine, Richtung Wand
+rail_in    = 10;     // Schienen decken die Platine von hier bis zur Kante ab, die Randpads bleiben frei
+rail_clr   = 0.1;
 
 /* [Endkappe Motorseite] */
 cap_flange = 1.5;
@@ -95,9 +106,9 @@ cell_bay   = 69;     // 65.5 Zelle + Kontaktplatte + Feder (gedrückt ~3 mm)
 contact_w  = 12;     // Federkontakte 12x12 mm, Lötfahne nach oben in den Kabelkanal biegen
 contact_t  = 0.7;    // Schlitz für 0.3-mm-Blech
 bulk_t     = 3;
-elec_bay   = 20;
+elec_bay   = 8;      // nur noch Kabel: Treiber sitzt auf der Platine im Kopf
 elec_floor = -4;
-drv_w      = 16.6;
+elec_w     = 16.6;
 sock_l     = 11;     // Journal-Aufnahme + Kabelkammer + Pluskontakt
 plate_t    = 3;
 
@@ -130,6 +141,8 @@ echo(str("Rohrlänge: ", tube_len, " mm"));
 echo(str("Stoffbreite max.: ", tube_len - 4, " mm"));
 echo(str("Loch Ø3.5 für Rastnase: ", x_ad + nub_x - x_tube0, " mm ab Rohrende Motorseite"));
 echo(str("Kartuschenlänge: ", cart_len, " mm"));
+assert(esp_over + brd_l <= board_l, "Motorplatine zu lang für den Kopf");
+assert(sqrt(pow(head_d/2 - head_wall, 2) - pow(brd_w/2 + rail_clr, 2)) >= brd_z + brd_t + esp_stack, "Platinenkanten passen nicht in den Kopf");
 
 // ---------- Hilfsmodule ----------
 
@@ -168,9 +181,28 @@ module bracket() {
     }
 }
 
+// Schiene für eine Platinenkante (+Y), läuft zum Deckel hin aus. Die Platine schiebt sich vom
+// Deckel her ein, bis zum Anschlag x0; der Deckel hält sie dort.
+module brd_rail(x0, Lb, ri) {
+    top = brd_z + brd_t + 0.2 + 1;
+    bot = brd_z - 1;
+    intersection() {
+        xcyl(2*ri + eps, Lb);
+        difference() {
+            hull() {
+                translate([x0 - 1.2, rail_in, bot]) cube([Lb - x0 + 1.2, ri - rail_in + 1, top - bot]);
+                translate([x0 - 1.2 - (ri - rail_in), ri, bot]) cube([0.1, 1, top - bot]);
+            }
+            // Nut für die Platine
+            translate([x0, rail_in - 1, brd_z - 0.1]) cube([Lb, brd_w/2 + rail_clr - rail_in + 1, brd_t + 0.2]);
+            // Oberhalb der Nut die Schiene erst ab rail_in: dort stehen die Randpads frei
+        }
+    }
+}
+
 // Kopfgehäuse, Boden zum Halter.
-// Wandseitig: USB-C-Schnappbuchse nach unten. Dahinter Trennwand mit
-// ESP32-C6 (Antenne zur Wand) und TP4056 beidseitig aufgeklebt.
+// Wandseitig: USB-C-Schnappbuchse nach unten. Dahinter die Motorplatine in zwei Schienen,
+// Antenne zur Wand, Super Mini nach oben.
 module head_body() {
     Lb = head_l - lid_t;
     ri = head_d/2 - head_wall;
@@ -181,10 +213,9 @@ module head_body() {
                 xcyl(head_d, Lb);
                 translate([face_t, 0, 0]) xcyl(2*ri, Lb);
             }
-            intersection() {
-                translate([face_t + usb_l, -1, -ri]) cube([Lb - face_t - usb_l + div_key, 2, ri + 9.5]);
-                xcyl(2*ri + eps, Lb + div_key);
-            }
+            x0 = face_t + usb_l + esp_over;
+            brd_rail(x0, Lb, ri);
+            mirror([0, 1, 0]) brd_rail(x0, Lb, ri);
             for (a = hook_angles) rotate([a - 90, 0, 0]) snap_hook(Lb, ri);
         }
         translate([-eps, -(tenon + 0.15)/2, -(tenon + 0.15)/2]) cube([key_pocket + eps, tenon + 0.15, tenon + 0.15]);
@@ -209,7 +240,6 @@ module head_lid() {
         translate([-eps, 0, 0]) xcyl(journal_id, lid_t + jl + 1);
         translate([lid_t + jl - jour_engage, -journal_od, key_z]) cube([jour_engage + 1, 2*journal_od, journal_od]);
         translate([lid_t + jl - jour_engage/2, 0, 0]) rotate([90, 0, 0]) cylinder(d = pin_hole, h = journal_od + 2, center = true);
-        translate([-eps, -1.25, -ri - 1]) cube([div_key + 0.3, 2.5, ri + 11]);
         for (a = hook_angles) rotate([a - 90, 0, 0])
             translate([-eps, -(hook_w + 0.6)/2, ri - 0.4 - hook_t - 0.3]) cube([lid_t + 2*eps, hook_w + 0.6, hook_t + 0.5]);
     }
@@ -245,7 +275,7 @@ module cart_profile(l) {
     }
 }
 
-// Kartusche: Steckaufnahme | 18650 | Schott | DRV8833 | N20 | Frontplatte
+// Kartusche: Steckaufnahme | 18650 | Schott | Kabel | N20 | Frontplatte
 module cartridge() {
     x_bat = sock_l;
     x_el  = x_bat + cell_bay + bulk_t;
@@ -268,8 +298,8 @@ module cartridge() {
             xcyl(cell_d + 0.4, cell_bay);
             translate([0, -(cell_d + 0.4)/2, 0]) cube([cell_bay, cell_d + 0.4, cart_od]);
         }
-        // Elektronikfach (DRV8833 flach auf den Boden)
-        translate([x_el, -drv_w/2, elec_floor]) cube([elec_bay, drv_w, cart_od]);
+        // Kabelkammer vor dem Motor
+        translate([x_el, -elec_w/2, elec_floor]) cube([elec_bay, elec_w, cart_od]);
         // Motorfach: Getriebe-Abflachungen verhindern das Verdrehen
         translate([x_mot, -(mot_w + 0.4)/2, -(mot_h + 0.4)/2]) cube([mot_len + eps, mot_w + 0.4, cart_od]);
         // Frontplatte: Durchgang für Getriebebund und Welle
@@ -325,6 +355,8 @@ module assembly() {
     color("Gold")       translate([W - br_t, 0, 0]) mirror([1, 0, 0]) idle_axle();
     tube();
     // Platzhalter
+    color("DarkGreen") translate([br_t + face_t + usb_l + esp_over, -brd_w/2, brd_z]) cube([brd_l, brd_w, brd_t]);
+    color("RoyalBlue") translate([br_t + face_t + usb_l, -esp_w/2, brd_z + brd_t + 0.1]) cube([24, esp_w, 1.2]);
     color("DimGray") translate([x_tube1 - b608_w, 0, 0]) difference() { xcyl(b608_d, b608_w); translate([-1, 0, 0]) xcyl(b608_id, b608_w + 2); }
     color("Blue")    translate([x_c0 + sock_l + 0.5, 0, cell_z]) xcyl(cell_d, 65.5);
     color("Silver")  translate([x_c0 + cart_len - plate_t - mot_len, -mot_w/2, -mot_h/2]) cube([mot_len, mot_w, mot_h]);
