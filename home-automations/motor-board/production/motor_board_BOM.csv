@@ -1,0 +1,24 @@
+Ref,Qty valve head,Qty Rollo,Value,Part,Description,Footprint
+A1,1,1,Super Mini,ESP32-H2 Super Mini,"Dev board, buy separately, hand-solder on top",ESP32H2-Supermini
+C1 C2 C6,3,3,10u,,"Capacitor, 10 uF, X5R, 10 V or more, 0603",C_0603_1608Metric
+C3 C4,2,2,100n,,"Capacitor, 100 nF, X7R, 16 V or more, 0603",C_0603_1608Metric
+C5,1,1,10n,,"Capacitor, 10 nF, X7R, 16 V or more, 0603 (VCP)",C_0603_1608Metric
+C7,1,1,2.2u,,"Capacitor, 2.2 uF, X5R, 10 V or more, 0603 (VINT)",C_0603_1608Metric
+D1,1,1,red,,"LED, red, 0603",LED_0603_1608Metric
+J1,1,1,USB-C,,"Wire pads to the USB-C socket, no part",WirePads_1x02_P2.00mm
+J2,1,1,18650,,"Wire pads to the 18650 holder, no part",WirePads_1x02_P2.00mm
+J3,1,1,Motor,,"Wire pads to the motor, no part",WirePads_1x02_P2.00mm
+J4,0,1,Encoder,,"Wire pads to the encoder, no part",WirePads_1x04_P2.00mm
+Q1,1,1,FS8205A,FS8205A,"Dual N-MOSFET, TSSOP-8; check its pinout against the datasheet",TSSOP-8_4.4x3mm_P0.65mm
+Q2,0,1,AO3401A,AO3401A,"P-MOSFET, SOT-23",SOT-23
+R1,1,1,2.4k,,"Resistor, 2.4k ohm, 1%, 0603",R_0603_1608Metric
+R2 R4,2,2,1k,,"Resistor, 1k ohm, 1%, 0603",R_0603_1608Metric
+R3,1,1,100,,"Resistor, 100 ohm, 1%, 0603",R_0603_1608Metric
+R5 R6,2,2,1M,,"Resistor, 1M ohm, 1%, 0603",R_0603_1608Metric
+R7,1,1,0.2,,"Current sense, 0.2 ohm, 1%, 0.25 W or more, 1206",R_1206_3216Metric
+R8,1,1,10k,,"Resistor, 10k ohm, 1%, 0603",R_0603_1608Metric
+R9,0,1,100k,,"Resistor, 100k ohm, 1%, 0603",R_0603_1608Metric
+R10 R11,0,2,10k,,"Resistor, 10k ohm, 1%, 0603",R_0603_1608Metric
+U1,1,1,DRV8833,DRV8833PWPR,"Motor driver, TI, HTSSOP-16 with thermal pad",HTSSOP-16-1EP_4.4x5mm_P0.65mm_EP3.4x5mm_Mask2.46x2.31mm
+U2,1,1,TP4056,TP4056,"Li-ion charger, ESOP-8 with thermal pad",SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.41x3.3mm
+U3,1,1,DW01A,DW01A,"Battery protection IC, SOT-23-6",SOT-23-6

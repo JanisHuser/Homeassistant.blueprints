@@ -52,9 +52,9 @@ The code comes from the test certificates in esp-matter. Home Assistant accepts 
 | GPIO | Connected to |
 |---|---|
 | 1 | battery divider (OUT+ through 2× 1 MΩ) |
-| 2 | DRV8833 IN1 |
-| 3 | DRV8833 IN2 |
-| 4 | DRV8833 nSLEEP |
+| 10 | DRV8833 board AIN1 |
+| 11 | DRV8833 board AIN2 |
+| 4 | DRV8833 board STBY |
 
 The pins live in `main/board.h`; the build target picks the set.
 

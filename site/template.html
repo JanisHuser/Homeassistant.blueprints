@@ -430,6 +430,36 @@ esp-web-install-button:not(:defined) [slot="unsupported"], esp-web-install-butto
   padding: 3px 7px; border-radius: 999px; margin-left: 6px; vertical-align: 1px; }
 .stage.custom .live-badge { display: inline-block; }
 
+/* KiCad viewer: covers the stage; its colours are KiCad's own, not the page theme's. */
+.kc { position: absolute; z-index: 2; inset: 0; display: none; overflow: hidden; }
+.stage.mode-kicad .kc { display: block; }
+.stage.mode-kicad::after, .stage.mode-kicad .hint { display: none; }
+.kc-svg { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.kc-svg:active { cursor: grabbing; }
+.kc-bar { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; align-items: center; gap: 10px; pointer-events: none; min-width: 0; }
+.kc-tools { display: flex; gap: 2px; padding: 3px; border-radius: 11px; background: rgba(255,255,255,.92); border: 1px solid rgba(0,0,0,.08); pointer-events: auto; flex: 0 0 auto; }
+.kc-tools button { border: 0; background: none; color: #17171a; font: 600 12px var(--sans); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.kc-tools button[hidden] { display: none; }
+.kc-tools button:hover, .kc-tools button[aria-expanded="true"] { background: rgba(0,0,0,.08); }
+.kc-info { min-width: 0; font: 500 12px var(--mono); color: #3c3b38; background: rgba(255,255,255,.92); border-radius: 8px; padding: 5px 9px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kc-info:empty { display: none; }
+.kc-info b { color: #17171a; }
+.kc-layers { position: absolute; left: 14px; bottom: 60px; max-height: calc(100% - 130px); overflow-y: auto; display: flex; flex-direction: column; padding: 6px; border-radius: 12px;
+  background: rgba(255,255,255,.95); border: 1px solid rgba(0,0,0,.08); color: #17171a; font: 500 12px var(--sans); box-shadow: 0 10px 30px -12px rgba(0,0,0,.4); }
+.kc-layers[hidden] { display: none; }
+.kc-layers label { display: flex; align-items: center; gap: 7px; padding: 3px 8px 3px 4px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.kc-layers label:hover { background: rgba(0,0,0,.06); }
+.kc-layers input { margin: 0; accent-color: #e2801f; }
+.kc-layers i { width: 10px; height: 10px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); }
+.kc-crumbs { position: absolute; left: 14px; top: 60px; display: flex; align-items: center; gap: 6px; max-width: calc(100% - 28px); overflow-x: auto; padding: 5px 10px; border-radius: 9px;
+  background: rgba(255,255,255,.92); border: 1px solid rgba(0,0,0,.08); color: #17171a; font: 500 12px var(--sans); white-space: nowrap; }
+.kc-crumbs[hidden] { display: none; }
+.kc-crumbs button { border: 0; background: none; padding: 0; color: #b8650f; cursor: pointer; font: inherit; font-weight: 600; }
+.kc-msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: #d94f4f; font-weight: 600; }
+.kc-msg[hidden] { display: none; }
+.boards .row > svg { width: 22px; height: 22px; flex: 0 0 auto; color: var(--accent); margin: 6px 12px 6px 8px; }
+
 /* Info tabs */
 .tabs { position: sticky; top: -32px; z-index: 2; display: flex; gap: 4px; padding: 4px; margin: -8px 0 0; border-radius: 12px;
   border: 1px solid transparent; width: fit-content; }
@@ -560,7 +590,7 @@ esp-web-install-button:not(:defined) [slot="unsupported"], esp-web-install-butto
   <div class="grid" id="grid"></div>
 </main>
 
-<footer><div class="wrap"><span id="foot"></span><span>Renders by OpenSCAD · 3D viewer by three.js</span></div></footer>
+<footer><div class="wrap"><span id="foot"></span><span>Renders by OpenSCAD · 3D viewer by three.js · Electronics in KiCad</span></div></footer>
 
 <dialog id="detail" aria-labelledby="d-title">
   <button class="icon-btn close" type="button" data-close aria-label="Close">
@@ -593,6 +623,8 @@ const ICON = {
   full: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   explode: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M4 4l3 3M20 4l-3 3M4 20l3-3M20 20l-3-3M3 9v-5h5M21 9V4h-5M3 15v5h5M21 15v5h-5"/></svg>',
   history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>',
+  schematic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h5l2-5 3 10 3-10 2 5h5"/></svg>',
+  pcb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><circle cx="16" cy="16" r="1.5"/><path d="M9.5 8H13l1.9 1.9V14.5"/></svg>',
   ruler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg>',
   cube: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="m3 7 9 5 9-5M12 12v10"/></svg>',
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z"/></svg>',
@@ -614,6 +646,7 @@ const VIEW_MODES = [
   {name: "exploded", label: "Exploded & assemble", mode: "asm", icon: "explode"},
   {name: "measurements", label: "Measurements", mode: "measure", icon: "ruler"},
 ];
+const BOARD_KINDS = {sch: {label: "Schematic", icon: "schematic"}, pcb: {label: "PCB", icon: "pcb"}};
 const nameOf = x => x.label || pretty(x.name);
 for (const it of DATA.items) {
   it.slug = it.id.toLowerCase().replace(/[^a-z0-9-]/g, "-");
@@ -624,6 +657,7 @@ for (const it of DATA.items) {
     // One set per version, the current files first; the detail view shows one set at a time.
     const set = (models, version) => ({version, label: version ? pretty(version) : "Current", models,
       files: models.map(m => m.file.split("/").pop()),
+      boards: version ? [] : (it.kicad || []).map(b => ({...b, ...BOARD_KINDS[b.kind], type: "board", mode: "kicad"})),
       views: models.flatMap(views), parts: models.flatMap(m => m.parts.map(p => tag(m, p, "part")))});
     it.sets = [set(current, null), ...it.models.filter(m => m.version).map(m => set([m], m.version))].filter(v => v.models.length);
     it.renders = current.flatMap(m => m.views.map(v => tag(m, v, "view")));
@@ -632,6 +666,7 @@ for (const it of DATA.items) {
   const words = [it.title, it.summary, it.description, it.domain, ...(it.files || []),
     ...(it.inputs || []).flatMap(i => [i.name, i.description]),
     it.kind === "blueprint" ? "blueprint home assistant automation" : "home automation hardware 3d print stl openscad"];
+  if (it.kicad?.length) words.push("kicad pcb schematic electronics", ...it.kicad.map(b => b.file));
   for (const g of (it.sets || []).flatMap(v => v.parts)) words.push(g.name, pretty(g.name), g.file, g.version);
   it._text = words.filter(Boolean).join(" ").toLowerCase();
 }
@@ -1318,6 +1353,7 @@ function openDetail(slug, push = true) {
   const it = byId[slug]; if (!it) return;
   stopCycle();
   if (state?.viewer) state.viewer.dispose();
+  state?.board?.dispose();
   clearInterval(state?.playTimer);
   state = {it, idx: 0, mode: null, set: it.sets?.[0], gallery: [], viewer: null, values: {}, model: null, asm: null, step: 0, explode: 0, live: true, custom: null};
   if (it.kind === "automation") state.gallery = galleryOf(it, state.set);
@@ -1343,6 +1379,7 @@ function closeDetail() {
 }
 detail.addEventListener("close", () => {
   if (state?.viewer) state.viewer.dispose();
+  state?.board?.dispose();
   if (state?.custom?.url) URL.revokeObjectURL(state.custom.url);
   clearInterval(state?.playTimer);
   state = null; document.title = "Home Projects";
@@ -1362,13 +1399,14 @@ addEventListener("popstate", () => {
   else if (detail.open) { closingFromHistory = true; closeDetail(); }
 });
 
-// What the stage and the strip step through for one version: its views, then its parts.
-const galleryOf = (it, set) => [...set.views, ...set.parts];
+// What the stage and the strip step through for one version: its views, its parts, then its electronics.
+const galleryOf = (it, set) => [...set.views, ...set.parts, ...set.boards];
 
 // Shows another version: the whole sheet (strip, parts, customizer) is rebuilt for its models.
 function setVersion(v) {
   const s = state; if (!s || v === s.set) return;
   if (s.viewer) { s.viewer.dispose(); s.viewer = null; }
+  s.board?.dispose(); s.board = null;
   clearInterval(s.playTimer);
   Object.assign(s, {set: v, gallery: galleryOf(s.it, v), idx: 0, mode: null, model: null, asm: null, playTimer: null});
   const info = $(".info", sheet), top = [info.scrollTop, sheet.scrollTop];
@@ -1382,7 +1420,7 @@ function hardwareSheet(it, set, gallery) {
   const thumb = x => x.icon
     ? `<button class="thumb vw" type="button" data-g="${idxOf(x)}" aria-label="${esc(nameOf(x))}">${ICON[x.icon]}${esc(nameOf(x))}</button>`
     : `<button class="thumb" type="button" data-g="${idxOf(x)}" aria-label="${esc(pretty(x.name))}"><img src="${esc(x.png)}" alt="" loading="lazy"><span class="cube">${ICON.cube}</span></button>`;
-  const rail = [["Views", set.views], ["Parts", set.parts]]
+  const rail = [["Views", set.views], ["Parts", set.parts], ["KiCad", set.boards]]
     .filter(([, l]) => l.length).map(([g, l]) => `<span class="group">${esc(g)}</span>${l.map(thumb).join("")}`).join("");
   const row = x => `<div class="row" data-g="${idxOf(x)}">
       <img src="${esc(x.png)}" alt="" loading="lazy">
@@ -1414,7 +1452,7 @@ function hardwareSheet(it, set, gallery) {
       <div class="rail" id="rail">${rail}</div>
     </div>
     <div class="info">
-      <div class="kind">Hardware · OpenSCAD</div>
+      <div class="kind">Hardware · OpenSCAD${set.boards.length ? " · KiCad" : ""}</div>
       <h2 id="d-title">${esc(it.title)}</h2>
       <div class="tabs" role="tablist">
         <button type="button" role="tab" aria-selected="true" data-tab="overview">Overview</button>
@@ -1435,6 +1473,9 @@ function hardwareSheet(it, set, gallery) {
         </div>
         ${it.firmware ? firmwareBlock(it.firmware) : ""}
         ${set.parts.length ? `<div class="section-title"><span>Printable parts${set.version ? ` · ${esc(set.label)}` : ""}</span><span>${set.parts.length}</span></div><div class="list">${set.parts.map(row).join("")}</div>` : ""}
+        ${set.boards.length ? `<div class="section-title"><span>Electronics · KiCad</span><span>${set.boards.length}</span></div><div class="list boards">${set.boards.map(b => `<div class="row" data-g="${idxOf(b)}">${ICON[b.icon]}
+          <div class="txt"><div class="nm">${esc(b.label)}</div><div class="fl">${esc(b.file)}</div></div>
+          <a class="dl" href="${esc(b.url)}" download>${ICON.down}KiCad</a></div>`).join("")}</div>` : ""}
         ${(it.bom || []).length ? `<div class="section-title"><span>Bill of materials</span><span>${it.bom.reduce((n, g) => n + g.rows.length, 0)}</span></div>
           ${it.bom.map(bomTable).join("")}` : ""}
         ${it.sets.length > 1 ? `<div class="section-title"><span>Version</span><span>${it.sets.length}</span></div>
@@ -1572,7 +1613,7 @@ function engineStatus(kind, html) {
 
 // Renders what the stage shows (the selected part, or the assembly) with the current values.
 async function liveRender() {
-  const s = state; if (!s || s.it.kind !== "automation") return;
+  const s = state; if (!s || s.it.kind !== "automation" || s.mode === "kicad") return;
   const m = s.model, vals = s.values[m.file] || {};
   const asm = s.mode !== "3d", x = s.gallery[s.idx];
   const target = asm ? asmViewOf(m)?.name : x.define ? x.name : null;
@@ -1621,13 +1662,15 @@ function select(i) {
   const x = g[(i + g.length) % g.length];
   state.idx = g.indexOf(x);
   const model = x.model;
-  $("#stage-tag").innerHTML = `<b>${esc(nameOf(x))}</b> · ${esc(model.version ? model.version + "/" : "")}${esc(model.file.split("/").pop())}<span class="live-badge">custom</span>`;
+  $("#stage-tag").innerHTML = model
+    ? `<b>${esc(nameOf(x))}</b> · ${esc(model.version ? model.version + "/" : "")}${esc(model.file.split("/").pop())}<span class="live-badge">custom</span>`
+    : `<b>${esc(nameOf(x))}</b> · ${esc(x.file.split("/").pop())}`;
   $$("[data-g]", sheet).forEach(el => {
     const on = g[+el.dataset.g] === x;
     el.classList.contains("thumb") ? el.setAttribute("aria-current", on) : el.classList.toggle("current", on);
     if (on && el.classList.contains("thumb")) el.scrollIntoView({block: "nearest", inline: "center", behavior: reduced ? "auto" : "smooth"});
   });
-  if (state.model !== model) { state.model = model; state.asm = null; customPane(); }
+  if (model && state.model !== model) { state.model = model; state.asm = null; customPane(); }
   markChanged();
   setMode(x.mode || "3d");
 }
@@ -1637,9 +1680,28 @@ function setMode(mode) {
   const stage = $("#stage"); if (!stage) return;
   clearInterval(state.playTimer); state.playTimer = null; paintPlay();
   state.mode = mode;
-  for (const k of ["3d", "complete", "asm", "measure"]) stage.classList.toggle(`mode-${k}`, mode === k);
+  for (const k of ["3d", "complete", "asm", "measure", "kicad"]) stage.classList.toggle(`mode-${k}`, mode === k);
   $("#hint").textContent = mode === "asm" ? "Drag to orbit · ← → step through" : mode === "measure" ? "← → to browse" : "Drag to orbit · scroll to zoom · ← → to browse";
+  if (mode === "kicad") return showBoard(state.gallery[state.idx]);
   mode === "3d" ? show3d(state.gallery[state.idx]) : showAsmMode();
+}
+
+let kicadLib = null;
+async function showBoard(x) {
+  const stage = $("#stage"), s = state;
+  stage.classList.add("loading");
+  try {
+    const {KicadViewer} = await (kicadLib ??= import("./kicad.js"));
+    if (state !== s) return;
+    s.board ??= new KicadViewer(stage);
+    await s.board.open(x.url);
+  } catch (err) {
+    kicadLib = null;
+    console.error(err);
+    toast("Couldn't load the board viewer");
+  } finally {
+    stage.classList.remove("loading");
+  }
 }
 
 const isCustom = () => Object.keys(state.values[state.model?.file] || {}).length > 0;
