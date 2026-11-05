@@ -4,6 +4,7 @@
 
 #include <cstdint>
 
+#include <hal/gpio_types.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <sdkconfig.h>
@@ -12,22 +13,22 @@
 
 #if CONFIG_IDF_TARGET_ESP32C6
 // XIAO pad -> GPIO
-#define PIN_BATTERY_ADC 1   // D1 / A1: OUT+ through 2x 1 MOhm
-#define PIN_MOTOR_IN1   2   // D2 -> DRV8833 IN1
-#define PIN_MOTOR_IN2   21  // D3 -> DRV8833 IN2
-#define PIN_MOTOR_SLEEP 22  // D4 -> DRV8833 nSLEEP (high = on)
-#define PIN_RF_SWITCH   3   // low = RF switch powered
-#define PIN_RF_ANTENNA  14  // low = on-board antenna, high = U.FL
+#define PIN_BATTERY_ADC GPIO_NUM_1   // D1 / A1: OUT+ through 2x 1 MOhm
+#define PIN_MOTOR_IN1   GPIO_NUM_2   // D2 -> DRV8833 IN1
+#define PIN_MOTOR_IN2   GPIO_NUM_21  // D3 -> DRV8833 IN2
+#define PIN_MOTOR_SLEEP GPIO_NUM_22  // D4 -> DRV8833 nSLEEP (high = on)
+#define PIN_RF_SWITCH   GPIO_NUM_3   // low = RF switch powered
+#define PIN_RF_ANTENNA  GPIO_NUM_14  // low = on-board antenna, high = U.FL
 #elif CONFIG_IDF_TARGET_ESP32H2
-#define PIN_BATTERY_ADC 1   // ADC1: OUT+ through 2x 1 MOhm
-#define PIN_MOTOR_IN1   2   // -> DRV8833 IN1
-#define PIN_MOTOR_IN2   3   // -> DRV8833 IN2
-#define PIN_MOTOR_SLEEP 4   // -> DRV8833 nSLEEP (high = on)
-#define PIN_RGB_LED     8   // WS2812 status LED of the ESP32-H2 dev board (main/led.cpp)
+#define PIN_BATTERY_ADC GPIO_NUM_1   // ADC1: OUT+ through 2x 1 MOhm
+#define PIN_MOTOR_IN1   GPIO_NUM_10  // -> DRV8833 board AIN1 (GPIO 2 and 3 are strapping pins)
+#define PIN_MOTOR_IN2   GPIO_NUM_11  // -> DRV8833 board AIN2
+#define PIN_MOTOR_SLEEP GPIO_NUM_4   // -> DRV8833 board STBY (high = on)
+#define PIN_RGB_LED     GPIO_NUM_8   // WS2812 status LED of the ESP32-H2 dev board (main/led.cpp)
 #else
 #error "No pin map for this target"
 #endif
-#define PIN_BUTTON      9   // BOOT button on both boards
+#define PIN_BUTTON      GPIO_NUM_9   // BOOT button on both boards
 
 constexpr uint32_t GPIO_LEVEL_LOW = 0;
 constexpr uint32_t GPIO_LEVEL_HIGH = 1;
