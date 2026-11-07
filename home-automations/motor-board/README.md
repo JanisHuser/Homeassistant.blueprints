@@ -32,7 +32,7 @@ GPIO 2, 3, 8, 9 and 25 are strapping pins, and GPIO 8 and 13 drive the Super Min
 | Ref | Goes to | Used by |
 |---|---|---|
 | J1 | USB-C snap socket, VBUS and GND (the socket needs its own CC resistors) | Both |
-| J2 | 18650 holder | Both |
+| J2 | 18650 contact plates | Both |
 | J3 | Motor | Both |
 | J4 | Encoder: power, GND, A, B | Rollo |
 
@@ -51,7 +51,7 @@ The board is **21 × 27.6 mm**. The Super Mini sits on top and everything else o
 | Project | How it sits | What it took |
 |---|---|---|
 | Valve head | Pressed into a pocket over the battery, wire pads towards the drive | Tray 37.5 mm deep |
-| Rollo | Slides into two rails in the head, antenna towards the wall | Head 6 mm longer, so the tube is 782 mm and the fabric 778 mm at most. The cartridge is 12 mm shorter |
+| Rollo | Slides into two rails in the head, antenna towards the wall, Super Mini facing down so BOOT and RESET are reachable through two pin holes | Head Ø30 and longer for its screw-in lid, so the tube is 777 mm and the fabric 773 mm at most. The cartridge is 133 mm |
 
 The stack is 1.7 mm underside parts, 0.8 mm board, 0.1 mm solder, 1.2 mm Super Mini and 3.3 mm its USB-C.
 
@@ -76,4 +76,4 @@ Order it as: 2 layers, 21 × 27.6 mm, **0.8 mm thick**, 1 oz copper. Smallest tr
 - Check that B+/B− suit a battery feed. The Super Mini's own charger stays connected to them, so its USB-C must not be plugged in while the battery is connected.
 - Check the FS8205A pinout against the datasheet of the part you buy.
 - Test the motors: the 1 A limit in R7 may be too low for the valve's closing force.
-- The Rollo model still places a C6 Super Mini, TP4056 and DRV8833 separately. `rollo.scad` and `valve_head_tray.scad` need pockets for this board, and the Rollo has no firmware yet.
+- The Rollo has no firmware yet.
