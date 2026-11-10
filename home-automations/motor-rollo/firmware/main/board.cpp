@@ -50,9 +50,9 @@ void board_init()
     esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, PM_LOCK_NO_ARG, "motor", &motor_lock);
 }
 
-void board_motor_start(motor_dir_t dir)
+void board_motor_start(motor_dir_t dir, bool reversed)
 {
-    bool up = dir == motor_dir_t::up;
+    bool up = (dir == motor_dir_t::up) != reversed;
 #if CONFIG_ROLLO_REVERSE
     up = !up;
 #endif

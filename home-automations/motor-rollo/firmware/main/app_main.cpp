@@ -8,6 +8,13 @@
  * (ICD): it light-sleeps between polls and wakes the motor driver only to move.
  *
  * Matter's lift position is in hundredths of a percent: 0 = fully open (up), 10000 = fully closed (down).
+ * Fully closed can be set short of the full height (ROLLO_VIRTUAL_MAX_PERCENT); the percentages then
+ * span only that range.
+ *
+ * Endpoints 2-5 are On/Off switches used as buttons: jog up, jog down (ROLLO_JOG_MS each), "set fully
+ * up" and "set fully down" (take where the blind stands as fully up / the virtual fully down, without
+ * moving). Each turns itself off once done.
+ * The motor direction can be swapped over Matter: the MotorDirectionReversed bit of the Mode attribute.
  *
  * BOOT button: a short press opens a pairing window (15 min, over the network) so another
  * controller can join; holding it 10 s clears every pairing and restarts.
@@ -18,6 +25,7 @@
  */
 
 #include <algorithm>
+#include <atomic>
 #include <cinttypes>
 #include <cstdlib>
 
@@ -66,44 +74,100 @@ static microseconds uptime()
 /** Lift positions in hundredths of a percent, as Matter counts them. */
 static constexpr uint16_t LIFT_OPEN = 0;       // fully up
 static constexpr uint16_t LIFT_CLOSED = 10000; // fully down
-/** Not a position: stops the motor where it is. */
-static constexpr uint16_t CMD_STOP = UINT16_MAX;
+/** Commands that are not a position (all above LIFT_CLOSED). */
+static constexpr uint16_t CMD_STOP = UINT16_MAX;          // stop where it is
+static constexpr uint16_t CMD_JOG_UP = UINT16_MAX - 1;    // run up for JOG_TIME
+static constexpr uint16_t CMD_JOG_DOWN = UINT16_MAX - 2;  // run down for JOG_TIME
+static constexpr uint16_t CMD_SET_OPEN = UINT16_MAX - 3;    // stop and take where it is as fully up
+static constexpr uint16_t CMD_SET_CLOSED = UINT16_MAX - 4;  // stop and take where it is as fully down
 
 static uint16_t covering_endpoint_id;
+/** On/Off endpoints that act as buttons: jog up, jog down, set fully up / down. They turn off once done. */
+static uint16_t jog_up_endpoint_id;
+static uint16_t jog_down_endpoint_id;
+static uint16_t set_open_endpoint_id;
+static uint16_t set_closed_endpoint_id;
 static QueueHandle_t cmd_queue;
 /** One slot: a new command replaces a waiting one. */
 static constexpr UBaseType_t CMD_QUEUE_LENGTH = 1;
 static constexpr TickType_t NO_WAIT = 0;
 
-/** Where the fabric is. Read from NVS at startup; afterwards only the motor task writes it. */
-static volatile uint16_t position = LIFT_OPEN;
+/**
+ * Where the fabric is, in Matter's lift units (past LIFT_CLOSED below the virtual fully down, see
+ * VIRTUAL_MAX). Read from NVS at startup; afterwards only the motor task writes it.
+ */
+static volatile uint32_t position = LIFT_OPEN;
 /** The motor task is working on a command. */
 static volatile bool motor_busy;
 
-/* ---- Position in NVS ---- */
+/**
+ * Motor direction reversed: the MotorDirectionReversed bit of the Window Covering Mode attribute, which
+ * a controller can write (Matter keeps it across restarts). The Matter thread sets reverse_requested; the
+ * motor task takes it over into reverse_applied between moves (apply_reverse).
+ */
+static std::atomic<bool> reverse_requested{false};
+static bool reverse_applied;
+
+/* ---- Virtual fully down ---- */
+
+/**
+ * Matter's fully closed is VIRTUAL_MAX of the full height (in hundredths of a percent): every lift
+ * position Matter sees, and position above, is a share of 0..VIRTUAL_MAX. Only the saved position is
+ * of the full height, so it stays right when the setting changes.
+ *
+ * position can be past LIFT_CLOSED: the blind is lower than the virtual fully down (the setting was
+ * lowered, or the direction swapped). Matter then sees it as closed, and the next move starts from
+ * where it really is.
+ */
+static constexpr uint32_t VIRTUAL_MAX = CONFIG_ROLLO_VIRTUAL_MAX_PERCENT * 100;
+
+/** A lift position (of the virtual range) as a share of the full height. */
+static uint16_t to_physical(uint32_t lift)
+{
+    const uint32_t physical = (lift * VIRTUAL_MAX + LIFT_CLOSED / 2) / LIFT_CLOSED;
+    return static_cast<uint16_t>(std::min<uint32_t>(physical, LIFT_CLOSED));
+}
+
+/** A share of the full height as a lift position: past LIFT_CLOSED below the virtual fully down. */
+static uint32_t from_physical(uint16_t physical)
+{
+    return (static_cast<uint32_t>(physical) * LIFT_CLOSED + VIRTUAL_MAX / 2) / VIRTUAL_MAX;
+}
+
+/** What Matter sees of a position. */
+static uint16_t matter_lift(uint32_t lift)
+{
+    return static_cast<uint16_t>(std::min<uint32_t>(lift, LIFT_CLOSED));
+}
+
+/* ---- Position in NVS (of the full height) ---- */
 
 static constexpr const char *NVS_NAMESPACE = "rollo";
 static constexpr const char *NVS_KEY_LIFT = "lift";
 
-static bool load_position(uint16_t *lift)
+static bool load_position(uint32_t *lift)
 {
     nvs_handle_t nvs;
     if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) {
         return false;
     }
-    const bool ok = nvs_get_u16(nvs, NVS_KEY_LIFT, lift) == ESP_OK && *lift <= LIFT_CLOSED;
+    uint16_t physical = 0;
+    const bool ok = nvs_get_u16(nvs, NVS_KEY_LIFT, &physical) == ESP_OK && physical <= LIFT_CLOSED;
     nvs_close(nvs);
+    if (ok) {
+        *lift = from_physical(physical);
+    }
     return ok;
 }
 
-static void save_position(uint16_t lift)
+static void save_position(uint32_t lift)
 {
     nvs_handle_t nvs;
     if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) {
         ESP_LOGW(TAG, "Position not saved");
         return;
     }
-    nvs_set_u16(nvs, NVS_KEY_LIFT, lift);
+    nvs_set_u16(nvs, NVS_KEY_LIFT, to_physical(lift));
     nvs_commit(nvs);
     nvs_close(nvs);
 }
@@ -118,19 +182,33 @@ static void schedule(void (*fn)(intptr_t), intptr_t arg = 0)
 /** While moving: where the fabric is now. */
 static void report_position(intptr_t lift)
 {
-    WindowCovering::LiftPositionSet(covering_endpoint_id, WindowCovering::NPercent100ths(static_cast<uint16_t>(lift)));
+    WindowCovering::LiftPositionSet(covering_endpoint_id, WindowCovering::NPercent100ths(matter_lift(lift)));
 }
 
 /**
  * The motor stopped here. When it stopped short of the target (Stop, or a restart) the target follows,
  * so the controller shows the blind as standing still; unless a newer command is already on its way.
  */
+static void report_target(intptr_t lift)
+{
+    WindowCovering::Attributes::TargetPositionLiftPercent100ths::Set(covering_endpoint_id,
+                                                                     WindowCovering::NPercent100ths(matter_lift(lift)));
+}
+
+/** The button endpoints go back to off. */
+static void release_buttons()
+{
+    for (uint16_t endpoint : {jog_up_endpoint_id, jog_down_endpoint_id, set_open_endpoint_id, set_closed_endpoint_id}) {
+        OnOff::Attributes::OnOff::Set(endpoint, false);
+    }
+}
+
 static void report_stopped(intptr_t lift)
 {
     report_position(lift);
     if (!motor_busy && uxQueueMessagesWaiting(cmd_queue) == 0) {
-        WindowCovering::Attributes::TargetPositionLiftPercent100ths::Set(covering_endpoint_id,
-                                                                         WindowCovering::NPercent100ths(static_cast<uint16_t>(lift)));
+        report_target(lift);
+        release_buttons();
     }
 }
 
@@ -139,16 +217,62 @@ static void report_stopped(intptr_t lift)
 static constexpr microseconds TRAVEL_UP = milliseconds(CONFIG_ROLLO_TRAVEL_UP_MS);
 static constexpr microseconds TRAVEL_DOWN = milliseconds(CONFIG_ROLLO_TRAVEL_DOWN_MS);
 static constexpr microseconds TOP_OVERRUN = milliseconds(CONFIG_ROLLO_TOP_OVERRUN_MS);
+static constexpr microseconds JOG_TIME = milliseconds(CONFIG_ROLLO_JOG_MS);
 /** How often the motor task checks for new commands and the position while the motor runs. */
 static constexpr milliseconds MOTOR_TICK = 20ms;
 /** How often the position is reported while moving. */
 static constexpr microseconds REPORT_INTERVAL = 1s;
 
+/** Run time over the virtual range 0..LIFT_CLOSED in one direction. */
+static int64_t virtual_travel_us(motor_dir_t dir)
+{
+    return (dir == motor_dir_t::up ? TRAVEL_UP : TRAVEL_DOWN).count() * VIRTUAL_MAX / LIFT_CLOSED;
+}
+
+/**
+ * Runs the motor for JOG_TIME, whatever the position says, unless a new command arrives first (as in
+ * run_to). That way a blind that is out of step can be brought to the real top and taken as fully up
+ * there (CMD_SET_OPEN). The position follows, but stays within fully up and the bottom of the full
+ * height.
+ */
+static bool jog(motor_dir_t dir, uint16_t *next)
+{
+    const int64_t travel_us = virtual_travel_us(dir);
+    const int64_t bottom = from_physical(LIFT_CLOSED);
+    const int64_t start = position;
+    const int64_t jog_lift = JOG_TIME.count() * LIFT_CLOSED / travel_us;
+    const int64_t end = dir == motor_dir_t::up ? std::max<int64_t>(start - jog_lift, LIFT_OPEN) : std::min(start + jog_lift, bottom);
+    schedule(report_target, end);
+
+    ESP_LOGI(TAG, "Jogging %s for %d ms", dir == motor_dir_t::up ? "up" : "down", static_cast<int>(to_ms(JOG_TIME)));
+    const microseconds t0 = uptime();
+    board_motor_start(dir, reverse_applied);
+    for (;;) {
+        const bool interrupted = xQueueReceive(cmd_queue, next, pdMS_TO_TICKS(MOTOR_TICK.count())) == pdTRUE;
+
+        const microseconds now = uptime();
+        const int64_t moved = (now - t0).count() * LIFT_CLOSED / travel_us;
+        const int64_t lift = dir == motor_dir_t::up ? std::max<int64_t>(start - moved, LIFT_OPEN) : std::min(start + moved, bottom);
+        position = static_cast<uint32_t>(lift);
+
+        if (interrupted) {
+            board_motor_stop();
+            return true;
+        }
+        if (now - t0 >= JOG_TIME) {
+            break;
+        }
+    }
+    board_motor_stop();
+    return false;
+}
+
 /**
  * Runs the motor from the current position towards target until it gets there or a new command
  * arrives (returned in *next, the function then returns true). The position is worked out from the
- * run time: TRAVEL_UP or TRAVEL_DOWN for the full height. A move to fully up runs TOP_OVERRUN
- * longer, into the stop at the head, which corrects any drift.
+ * run time: TRAVEL_UP or TRAVEL_DOWN for the full height, of which the virtual range 0..LIFT_CLOSED
+ * takes VIRTUAL_MAX. A move to fully up runs TOP_OVERRUN longer, into the stop at the head, which
+ * corrects any drift.
  */
 static bool run_to(uint16_t target, uint16_t *next)
 {
@@ -157,15 +281,15 @@ static bool run_to(uint16_t target, uint16_t *next)
         return false;
     }
     const motor_dir_t dir = target <= position ? motor_dir_t::up : motor_dir_t::down;
-    const int64_t travel_us = (dir == motor_dir_t::up ? TRAVEL_UP : TRAVEL_DOWN).count();
+    const int64_t travel_us = virtual_travel_us(dir);
     const int64_t start = position;
     const microseconds t0 = uptime();
     microseconds last_report = t0;
     bool overrunning = false;
     microseconds overrun_end{};
 
-    ESP_LOGI(TAG, "Moving %s from %u to %u (1/100 %%)", dir == motor_dir_t::up ? "up" : "down", position, target);
-    board_motor_start(dir);
+    ESP_LOGI(TAG, "Moving %s from %" PRIu32 " to %u (1/100 %%)", dir == motor_dir_t::up ? "up" : "down", position, target);
+    board_motor_start(dir, reverse_applied);
     for (;;) {
         const bool interrupted = xQueueReceive(cmd_queue, next, pdMS_TO_TICKS(MOTOR_TICK.count())) == pdTRUE;
 
@@ -180,7 +304,7 @@ static bool run_to(uint16_t target, uint16_t *next)
             lift = std::min<int64_t>(start + moved, target);
             reached = lift >= target;
         }
-        position = static_cast<uint16_t>(lift);
+        position = static_cast<uint32_t>(lift);
 
         if (interrupted) {
             board_motor_stop();
@@ -205,6 +329,45 @@ static bool run_to(uint16_t target, uint16_t *next)
     return false;
 }
 
+/**
+ * Takes over a changed motor direction (only while the motor stands). The blind hasn't moved, but
+ * everything it did so far ran the other way round: where we thought it was up, it is down. So the
+ * position is mirrored, over the full height.
+ */
+static void apply_reverse()
+{
+    const bool requested = reverse_requested;
+    if (requested == reverse_applied) {
+        return;
+    }
+    reverse_applied = requested;
+    position = from_physical(LIFT_CLOSED - to_physical(position));
+    ESP_LOGI(TAG, "Motor direction %s, position now %" PRIu32 " (1/100 %%)", requested ? "reversed" : "normal", position);
+}
+
+/** Carries out one command; true when a newer one arrived meanwhile (in *next). */
+static bool execute(uint16_t cmd, uint16_t *next)
+{
+    switch (cmd) {
+    case CMD_STOP:
+        return false;
+    case CMD_JOG_UP:
+        return jog(motor_dir_t::up, next);
+    case CMD_JOG_DOWN:
+        return jog(motor_dir_t::down, next);
+    case CMD_SET_OPEN:
+        ESP_LOGI(TAG, "Position %" PRIu32 " taken as fully up", position);
+        position = LIFT_OPEN;
+        return false;
+    case CMD_SET_CLOSED:
+        ESP_LOGI(TAG, "Position %" PRIu32 " taken as fully down", position);
+        position = LIFT_CLOSED;
+        return false;
+    default:
+        return run_to(cmd, next);
+    }
+}
+
 static void motor_task(void *)
 {
     uint16_t cmd;
@@ -213,9 +376,12 @@ static void motor_task(void *)
         xQueuePeek(cmd_queue, &cmd, portMAX_DELAY);
         motor_busy = true;
         xQueueReceive(cmd_queue, &cmd, NO_WAIT);
+        apply_reverse();
         // A command that arrives while moving replaces the current one.
-        while (cmd != CMD_STOP && run_to(cmd, &cmd)) {
+        while (execute(cmd, &cmd)) {
+            apply_reverse();
         }
+        apply_reverse();
         save_position(position);
         motor_busy = false;
         schedule(report_stopped, position);
@@ -225,6 +391,21 @@ static void motor_task(void *)
 static void send_command(uint16_t cmd)
 {
     xQueueOverwrite(cmd_queue, &cmd);
+}
+
+/** The motor direction from the Mode attribute (Matter thread). A change stops the motor first. */
+static void update_reverse(uint8_t mode, bool at_startup)
+{
+    const bool reversed = (mode & chip::to_underlying(WindowCovering::Mode::kMotorDirectionReversed)) != 0;
+    if (at_startup) {
+        reverse_applied = reversed;  // the saved position already belongs to this direction
+        reverse_requested = reversed;
+        ESP_LOGI(TAG, "Motor direction %s", reversed ? "reversed" : "normal");
+        return;
+    }
+    if (reversed != reverse_requested.exchange(reversed)) {
+        send_command(CMD_STOP);  // the motor task mirrors the position, saves and reports it
+    }
 }
 
 /* ---- Window covering delegate: Matter's movement commands land here (Matter thread) ---- */
@@ -465,7 +646,14 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
     case DeviceEventType::kCommissioningSessionStopped:
         pairing_session = false;
         break;
-    case DeviceEventType::kServerReady:
+    case DeviceEventType::kServerReady: {
+        // The Mode attribute is kept by Matter: take over the saved motor direction. ModeSet also brings
+        // ConfigStatus (LiftMovementReversed) in line with it.
+        chip::BitMask<WindowCovering::Mode> mode = WindowCovering::ModeGet(covering_endpoint_id);
+        WindowCovering::ModeSet(covering_endpoint_id, mode);
+        update_reverse(mode.Raw(), true);
+        break;
+    }
     case DeviceEventType::kCommissioningWindowOpened:
     case DeviceEventType::kCommissioningWindowClosed:
     case DeviceEventType::kFabricRemoved:
@@ -492,6 +680,22 @@ static esp_err_t app_identification_cb(identification::callback_type_t type, uin
 static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16_t endpoint_id, uint32_t cluster_id,
                                          uint32_t attribute_id, esp_matter_attr_val_t *val, void *priv_data)
 {
+    if (type == attribute::POST_UPDATE && endpoint_id == covering_endpoint_id && cluster_id == WindowCovering::Id &&
+        attribute_id == WindowCovering::Attributes::Mode::Id) {
+        update_reverse(val->val.u8, false);
+    }
+    // The button endpoints act when switched on; off is only them going back (release_buttons).
+    if (type == attribute::POST_UPDATE && cluster_id == OnOff::Id && attribute_id == OnOff::Attributes::OnOff::Id && val->val.b) {
+        if (endpoint_id == jog_up_endpoint_id) {
+            send_command(CMD_JOG_UP);
+        } else if (endpoint_id == jog_down_endpoint_id) {
+            send_command(CMD_JOG_DOWN);
+        } else if (endpoint_id == set_open_endpoint_id) {
+            send_command(CMD_SET_OPEN);
+        } else if (endpoint_id == set_closed_endpoint_id) {
+            send_command(CMD_SET_CLOSED);
+        }
+    }
     return ESP_OK;
 }
 
@@ -516,9 +720,10 @@ extern "C" void app_main()
 
     // Without a sensor the position after a restart is the one saved after the last move. A blind
     // that was never moved is taken to be fully up.
-    uint16_t lift = LIFT_OPEN;
+    uint32_t lift = LIFT_OPEN;
     if (load_position(&lift)) {
-        ESP_LOGI(TAG, "Position from NVS: %u (1/100 %%)", lift);
+        ESP_LOGI(TAG, "Position from NVS: %" PRIu32 " (1/100 %%, virtual fully down at %" PRIu32 " of the full height)", lift,
+                 VIRTUAL_MAX);
     } else {
         ESP_LOGW(TAG, "No saved position, assuming fully up");
     }
@@ -541,12 +746,21 @@ extern "C" void app_main()
                        chip::to_underlying(WindowCovering::ConfigStatus::kLiftPositionAware);
     wc.feature_flags = cluster::window_covering::feature::lift::get_id() |
                        cluster::window_covering::feature::position_aware_lift::get_id();
-    wc.features.position_aware_lift.current_position_lift_percent_100ths = nullable<uint16_t>(lift);
-    wc.features.position_aware_lift.target_position_lift_percent_100ths = nullable<uint16_t>(lift);
+    wc.features.position_aware_lift.current_position_lift_percent_100ths = nullable<uint16_t>(matter_lift(lift));
+    wc.features.position_aware_lift.target_position_lift_percent_100ths = nullable<uint16_t>(matter_lift(lift));
     wc.delegate = &covering_delegate;
     endpoint_t *covering = window_covering::create(node, &covering_config, ENDPOINT_FLAG_NONE, nullptr);
     ABORT_APP_ON_FAILURE(covering != nullptr, ESP_LOGE(TAG, "Failed to create window covering endpoint"));
     covering_endpoint_id = endpoint::get_id(covering);
+
+    // Endpoints 2-5: jog up, jog down, set fully up, set fully down. Plain On/Off plug-ins, which Home
+    // Assistant shows as switches; each turns itself off once done.
+    for (uint16_t *id : {&jog_up_endpoint_id, &jog_down_endpoint_id, &set_open_endpoint_id, &set_closed_endpoint_id}) {
+        on_off_plug_in_unit::config_t button_config;
+        endpoint_t *button = on_off_plug_in_unit::create(node, &button_config, ENDPOINT_FLAG_NONE, nullptr);
+        ABORT_APP_ON_FAILURE(button != nullptr, ESP_LOGE(TAG, "Failed to create button endpoint"));
+        *id = endpoint::get_id(button);
+    }
 
     esp_openthread_platform_config_t ot_config = {
         .radio_config = {.radio_mode = RADIO_MODE_NATIVE},

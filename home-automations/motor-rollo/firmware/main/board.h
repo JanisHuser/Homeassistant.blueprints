@@ -29,7 +29,8 @@ constexpr int PM_LOCK_NO_ARG = 0;
 enum class motor_dir_t { up, down };
 
 void board_init();
-/* Wakes the driver and runs the motor until board_motor_stop(). Keeps the chip out of light sleep meanwhile. */
-void board_motor_start(motor_dir_t dir);
+/* Wakes the driver and runs the motor until board_motor_stop(). Keeps the chip out of light sleep meanwhile.
+   reversed swaps the direction (on top of ROLLO_REVERSE). */
+void board_motor_start(motor_dir_t dir, bool reversed);
 /* Brakes, then sleeps the driver. */
 void board_motor_stop();

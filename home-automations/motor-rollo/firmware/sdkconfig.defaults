@@ -34,7 +34,10 @@ CONFIG_DISABLE_IPV4=y
 CONFIG_USE_MINIMAL_MDNS=n
 CONFIG_MBEDTLS_SSL_PROTO_DTLS=y
 
+# Updates over Matter: the device takes them, and the build also makes the .ota image for them
+# (build/motor_rollo-ota.bin; site/build_firmware.sh turns it into _firmware/motor-rollo/*.ota + .json).
 CONFIG_ENABLE_OTA_REQUESTOR=y
+CONFIG_CHIP_OTA_IMAGE_BUILD=y
 
 # Vendor and product name the controllers show (main/CHIPProjectConfig.h)
 CONFIG_CHIP_PROJECT_CONFIG="main/CHIPProjectConfig.h"
@@ -62,4 +65,5 @@ CONFIG_ICD_ACTIVE_MODE_INTERVAL_MS=1000
 # controller reading the device in) don't fall back to slow polling between steps.
 CONFIG_ICD_ACTIVE_MODE_THRESHOLD_MS=5000
 
-CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT=2
+# Root, window covering, and the four button switches (jog up / down, set fully up / down)
+CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT=6
