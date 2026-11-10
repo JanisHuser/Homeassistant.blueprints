@@ -1,38 +1,38 @@
 // ============================================================
 //  Motorrollo auf Basis IKEA LÅNGDANS  –  Matter über Thread
-//  Version "Motor dreht": Motor, Elektronik und Akku drehen mit dem Rohr. Fest steht nur der Schlüssel:
-//  er sitzt mit dem Vierkant im Halter, die Motorwelle treibt ihn, also dreht sich der Motor samt Rohr darum.
-//  Damit läuft kein Kabel zwischen festen und drehenden Teilen, es braucht keinen Kabeldurchgang.
+//  Version "Schlitten": ein Druckteil im Rohr trägt Motor, eine lange Platine und die Zelle. Alles dreht
+//  mit dem Rohr. Fest steht nur der Schlüssel: er sitzt mit dem Vierkant im Halter, die Motorwelle treibt
+//  ihn über Sechskantstab und Kupplung, also dreht sich der Motor samt Rohr darum.
 //
 //  Aufbau (Achse = X, Motorseite links bei x = 0 = Wand):
-//   [Halter]─[Schlüssel]─[Nase 4 mm]═ IKEA-Rohr: ESP32-H2 │ Kupplung │ N20 ═ Kartusche: DRV8833 │ TP4056 │ 18650 ═[608]─[Achse]─[Halter]
-//                └── Sechskantstab 4 mm (Stahl) unter dem Super Mini bis zur Kupplung
+//   [Halter]─[Schlüssel]─[Nase]═ Schlitten: Kupplung │ N20 │ Fach │ Schott │ 18650 ═[608]─[Achse]─[Halter]
+//                         └── Platine liegt flach über Kupplung, Motor und Fach, von der Nase bis zum Schott
 //
-//  Ausserhalb des Rohrs liegen nur der Halter (br_t) und die Nase: zusammen höchstens 15 mm.
-//  Der Schlüssel hält einen Sechskantstab (4 mm SW, z.B. abgesägter Inbusschlüssel), der unter dem Super Mini
-//  durch den Kopf zur Kupplung läuft. Die Kupplung sitzt auf der Motorwelle. Der Kopf läuft auf der Motorwelle
-//  und mit der Bohrung lose um den Stab.
-//  Der Super Mini liegt flach über dem Stab, von oben eingelegt; das Rohr hält ihn. Nur sein Antennenende
-//  (nose_l - esp_x0 mm) liegt in der Nase ausserhalb des Alu-Rohrs: Funk vor dem Einbau prüfen.
-//  Laden ist hier nicht gelöst: die USB-C-Buchse der TP4056-Platine liegt in der Kartusche im Rohr.
-//  BOOT, RESET und USB nur bei ausgebautem Kopf erreichbar.
-//  Die Kartusche hängt am Kopf: ein Adapter schraubt sich ins Innengewinde am Motorende des Kopfs, wie der
-//  Ventilkopf-Adapter (Steigung 4, zwei Gänge, 0.6 Umdrehung bis zum Bund), und hält dabei den Motor im Fach.
-//  Die Kartusche steckt auf dem Zapfen des Adapters, zwei Filament-Stifte halten sie.
-//  Akku wie beim Ventilkopf: 18650 ohne Halter zwischen zwei blanken Kontaktplatten in gedruckten Sitzen.
-//  Die Lötfahnen bleiben ganz, werden aber an der Plattenkante 90° von der Zelle weg umgebogen: gerade
-//  würden sie am Rohr streifen. Die der Federplatte liegt über dem TP4056, die der Knopfplatte geht durch
-//  den Schlitz im Boden und steht 4 mm hinten heraus.
+//  Die Platine (ESP32-H2 als Chip, Laderegler, Schutz, DRV8833; KiCad-Projekt in pcb/) liegt in einer Tasche oben im Schlitten,
+//  das Rohr deckt sie ab. Ihr vorderes Ende mit der Chip-Antenne liegt in der Nase ausserhalb des Alu-Rohrs.
+//  Alle Bauteile sitzen oben (am Rand flach, top_w × top_h, in der Mitte bis mid_h); unten im Fach hinter dem
+//  Motor sind nur die Lötpunkte für die Motordrähte.
+//  Fast keine Kabel: der Motor hat zwei kurze Drähte von seinen Lötfahnen durchs Fenster hinter ihm auf zwei
+//  Lötpunkte der Platine, die Lötfahne der Federplatte (Minus) liegt über dem Schott flach auf der Platine,
+//  und der Pluspol am hinteren Ende hat ein Kabel über der Zelle zur Platine.
+//  USB-C (Laden und Flashen) sitzt vorne auf der Platine, Öffnung zur Wand, über dem Sechskantstab. Zum Laden das
+//  Rollo aus den Haltern heben und den Schlüssel samt Stab aus der Nase ziehen: dann geht der Stecker in die Nase.
 //
-//  Vor dem Druck nachmessen: tube_id, ridge_*, tube_od, Motor (mot_*), Module (esp_*, drv_*, tp_*),
-//  Kontaktplatten und Zelle (con_*, cell_*).
+//  Einbau: Kupplung auf die Motorwelle, Motor samt Kupplung von oben ins Fach. Zwei kurze Drähte an die
+//  Lötfahnen des Motors, Platine in die Tasche, Drähte an die Lötpunkte. Kontaktplatten in ihre Sitze, Lötfahnen anlöten, Pluskabel legen, Zelle
+//  von oben einlegen. Eine Lage Kapton um den Schlitten, dann mit den Nuten auf die Stege ins Rohr schieben.
+//
+//  Vor dem Druck nachmessen: tube_id, ridge_*, tube_od, Motor (mot_*), Kontaktplatten und Zelle (con_*, cell_*).
+//
+//  Rohrstück mit echtem Querschnitt (ID, Stege, Schlitze) zum Testen des Schlittens: part = "tube_section".
 //
 //  Einzelteil wählen:  part = "...";   oder
-//    openscad -D 'part="head"' -o head.stl rollo.scad
+//    openscad -D 'part="sled"' -o sled.stl rollo.scad
+//  Umriss der Platine für KiCad (Edge.Cuts):  openscad -D 'part="pcb_outline"' -o pcb_outline.dxf rollo.scad
 //  Alle Teile sind fürs Drucken bereits richtig orientiert.
 // ============================================================
 
-part = "assembly"; // [assembly, section, bracket_motor, bracket_idle, key, hex_rod, head, coupler, motor_stop, adapter, cartridge, idle_axle]
+part = "assembly"; // [assembly, section, tube_section, bracket_motor, bracket_idle, key, hex_rod, coupler, sled, idle_axle, pcb_outline]
 
 $fn = 96;
 eps = 0.01;
@@ -44,26 +44,43 @@ fit_gap  = 2;       // Luft gesamt
 /* [IKEA-Rohr – nachmessen!] */
 tube_id    = 22.4;  // LÅNGDANS, gemessen
 ridge_d    = 21.5;  // zwei Stege innen, gegenüber (±Y): Ø über die Stegspitzen
-ridge_w    = 1.0;   // Stegbreite. Alles im Rohr hat Nuten dafür: die Stege nehmen das Drehmoment
+ridge_w    = 1.0;   // Stegbreite. Der Schlitten hat Nuten dafür: die Stege nehmen das Drehmoment
 tube_od    = 25;    // Annahme
+slot_w     = 2.0;   // Schlitze aussen an den Seiten (±Y), über den Stegen: Breite – nachmessen!
+slot_d     = 0.8;   // ... Tiefe ab Aussendurchmesser – nachmessen!
 roll_d     = 40;    // Stoffwickel aufgerollt, gemessen
+tsec_l     = 25;    // Rohrstück zum Testen (part = "tube_section"): Länge
+tsec_comp  = 0;     // ... Innenmasse so viel grösser drucken, falls Löcher zu klein herauskommen
 
 /* [Toleranzen] */
 clr      = 0.3;
 rib_i    = 0.3;     // Übermass der Klemmrippen im Rohr
-pin_hole = 1.9;     // für 1.75-mm-Filament als Stift
+tube_lim = 0.5;     // Abstand aller Teile zur Rohrwand
 
-/* [Halter: Wandplatte mit VHB an der Rückwand, Arm bis zur Achse] */
-// An der Wand höchstens 25 mm hoch, dafür breit: der ganze Halter ist ein 25 mm hohes Profil, flach gedruckt.
-br_t      = 10;     // Arm, entlang der Achse
-wp_t      = 6;      // Wandplatte, Dicke
-wp_h      = 25;     // Wandplatte und ganzer Halter, Höhe (mittig zur Achse). Max. 25 an der Wand
-arm_h     = wp_h;   // Arm, Höhe
-wp_w      = 120;    // Wandplatte, entlang der Achse nach innen (hinter dem Stoff): VHB-Fläche
-gus_l     = 70;     // Dreieck neben dem Arm (Richtung Rohr), Länge am Arm
-gus_t     = 4;      // Stegbreite des Dreiecks: nur Rahmen, innen offen
-arm_fl    = 4;      // Arm: Gurt oben und unten, dazwischen Rautenfenster (45°, druckt ohne Stütze)
-arm_web   = 4;      // Arm: Steg zwischen den Rauten, quer gemessen
+/* [Halter: Haken hinter die Täferverkleidung] */
+// Seitenansicht: Arm von der Achse waagrecht zur Rückwand, oben bündig mit der Unterkante der Verkleidung.
+// Am Wandende steigt eine Nase br_nud_h hoch in den Spalt zwischen Wand und Verkleidung (genagelt).
+// Kraftfluss: das Gewicht will den Halter kippen (Arm runter). Die Nase stemmt sich gegen die Rückseite der
+// Verkleidung, der Fuss unten gegen die Wand: ein Druckpaar über die ganze Höhe, kein Schälen am Klebeband.
+// Senkrecht hält Reibung, und die klemmt sich selbst: die Andruckkräfte wachsen mit der Last.
+// Nach oben (Einhängen) stösst der Arm an die Unterkante der Verkleidung. Das VHB am Fuss hält nur die Lage.
+br_t      = 10;     // Arm, Dicke entlang der Achse = Innenfläche (Anlage Schlüsselbund) ab Aussenseite
+br_h      = 25;     // Arm, Höhe, mittig zur Achse. Oberkante = Unterkante der Verkleidung
+sh_gap    = 5;      // Spalt zwischen Wand und Rückseite der Verkleidung – nachmessen!
+br_nud_t  = sh_gap - 0.6;   // Nase, Dicke: 0.3 Luft auf jeder Seite
+br_nud_h  = 15;     // Nase, so weit hinter die Verkleidung
+br_nud_ch = 1.5;    // Fase vorne an der Nasenspitze: fädelt ein
+br_ft_t   = 6;      // Fuss an der Wand, Dicke (unterhalb der Verkleidung)
+br_ft_w   = 50;     // Fuss und Nase, Breite entlang der Achse nach innen (hinter dem Stoff): trägt die Nase
+br_gus_l  = 25;     // Zwickel in der Draufsicht vom Arm zum breiten Fuss
+br_chord  = 3;      // Arm als Fachwerk: Gurt oben und unten ...
+br_web    = 2.5;    // ... Diagonalen (ca. 60°, druckt ohne Stütze: Fenster gehen quer durch, Halter liegt auf der Seite)
+fil_r     = 4;      // Ausrundung der Innenecken in der Draufsicht
+// Nachweis (Echo unten): Zug am Stoff zusammen mit dem Motormoment
+br_F      = 30;     // N  vertikal an der Achse: Gewicht + kräftiges Ziehen am Stoff
+br_T      = 0.3;    // Nm Drehmoment des Motors, abgestützt über den Vierkant
+br_mu     = 0.3;    // Reibwert PETG auf Farbe/Holz, vorsichtig
+br_sig    = 10;     // MPa zulässige Spannung (PETG in Lagenrichtung, ~4-fache Sicherheit)
 back_gap  = 100;
 pocket_d  = 4.8;
 tenon     = 10;     // Vierkant
@@ -78,46 +95,43 @@ hex_fit   = 0.15;   // im Schlüssel: stramm
 hex_slide = 0.3;    // in der Kupplung: schiebt sich beim Einbau hinein
 hex_in    = 6;      // Stab in der Kupplung
 
-/* [Kopf] */
+/* [Schlitten] */
 nose_l    = 4;      // ausserhalb des Rohrs. Mit collar_t + key_gap höchstens 5 mm
-esp_x0    = 0.6;    // Antennenende des Super Mini ab Stirnseite
-floor_t   = 0.6;    // Boden zwischen Bohrung und Platine
-wire_room = 3;      // hinter dem Super Mini, für die Kabel zum Motor
-cp_d      = 9.6;    // Kupplung Stab ↔ Motorwelle. Passt durchs Motorfach (mot_h + 0.4)
+cp_d      = 9.6;    // Kupplung Stab ↔ Motorwelle
 cp_clr    = 0.4;
+sled_od   = tube_id - 0.6;   // hinter dem Motor, ohne Klemmrippen
+sled_flat = 0.4;    // unten flach zum Drucken
+mot_clr   = 0.4;    // Motorfach grösser als der Motor
+mot_end   = 0.3;    // Luft hinter dem Motor
+back_t    = 1.5;    // Wand hinter dem Motor
+tab_win   = 8.4;    // Fenster in der Wand: Motordrähte nach oben zur Platine
+tab_bot   = 2.4;    // Steg unten im Fenster
+bay_l     = 5;      // Fach hinter dem Motor: Motordrähte an die Lötpunkte unten auf der Platine
+bulk_t    = 2;      // Schott Fach ↔ Zelle
+end_t     = 3;
+kapton    = 0.1;
+wire_d    = 0.9;    // Pluskabel über der Zelle
 
-/* [Gewinde Kopf ↔ Adapter, wie beim Ventilkopf] */
-th_d      = 19;     // Aussen-Ø. Innen bleibt das Gewinde im Kopf grösser als der Motor, er geht hindurch
-th_p      = 4;      // Steigung je Gang: grob, damit jeder Gang beim Drucken rund 10 Schichten hat
-th_starts = 2;      // zwei Gänge: 0.6 Umdrehung bis zum Bund
-th_h      = 1.2;    // Ganghöhe, 45°-Flanken
-th_gap    = 0.25;   // Spiel am Adapter, wie beim Ventilkopf (thread_test.scad)
-th_l      = 4.8;    // Gewindelänge
-ad_id     = 13;     // Adapter innen: Kabel und Encoder
-sh_t      = 3;      // Bund zwischen Kopf und Kartusche, unten 45° (druckt ohne Stütze)
-tail_od   = 16;     // Adapter in der Kartusche, mit zwei Filament-Stiften gehalten
-tail_l    = 6;
-tail_pin_y= 7.6;    // Stifte als Sehne: halb im Zapfen, halb in der Kartusche
-
-/* [Module – nachmessen!] */
-mod_z    = -1.5;    // Unterkante DRV8833 und TP4056 in der Kartusche
-mod_clr  = 0.2;
-mod_gap  = 1;
-kapton   = 0.1;
-esp_l    = 22.5;    // ESP32-H2 Super Mini
-esp_w    = 18.4;
-esp_pcb  = 1.0;
-esp_top  = 3.3;     // USB-C
-esp_comp = 14;      // Breite der Bauteile auf dem Super Mini
-drv_l    = 18.5;    // DRV8833-Platine (ohne Stiftleisten)
-drv_w    = 16.5;
-drv_pcb  = 1.6;
-drv_top  = 1.8;
-tp_l     = 28;      // TP4056 USB-C mit Schutzschaltung (DW01)
-tp_w     = 17.5;
-tp_pcb   = 1.6;
-tp_top   = 3.5;
-wire_ch  = [5, 2];  // Kabelkanal unter den Modulen (Breite, Tiefe)
+/* [Platine] */
+pcb_t     = 0.8;
+pcb_w     = 17;
+pcb_x0    = 0.6;    // Vorderkante (Antenne) ab Stirnseite
+pcb_clr   = 0.2;    // Tasche je Seite
+pcb_air   = 0.2;    // Luft zwischen Motorfach und Platine
+ledge     = 1.2;    // Auflage je Seite im Fach
+top_w     = 15;     // Bauteile oben: höchstens so breit verteilt ...
+top_h     = 1.3;    // ... und so hoch (QFN, Quarz, Chip-Antenne, 0402)
+mid_w     = 13;     // in der Mitte ist mehr Platz: Bauteile so breit verteilt ...
+mid_h     = 2.0;    // ... dürfen so hoch sein (Taster, SOT-23)
+bot_h     = 2.6;    // Platz unter der Platine im Fach: Lötstellen der Motordrähte
+usb_w     = 8.94;   // USB-C-Buchse (G-Switch GT-USB-7014C, sitzt versenkt in einer Aussparung der Platine): Breite
+usb_d     = 6.5;    // ... Tiefe entlang der Achse ab Vorderkante
+usb_h     = 1.56;   // ... Höhe über der Platine
+usb_dn    = 0.8;    // ... ragt so weit unter die Platine (versenkt 1.6 mm, Platine 0.8 mm)
+usb_off   = 2.0;    // ... Mitte so weit zur +Y-Seite, weg von der Antenne
+usb_leg   = 5.62;   // ... Schirmlaschen quer ab ihrer Mitte
+plug_w    = 12.4;   // Stecker-Umspritzung: Öffnung in der Stirnseite
+plug_h    = 6.6;
 
 /* [Lager 608 Lagerseite (direkt im Rohr)] */
 brg_d  = 22;
@@ -128,7 +142,7 @@ brg_rib  = 0.25;   // Übermass der Klemmrippen im Lager (nach Ausgleich)
 
 /* [Motor N20 ohne Encoder, nachgemessen] */
 mot_w        = 12;
-mot_h        = 10;   // Abflachungen oben/unten = Verdrehsicherung im Zapfen
+mot_h        = 10;   // Abflachungen oben/unten = Verdrehsicherung im Fach
 mot_len      = 24.2; // Getriebe + Motor
 mot_boss_d   = 5;
 mot_boss_h   = 1.1;
@@ -136,99 +150,90 @@ mot_shaft_d  = 3;
 mot_shaft_D  = 2.5;  // Mass über Abflachung
 mot_shaft_len= 1.1 + 5;   // ab Getriebefläche: Bund 1.1 + 5 mm freie Welle
 
-/* [Motorriegel: U-Klammer hinter dem Motor, hält ihn auch ohne Adapter im Fach] */
-stop_t       = 3;    // Dicke entlang der Achse
-stop_win     = 8.4;  // Breite der Öffnung oben: Lötfahnen und Kabel des Motors
-stop_bot     = 2.4;  // Steg unten
-stop_rib     = 0.25; // Übermass der Klemmrippen je Seite
-
-/* [Kartusche] */
-cart_od    = ridge_d - 0.8;  // rund, ohne Stegnuten: sie hängt am Kopf und dreht mit ihm
-cart_flat  = 0.4;
-front_bay  = tail_l; // Bohrung für den Adapter
-elec_w     = 16.6;
-elec_floor = -4;
+/* [Zelle und Kontaktplatten, wie beim Ventilkopf] */
 cell_d     = 18.4;
 cell_len   = 65;
 cell_nub   = 0.5;
 cell_fit   = 0.2;
 con_w      = 12;
 con_t      = 0.3;
-con_tab    = 7;      // Lötfahne in voller Länge, an der Plattenkante 90° von der Zelle weg umgebogen
+con_tab    = 7;      // Lötfahne in voller Länge
 con_bend   = 1;      // Platz für die Biegung über der Plattenkante
 con_spring = 5.5;
 con_dome   = 1;
 con_slot   = 0.5;
 con_lip    = 0.8;
 con_lap    = 1;
-wire_d     = 0.9;
 bay_d      = cell_d + 2*cell_fit;
-cell_bay   = con_t + con_spring + cell_len + con_dome + con_t;   // Federplatte (Modulseite) bis Knopfplatte
-bulk_t     = 2;
-end_t      = 3;
+cell_bay   = con_t + con_spring + cell_len + con_dome + con_t;   // Federplatte (Platinenseite) bis Knopfplatte
 cell_z     = 0;
 
 // ---------- abgeleitete Masse ----------
 W        = recess_w - fit_gap;
 r_roll   = roll_d/2;
 y_wall   = r_roll + back_gap;
-// Kopf, u = 0 an der Stirnseite (Wand)
+lim      = tube_id/2 - tube_lim;               // so weit darf alles von der Achse weg
+
 hex_ac   = hex_af / cos(30);                   // Mass über Ecken
-bore_d   = hex_ac + 2*clr;                     // Kopf dreht sich um den Stab
-board_z  = bore_d/2 + floor_t;                 // Unterseite Super Mini
-win_hw   = esp_w/2 + mod_clr;
-u_w1     = esp_x0 + esp_l + wire_room;         // Ende Fenster
+bore_d   = hex_ac + 2*clr;                     // Schlitten dreht sich um den Stab
+
+// Schlitten, u = 0 an der Stirnseite (Wand)
+mot_top  = (mot_h + mot_clr)/2;
+pcb_z    = mot_top + pcb_air;                  // Unterseite Platine
+pcb_top  = pcb_z + pcb_t;
+pcb_hw   = pcb_w/2 + pcb_clr;
+cav_hw   = pcb_w/2 - ledge;
 cp_l     = hex_in + 1 + (mot_shaft_len - mot_boss_h + 0.5);
-u_cp     = u_w1 + 0.5;                         // Kupplung
+u_cp     = nose_l + 0.5;                       // Kupplung
 u_mf     = u_cp + cp_l + mot_boss_h + 0.5;     // Getriebefläche
-u_s0     = u_mf + mot_len + stop_t;            // Motorende + Riegel = Beginn Innengewinde
-head_l   = u_s0 + th_l;
-th_lead  = th_p * th_starts;
-th_crest = th_p/2 - th_h;
+u_me     = u_mf + mot_len + mot_end;           // Ende Motorfach
+u_e0     = u_me + back_t;                      // Fach hinter dem Motor
+u_e1     = u_e0 + bay_l;
+x_bat    = u_e1 + bulk_t;                      // Federplatte
+sled_l   = x_bat + cell_bay + end_t;
+pcb_l    = u_e1 - 0.3 - pcb_x0;
+bay_floor= pcb_z - bot_h - 0.2;
+usb_z    = (pcb_top + usb_h + pcb_z - usb_dn)/2;   // Mitte der Buchse
 u_t      = nose_l;                             // Rohrende
 hex_len  = (pocket_d - 0.2) + collar_t + key_gap + u_cp + hex_in - 0.5;
-// Kartusche
-u_d0     = front_bay;
-u_p0     = u_d0 + drv_l + mod_gap;
-x_bat    = u_p0 + tp_l + mod_gap + bulk_t;
-cart_len = x_bat + cell_bay + end_t;
+
 // Lage im Einbau
 x_h      = br_t + collar_t + key_gap;
 x_tube0  = x_h + u_t;
-x_c0     = x_h + head_l + sh_t;
 x_tube1  = W - br_t - 1.5;
 tube_len = x_tube1 - x_tube0;
 
 echo(str("Rohrlänge: ", tube_len, " mm"));
 echo(str("Stoffbreite max.: ", tube_len - 4, " mm"));
-echo(str("Ausserhalb des Rohrs: Halter ", br_t, " + ", collar_t + key_gap + nose_l, " mm, Kopf im Rohr: ", head_l - nose_l, " mm"));
-echo(str("Kartuschenlänge: ", cart_len, " mm, Gewinde ", th_l / th_lead, " Umdrehungen"));
+echo(str("Schlitten: ", sled_l, " mm, davon ", nose_l, " mm Nase ausserhalb des Rohrs"));
 echo(str("Sechskantstab ", hex_af, " mm SW, Länge ", hex_len, " mm"));
-echo(str("Super Mini ausserhalb des Rohrs: ", nose_l - esp_x0, " mm"));
+// Platinenkoordinaten: x ab Vorderkante (Antenne), y = 0 auf der Achse
+echo(str("Platine: ", pcb_l, " × ", pcb_w, " × ", pcb_t, " mm, Unterseite ", pcb_z, " mm über der Achse"));
+echo(str("Platine: ausserhalb des Rohrs (Antenne) x = 0 bis ", nose_l - pcb_x0));
+echo(str("Platine: Getriebefläche bei x = ", u_mf - pcb_x0, ", Motorrückseite bei x = ", u_mf + mot_len - pcb_x0));
+echo(str("Platine: unten nur die Lötpunkte für den Motor, x = ", u_e0 - pcb_x0, " bis ", pcb_l, ", |y| <= ", cav_hw));
+echo(str("Platine: USB-C in einer Aussparung ", usb_w + 0.3, " × 6.7 mm an der Vorderkante, Mitte bei y = ", usb_off, "; Antenne bei -y"));
+echo(str("Platine: oben Bauteile höchstens ", top_h, " mm bei |y| <= ", top_w/2, ", ", mid_h, " mm bei |y| <= ", mid_w/2));
+echo(str("Platine: Lötfahne Federplatte (Minus) an der Hinterkante, |y| <= 1.5"));
 
-assert(arm_h <= wp_h && wp_h <= 25, "Halter an der Wand höher als 25 mm");
-assert(y_wall - wp_t - gus_l >= r_roll + 10, "Dreieck am Halter reicht bis an den Stoff");
-assert(drop + (tenon + 0.4)/2 <= arm_h/2 - 2, "Keilsitz zu nah an der Armkante");
+assert(br_h <= 25, "Halter höher als 25 mm");
+assert(y_wall - br_ft_t - br_gus_l >= r_roll + 10, "Zwickel am Halter reicht bis an den Stoff");
+assert(drop + (tenon + 0.4)/2 <= br_h/2 - 2, "Keilsitz zu nah an der Armkante");
+assert(br_nud_t <= sh_gap - 0.4, "Nase passt nicht in den Spalt hinter der Verkleidung");
 assert(collar_t + key_gap + nose_l <= 5, "Mehr als 5 mm ausserhalb des Rohrs");
-assert(sqrt(pow(win_hw, 2) + pow(board_z + esp_pcb, 2)) <= tube_id/2 - 0.5, "Super Mini stösst am Rohr an");
-assert(sqrt(pow(4.5, 2) + pow(board_z + esp_pcb + esp_top, 2)) <= tube_id/2 - 0.5, "USB-C des Super Mini stösst am Rohr an");
-assert(board_z - 0.5 >= ridge_w/2 + 0.3, "Platine liegt auf Höhe der Stege");
-assert(cp_d <= mot_h + 0.4 - 0.4, "Kupplung geht nicht durchs Motorfach");
+assert(sqrt(pow(pcb_hw, 2) + pow(pcb_top, 2)) <= lim, "Platine stösst am Rohr an");
+assert(sqrt(pow(top_w/2, 2) + pow(pcb_top + top_h + kapton, 2)) <= lim, "Bauteile oben stossen am Rohr an");
+assert(sqrt(pow(mid_w/2, 2) + pow(pcb_top + mid_h + kapton, 2)) <= lim, "Hohe Bauteile in der Mitte stossen am Rohr an");
+assert(sqrt(pow(pcb_hw, 2) + pow(pcb_z, 2)) <= sled_od/2 - 0.4, "Keine Auflage für die Platine");
+assert(cp_d/2 + cp_clr <= pcb_z - 0.2, "Kupplung streift die Platine");
+assert(cp_d <= mot_h + mot_clr - 0.4, "Kupplung geht nicht ins Motorfach");
 assert(cp_d + 2*cp_clr <= mot_w - 1.5, "Getriebe hat keinen Anschlag an der Kupplungsbohrung");
-assert(th_d/2 - th_h > sqrt(pow(mot_w, 2) + pow(mot_h, 2))/2 + 0.3, "Motor geht nicht durchs Innengewinde");
-assert(ridge_d/2 - 0.3 - th_d/2 >= 0.8, "Kopf zu dünn zwischen Gewinde und Stegnut");
-assert(th_d/2 - th_h - th_gap - ad_id/2 >= 1.2, "Adapter zu dünn");
-assert(tail_od/2 - ad_id/2 >= 1.2 && tail_pin_y < tail_od/2 && tail_pin_y + pin_hole/2 > tail_od/2 + clr && tail_pin_y - pin_hole/2 >= ad_id/2 + 0.1, "Stifte treffen den Adapter nicht richtig");
-assert(th_crest > 0, "Gewindegänge zu hoch für die Steigung");
-function mod_fits(w, pcb, top) =
-    w/2 + mod_clr <= ridge_d/2 - 0.4 - 0.5
-    && sqrt(pow(w/2 + mod_clr, 2) + pow(max(abs(mod_z), abs(mod_z + pcb)), 2)) <= cart_od/2 - kapton
-    && sqrt(pow(4.5, 2) + pow(mod_z + pcb + top, 2)) <= cart_od/2 - kapton - wire_d;
-assert(mod_fits(drv_w, drv_pcb, drv_top), "DRV8833 passt nicht ins Rohr");
-assert(mod_fits(tp_w, tp_pcb, tp_top), "TP4056 passt nicht ins Rohr");
-assert(cart_od/2 - cell_z - cell_d/2 >= wire_d + kapton, "Kein Platz für das Pluskabel über der Zelle");
-assert(cell_z + con_w/2 + con_bend + con_t <= cart_od/2 - 0.5, "Umgebogene Lötfahne reibt am Rohr");
-assert(mod_z + tp_pcb + tp_top < cell_z + con_w/2 - 0.3, "Lötfahne der Federplatte liegt auf dem TP4056");
+assert(sqrt(pow(usb_off + usb_w/2, 2) + pow(pcb_top + usb_h + kapton, 2)) <= lim, "USB-C stösst am Rohr an");
+assert(usb_off + usb_leg + 0.5 <= pcb_w/2 - 0.25, "Schirmlaschen der USB-C-Buchse zu nah am Platinenrand");
+assert(pcb_z - usb_dn - 0.4 >= bore_d/2 + 0.6, "USB-C-Buchse unter der Platine trifft die Bohrung für den Stab");
+assert(cell_z + con_w/2 <= pcb_top, "Federplatte ragt über die Platine: Lötfahne liegt nicht flach auf");
+assert(tube_id/2 - cell_d/2 - cell_fit >= wire_d + kapton + 0.3, "Kein Platz für das Pluskabel über der Zelle");
+assert(ridge_d/2 - 0.4 - bay_d/2 >= 0.8, "Wand ums Zellenfach an den Stegnuten zu dünn");
 
 // ---------- Hilfsmodule ----------
 
@@ -255,32 +260,6 @@ module ribbed_plug(l) {
     }
 }
 
-// Kartusche: läuft mit den Stegen in den Nuten, also dreht sie mit dem Rohr. Unten flach zum Drucken.
-module cart_profile(l) {
-    difference() {
-        intersection() {
-            xcyl(cart_od, l);
-            translate([-1, -cart_od, -cart_od/2 + cart_flat]) cube([l + 2, 2*cart_od, cart_od]);
-        }
-        ridge_grooves(l, ridge_d/2 - 0.4);
-    }
-}
-
-module mod_slot(u0, l, w, pcb) {
-    translate([u0, -(w/2 + mod_clr), mod_z - 0.1]) cube([l, w + 2*mod_clr, cart_od]);
-}
-
-// Gewinde entlang +X, im Koordinatensystem des Kopfs: Kopf und Adapter nehmen dieselbe Phase, also passen sie.
-// Trapezgang mit 45°-Flanken, th_starts Gänge. c = Spiel (negativ am Adapter).
-function th_r(a, c) = let(t = ((a * th_lead / 360) % th_p + th_p) % th_p)
-    th_d/2 - th_h + c + min(th_h, max(0, th_crest/2 + th_h - abs(t - th_p/2)));
-module th_solid(u0, len, c) {
-    n = 96;
-    translate([u0, 0, 0]) rotate([0, 90, 0]) rotate(-u0 * 360 / th_lead)
-        linear_extrude(height = len, twist = 360 * len / th_lead, slices = ceil(len / th_lead * 120), convexity = 6)
-            polygon([for (i = [0 : n - 1]) let(a = i * 360 / n) th_r(a, c) * [cos(a), sin(a)]]);
-}
-
 // D-Bohrung für die N20-Welle, ab x = 0 entlang -X, Tiefe d
 module d_bore(d) {
     translate([-d, 0, 0]) intersection() {
@@ -292,39 +271,77 @@ module d_bore(d) {
 
 // ---------- Teile ----------
 
-// Halter: Wandplatte mit VHB an die Rückwand (+Y), Arm (br_t × arm_h) bis über die Achse, ein Dreieck neben
-// dem Arm (Richtung Rohr, hinter dem Stoff) verbindet ihn mit der breiten Platte. Alles gleich hoch (wp_h),
-// damit der Halter an der Wand nicht höher als 25 mm wird. Aussenseite x = 0 darf an der Seitenwand anliegen.
-// z = 0 und y = 0 auf der Achse. Flach liegend gedruckt.
-module bracket() {
-    s = tenon + 0.4;
-    tip = arm_h/2;
-    difference() {
-        union() {
-            translate([0, y_wall - wp_t, -wp_h/2]) cube([wp_w, wp_t, wp_h]);
-            translate([0, -tip, -arm_h/2]) cube([br_t, y_wall - wp_t + tip + eps, arm_h]);
-            y_p = y_wall - wp_t + eps;
-            g = [[br_t - eps, y_p], [wp_w, y_p], [br_t - eps, y_p - gus_l]];
-            // Nur die Schräge: Arm und Wandplatte sind schon da, sie brauchen keinen eigenen Steg
-            translate([0, 0, -wp_h/2]) linear_extrude(wp_h) difference() {
-                polygon(g);
-                hull() for (dx = [0, -gus_t], dy = [0, gus_t]) translate([dx, dy]) offset(delta = -gus_t) polygon(g);
-            }
-        }
-        translate([br_t - pocket_d, -s/2, -s/2]) cube([pocket_d + eps, s, s]);
-        translate([br_t - pocket_d, -tip - eps, drop - s/2]) cube([pocket_d + eps, tip + s/2 + eps, s]);
-        // Rautenfenster quer durch den Arm: Fachwerk aus Gurten und 45°-Streben
-        r = arm_h/2 - arm_fl;                       // halbe Rautenhöhe = halbe Breite
-        pitch = 2*r + arm_web*sqrt(2);
-        y_a = s/2 + 3 + r;                          // erste Mitte: hinter dem Keilsitz
-        y_b = y_wall - wp_t - 3 - r;                // letzte Mitte: vor der Wandplatte
-        n = floor((y_b - y_a)/pitch) + 1;
-        y_0 = (y_a + y_b)/2 - (n - 1)*pitch/2;
-        for (i = [0 : n - 1])
-            translate([br_t/2, y_0 + i*pitch, 0]) rotate([45, 0, 0])
-                cube([br_t + 2*eps, r*sqrt(2), r*sqrt(2)], center = true);
+// ---------- Halter ----------
+// Seitenansicht (y zur Wand, z hoch, Achse bei y = z = 0):
+//
+//          Verkleidung │ │   ┌─ Nase br_nud_h hoch im Spalt sh_gap
+//   ───────────────────┘ │ ┌─┤
+//   ┌─────────────────────┬┘ │ Wand
+//   │ ▢ Vierkant  /\/\/\/\  Fuss│
+//   └──────────────────────────┘
+//
+//  - Arm br_t dick (ganze Dicke, Aussenseite x = 0 flach), br_h hoch, als Fachwerk: zwei Gurte, Diagonalen.
+//  - Fuss und Nase breit (br_ft_w) entlang der Achse, hinter dem Stoff. Ein Zwickel in der Draufsicht führt
+//    das Moment vom schmalen Arm in die Breite.
+//  - Vierkantsitz unverändert: von vorne eingefädelt, um drop abgesenkt, Dach über dem Schlitz.
+//  - Gedruckt auf der Aussenseite liegend: alle Biegespannungen liegen in den Lagen, Fenster gehen senkrecht
+//    durch, der Vierkantsitz öffnet nach oben.
+//  - Montage: VHB nur auf die untere Hälfte der Fussrückseite, Schutzfolie mit Zuglasche nach unten dranlassen.
+//    Nase von unten hinter die Verkleidung schieben bis der Arm anstösst, Folie herausziehen, Fuss andrücken.
+br_y_tr0 = (tenon + 0.4)/2 + 3;                  // Fachwerk: ab hinter dem Vierkantsitz ...
+br_y_tr1 = y_wall - br_ft_t - br_gus_l;          // ... bis zum Zwickel
+br_zc    = br_h/2 - br_chord/2;                  // Gurtmitte
+br_n     = max(1, round((br_y_tr1 - br_y_tr0) / (2*br_zc*tan(30))));   // Felder, Diagonalen ~60°
+br_step  = (br_y_tr1 - br_y_tr0) / br_n;
+
+module bracket_truss_windows() {
+    zi = br_h/2 - br_chord;
+    offset(r = 1) offset(delta = -1) difference() {
+        translate([br_y_tr0, -zi]) square([br_y_tr1 - br_y_tr0, 2*zi]);
+        for (i = [0 : br_n - 1]) hull() for (j = [i, i + 1])
+            translate([br_y_tr0 + j*br_step, (j % 2 == 0 ? -1 : 1) * br_zc]) circle(d = br_web, $fn = 24);
+        for (y = [br_y_tr0, br_y_tr1]) translate([y - br_web/2, -br_h/2]) square([br_web, br_h]);
     }
 }
+
+module bracket() {
+    s = tenon + 0.4;
+    tip = br_h/2;
+    y_f = y_wall - br_ft_t;                       // Vorderseite Fuss
+    difference() {
+        union() {
+            // Draufsicht: Arm, Fuss, Zwickel – alle br_h hoch
+            translate([0, 0, -br_h/2]) linear_extrude(br_h) offset(r = -fil_r) offset(r = fil_r) union() {
+                translate([0, -tip]) square([br_t, y_wall + tip]);
+                translate([0, y_f]) square([br_ft_w, br_ft_t]);
+                polygon([[br_t - eps, y_f - br_gus_l], [br_t - eps, y_f + eps], [br_ft_w, y_f + eps]]);
+            }
+            // Nase hinter die Verkleidung, Rückseite bündig an der Wand, vorne angefast
+            rotate([90, 0, 90]) linear_extrude(br_ft_w) polygon([
+                [y_wall - br_nud_t, tip - eps], [y_wall - br_nud_t, tip + br_nud_h - br_nud_ch],
+                [y_wall - br_nud_t + br_nud_ch, tip + br_nud_h], [y_wall, tip + br_nud_h], [y_wall, tip - eps]]);
+        }
+        // Vierkantsitz, von vorne eingefädelt und um drop abgesenkt
+        translate([br_t - pocket_d, -s/2, -s/2]) cube([pocket_d + eps, s, s]);
+        translate([br_t - pocket_d, -tip - eps, drop - s/2]) cube([pocket_d + eps, tip + s/2 + eps, s]);
+        // Fachwerkfenster quer durch den Arm
+        rotate([90, 0, 90]) translate([0, 0, -1]) linear_extrude(br_t + 2) bracket_truss_windows();
+    }
+}
+
+// Nachweis von Hand (N, mm, MPa). Moment an der Wand: Zug mal Hebel plus Motormoment
+br_M     = br_F * y_wall + br_T * 1000;
+br_Nn    = br_M / (br_h + br_nud_h);             // Andruck an der Nase, ungünstig: trägt nur an der Spitze
+br_s_nud = 6 * br_Nn * br_nud_h / (br_ft_w * br_nud_t * br_nud_t);
+br_mu_req= br_F * (br_h + br_nud_h) / (2 * (br_F * y_wall - br_T * 1000));   // Reibung an Nase + Fuss, Moment gegenläufig
+br_Ma    = br_F * br_y_tr1 + br_T * 1000;        // Arm am Ende des Fachwerks
+br_s_ch  = br_Ma / (br_h - br_chord) / (br_chord * br_t);
+br_s_cr  = PI * PI * 2000 * br_chord * br_chord / (12 * pow(2 * br_step, 2));   // Gurt knickt zwischen den Knoten (PETG E 2000)
+echo(str("Halter: Moment an der Wand ", br_M/1000, " Nm, Andruck Nase/Fuss ", round(br_Nn), " N (bei ", br_F, " N Zug)"));
+echo(str("Halter: Nase ", br_s_nud, " MPa, Gurt ", br_s_ch, " MPa (knickt bei ", br_s_cr, "), nötiger Reibwert ", br_mu_req));
+assert(br_s_nud <= br_sig, "Nase zu schwach: br_ft_w oder br_nud_t grösser");
+assert(br_s_ch <= br_sig && br_s_ch <= br_s_cr/2, "Arm zu schwach: br_chord grösser");
+assert(br_mu_req <= br_mu, "Halter rutscht: Reibung reicht nicht");
 
 module hex(af, l) { rotate([0, 90, 0]) rotate([0, 0, 30]) cylinder(d = af / cos(30), h = l, $fn = 6); }
 
@@ -366,77 +383,6 @@ module coupler() {
     }
 }
 
-// Kopf, u = 0 an der Stirnseite: Nase (ausserhalb) | Fenster für den Super Mini | Kupplung | Motor.
-// Im Rohr mit Klemmrippen und Stegnuten, dreht mit dem Rohr. Druckt auf der Stirnseite stehend.
-// Einbau: Kupplung auf die Motorwelle, dann beide von der Rohrseite ins Motorfach schieben, Kupplung voran,
-// bis das Getriebe an der Stufe ansteht. Die Kartusche dahinter hält den Motor.
-module head() {
-    difference() {
-        union() {
-            xcyl(tube_od, nose_l);
-            translate([nose_l - eps, 0, 0]) ribbed_plug(head_l - nose_l + eps);
-        }
-        // Bohrung für den Stab, dann Raum für die Kupplung
-        translate([-eps, 0, 0]) xcyl(bore_d, u_cp + 2*eps);
-        // Die Ecken der Getriebefläche liegen auf der Stufe zum Motorfach: das ist der Anschlag des Motors
-        translate([u_cp, 0, 0]) xcyl(cp_d + 2*cp_clr, u_mf - u_cp + eps);
-        // Fenster: Super Mini von oben einlegen, Bauteile oben, Antenne zur Wand. Das Rohr deckt es ab,
-        // in der Nase bleibt es offen
-        translate([esp_x0, -win_hw, board_z]) cube([u_w1 - esp_x0, 2*win_hw, tube_od]);
-        // Kabel über Kupplung und Motor in die Kartusche
-        translate([u_w1 - eps, -3, (mot_h + 0.4)/2 - eps]) cube([head_l - u_w1 + 2*eps, 6, tube_id]);
-        // Motorfach von der Rohrseite, Welle zeigt zur Wand
-        translate([u_mf, -(mot_w + 0.4)/2, -(mot_h + 0.4)/2]) cube([mot_len + stop_t + eps, mot_w + 0.4, mot_h + 0.4]);
-        // Innengewinde für den Adapter, Einlauf an der Öffnung
-        th_solid(u_s0 - eps, th_l + 2*eps, 0);
-        translate([head_l - th_h - 0.4, 0, 0]) xcone(th_d/2 - th_h, th_d/2 + 0.4, th_h + 0.4 + eps);
-    }
-}
-
-// Motorriegel, x = 0 an der Motorrückseite. U offen nach oben: Lötfahnen und Kabel gehen
-// oben hinaus in den Kabelkanal. Die Schenkel federn, die Rippen klemmen ihn im Motorfach.
-// Hinter den Motor drücken, bis er anliegt. Druckt flach liegend.
-module motor_stop() {
-    pw = mot_w + 0.4 - 0.2;   // 0.1 Spiel je Seite, die Rippen klemmen
-    ph = mot_h + 0.4 - 0.2;
-    difference() {
-        translate([0, -pw/2, -ph/2]) cube([stop_t, pw, ph]);
-        translate([-eps, -stop_win/2, -ph/2 + stop_bot]) cube([stop_t + 2*eps, stop_win, ph]);
-    }
-    for (s = [-1, 1], z = [-ph/2 + 1.5, ph/2 - 1.5])
-        intersection() {
-            translate([0, s * (pw/2 + 0.1 + stop_rib - 0.5), z]) xcyl(1, stop_t);
-            translate([0, s > 0 ? pw/2 - eps : -pw/2 - 1, -ph/2]) cube([stop_t, 1 + eps, ph]);
-        }
-}
-
-// Adapter, im Koordinatensystem des Kopfs: Aussengewinde in den Kopf | Bund | Zapfen in die Kartusche.
-// Zwei Filament-Stifte halten die Kartusche drauf. Hohl für Kabel und Encoder; die Stirnseite des Gewindes
-// hält den Motor im Kopf. Druckt auf dem Zapfen stehend, Gewinde oben.
-module adapter() {
-    r_root = th_d/2 - th_h - th_gap;
-    x_tail = head_l + sh_t;
-    difference() {
-        union() {
-            // Gewinde, an der Spitze vom Grund bis zum Kamm angefast
-            intersection() {
-                th_solid(u_s0 + 0.2, th_l - 0.2 + eps, -th_gap);
-                union() {
-                    translate([u_s0 + 0.2, 0, 0]) xcone(r_root, r_root + th_h + 0.01, th_h);
-                    translate([u_s0 + 0.2 + th_h - eps, 0, 0]) xcyl(th_d + 1, th_l);
-                }
-            }
-            translate([u_s0 + 0.2, 0, 0]) xcyl(2*r_root + 0.02, th_l - 0.2 + eps);
-            // Bund: oben flach am Kopf, unten 45° zum Zapfen
-            translate([head_l - eps, 0, 0]) xcyl(cart_od, sh_t - (cart_od - tail_od)/2 + eps);
-            translate([x_tail - (cart_od - tail_od)/2, 0, 0]) xcone(cart_od/2, tail_od/2, (cart_od - tail_od)/2 + eps);
-            translate([x_tail - eps, 0, 0]) xcyl(tail_od, tail_l - 0.3 + eps);
-        }
-        translate([u_s0, 0, 0]) xcyl(ad_id, th_l + sh_t + tail_l + 1);
-        for (s = [-1, 1]) translate([x_tail + tail_l/2, s*tail_pin_y, 0]) cylinder(d = pin_hole, h = cart_od, center = true);
-    }
-}
-
 // Feststehende Achse Lagerseite: Keil | Bund | Ø8 ins 608 (sitzt direkt im Rohr).
 module idle_axle() {
     translate([-(pocket_d - 0.2), -tenon/2, -tenon/2]) cube([pocket_d - 0.2 + eps, tenon, tenon]);
@@ -459,43 +405,69 @@ module idle_axle() {
 module contact_seat(x0, dir) {
     l = con_slot + con_lip;
     for (s = [0, 1]) mirror([0, s, 0]) difference() {
-        translate([min(x0 - dir*eps, x0 + dir*l), con_w/2 - con_lap, -cart_od]) cube([l + eps, cart_od, 2*cart_od]);
-        translate([min(x0 - dir, x0 + dir*con_slot), -1, cell_z - con_w/2]) cube([con_slot + 1, con_w/2 + 0.15 + 1, cart_od]);
+        translate([min(x0 - dir*eps, x0 + dir*l), con_w/2 - con_lap, -sled_od]) cube([l + eps, sled_od, 2*sled_od]);
+        translate([min(x0 - dir, x0 + dir*con_slot), -1, cell_z - con_w/2]) cube([con_slot + 1, con_w/2 + 0.15 + 1, sled_od]);
     }
 }
 
-// Kartusche: Kabelfach | DRV8833 | TP4056 | Schott | Federplatte │ 18650 │ Knopfplatte | Boden.
-// Module und Zelle von oben einlegen, eine Lage Kapton darum. Druckt auf der Abflachung liegend.
-module cartridge() {
+// Schlitten, u = 0 an der Stirnseite: Nase | Kupplung | Motorfach | Fach | Schott | Zellenfach | Boden.
+// Vorne (bis hinter den Motor) mit Klemmrippen, hinten glatt; durchgehend Nuten für die Stege, also dreht er mit
+// dem Rohr. Oben die Tasche für die Platine, alles von oben eingelegt. Druckt auf der Abflachung liegend.
+module sled_body() {
+    intersection() {
+        union() {
+            xcyl(tube_od, nose_l);
+            translate([nose_l - eps, 0, 0]) ribbed_plug(u_e0 - nose_l + eps);
+            translate([u_e0 - eps, 0, 0]) difference() {
+                xcyl(sled_od, sled_l - u_e0 + eps);
+                ridge_grooves(sled_l - u_e0 + eps, ridge_d/2 - 0.4);
+            }
+        }
+        translate([-1, -tube_od, -sled_od/2 + sled_flat]) cube([sled_l + 2, 2*tube_od, tube_od]);
+    }
+}
+
+module sled() {
+    up = tube_od;   // "bis oben hinaus": das Rohr ist der Deckel
     difference() {
         union() {
             difference() {
-                cart_profile(cart_len);
-                translate([-eps, 0, 0]) xcyl(tail_od + 2*clr, front_bay + 2*eps);
-                mod_slot(u_d0, drv_l, drv_w, drv_pcb);
-                mod_slot(u_p0, tp_l, tp_w, tp_pcb);
-                translate([-eps, -wire_ch[0]/2, mod_z - wire_ch[1]]) cube([u_p0 + tp_l + eps, wire_ch[0], wire_ch[1] + eps]);
+                sled_body();
+                // Bohrung für den Stab, dann die Kupplung: von oben offen
+                translate([-eps, 0, 0]) xcyl(bore_d, u_cp + 2*eps);
+                translate([u_cp, 0, 0]) xcyl(cp_d + 2*cp_clr, u_mf - u_cp + eps);
+                translate([u_cp, -(cp_d/2 + cp_clr), 0]) cube([u_mf - u_cp + eps, cp_d + 2*cp_clr, up]);
+                // Motorfach, von oben offen. Die Ecken der Getriebefläche liegen auf der Stufe zur Kupplung
+                translate([u_mf, -(mot_w + mot_clr)/2, -mot_top]) cube([u_me - u_mf, mot_w + mot_clr, up]);
+                // Fenster in der Wand hinter dem Motor: Motordrähte hoch zur Platine
+                translate([u_me - eps, -tab_win/2, -mot_top + tab_bot]) cube([back_t + 2*eps, tab_win, up]);
+                // Tasche für die Platine, von der Nase bis zum Schott
+                translate([pcb_x0, -pcb_hw, pcb_z]) cube([u_e1 - pcb_x0, 2*pcb_hw, up]);
+                // Fach unter der Platine: Motordrähte
+                translate([u_e0, -cav_hw, bay_floor]) cube([bay_l, 2*cav_hw, up]);
+                // Öffnung für den USB-C-Stecker in der Stirnseite, Raum unter der Buchse für ihre Schirmlaschen
+                translate([-eps, usb_off - plug_w/2, usb_z - plug_h/2]) cube([pcb_x0 + 2*eps, plug_w, up]);
+                translate([pcb_x0 - eps, usb_off - (usb_leg + 0.9), pcb_z - usb_dn - 0.4]) cube([usb_d + 1.4, 2*(usb_leg + 0.9), up]);
+                // Zellenfach, von oben offen
                 translate([x_bat, 0, cell_z]) {
                     xcyl(bay_d, cell_bay);
-                    translate([0, -bay_d/2, 0]) cube([cell_bay, bay_d, cart_od]);
+                    translate([0, -bay_d/2, 0]) cube([cell_bay, bay_d, up]);
                 }
             }
             intersection() {
-                cart_profile(cart_len);
+                sled_body();
                 union() {
                     contact_seat(x_bat, 1);                 // Federplatte, Minuspol
                     contact_seat(x_bat + cell_bay, -1);     // Knopfplatte, Pluspol
                 }
             }
         }
-        // Stifte durch Kartusche und Adapter, senkrecht (Kartusche druckt liegend)
-        for (s = [-1, 1]) translate([tail_l/2, s*tail_pin_y, 0]) cylinder(d = pin_hole, h = 2*cart_od, center = true);
-        // Kabelkanal oben durch das Schott
-        translate([u_p0, -4, 4]) cube([x_bat - u_p0 + con_slot + con_lip + 1, 8, cart_od]);
+        // Lötfahne der Federplatte: über das Schott flach auf die Platine
+        translate([u_e1 - eps, -2.5, pcb_top]) cube([bulk_t + con_slot + con_lip + 2*eps, 5, up]);
         // Lötfahne der Knopfplatte: umgebogen durch einen Schlitz im Boden nach hinten
-        translate([x_bat + cell_bay - eps, -2, cell_z + con_w/2 - 0.5]) cube([end_t + 2*eps, 4, cart_od]);
+        translate([x_bat + cell_bay - eps, -2, cell_z + con_w/2 - 0.5]) cube([end_t + 2*eps, 4, up]);
         // Pluszeichen oben auf dem Boden, neben dem Schlitz: hier kommt der Pluspol hin
-        translate([cart_len - end_t/2, 6, sqrt(pow(cart_od/2, 2) - 49) - 0.8]) {
+        translate([sled_l - end_t/2, 6, sqrt(pow(sled_od/2, 2) - 49) - 0.8]) {
             translate([-1.2, -0.5, 0]) cube([2.4, 1, 2]);
             translate([-0.5, -1.2, 0]) cube([1, 2.4, 2]);
         }
@@ -504,74 +476,83 @@ module cartridge() {
 
 // ---------- Zusammenbau ----------
 
-module tube() {
-    color([0.8, 0.8, 0.85, 0.35]) translate([x_tube0, 0, 0]) difference() {
-        xcyl(tube_od, tube_len);
-        translate([-1, 0, 0]) xcyl(tube_id, tube_len + 2);
+// Querschnitt des IKEA-Rohrs in der XY-Ebene, Stege und Schlitze auf ±X (wird zu ±Y gedreht).
+// comp vergrössert die Innenmasse (Bohrung und Abstand der Stege) für den Druck.
+module tube_profile(comp = 0) {
+    difference() {
+        circle(d = tube_od);
+        difference() {
+            circle(d = tube_id + comp);
+            // Stege innen, gegenüber
+            for (s = [-1, 1]) translate([s*((ridge_d + comp)/2 + tube_od/4), 0])
+                square([tube_od/2, ridge_w - comp], center = true);
+        }
+        // Schlitze aussen über den Stegen
+        for (s = [-1, 1]) translate([s*(tube_od/2 - slot_d/2 + 0.5), 0])
+            square([slot_d + 1, slot_w], center = true);
     }
-    color([0.8, 0.8, 0.85, 0.35]) for (s = [0, 1]) mirror([0, s, 0])
-        translate([x_tube0, ridge_d/2, -ridge_w/2]) cube([tube_len, (tube_id - ridge_d)/2 + eps, ridge_w]);
 }
 
-module mod_ghost(u0, l, w, pcb, top, z, c) {
-    color(c) translate([u0, -w/2, z]) cube([l, w, pcb]);
-    color("Black") translate([u0 + 2, -w/2 + 3, z + pcb]) cube([l - 4, w - 6, top]);
+module tube() {
+    color([0.8, 0.8, 0.85, 0.35]) translate([x_tube0, 0, 0]) rotate([90, 0, 90])
+        linear_extrude(tube_len) tube_profile();
 }
 
-// Koordinaten wie head
-module head_ghost() {
-    mod_ghost(esp_x0, esp_l, esp_w, esp_pcb, esp_top, board_z, "RoyalBlue");
+// Koordinaten wie sled
+module sled_ghost() {
+    // Platine mit Chip-Antenne vorne, ESP32-H2 dahinter, alle Bauteile oben, USB-C
+    color("ForestGreen") translate([pcb_x0, -pcb_w/2, pcb_z]) cube([pcb_l, pcb_w, pcb_t]);
+    color("Silver")  translate([pcb_x0, usb_off - usb_w/2, pcb_z - usb_dn]) cube([usb_d, usb_w, usb_dn + pcb_t + usb_h]);
+    color("White")   translate([pcb_x0 + 0.7, -8.0, pcb_top]) cube([3.2, 1.6, top_h]);
+    color("Black")   translate([pcb_x0 + 11.5, -2, pcb_top]) cube([4, 4, 0.9]);
+    color("Black")   translate([pcb_x0 + 26, -mid_w/2, pcb_top]) cube([16, mid_w, mid_h]);
+    // Motor, zwei Drähte hoch zu den Lötpunkten
     color("Silver") translate([u_mf, -mot_w/2, -mot_h/2]) cube([mot_len, mot_w, mot_h]);
     color("Silver") translate([u_mf - mot_boss_h, 0, 0]) xcyl(mot_boss_d, mot_boss_h + eps);
     color("Silver") translate([u_mf - mot_shaft_len, 0, 0]) xcyl(mot_shaft_d, mot_shaft_len);
-    color("OrangeRed") translate([u_mf + mot_len, 0, 0]) motor_stop();
+    color("Red")    for (s = [-1, 1]) translate([u_mf + mot_len, s*2.6 - 0.3, 1]) cube([0.6, 0.6, pcb_top - 1]);
     color("DimGray") translate([-(pocket_d - 0.2) - collar_t - key_gap, 0, 0]) hex(hex_af, hex_len);
-}
-
-// Koordinaten wie cartridge
-module cart_ghost() {
-    mod_ghost(u_d0, drv_l, drv_w, drv_pcb, drv_top, mod_z, "MediumPurple");
-    mod_ghost(u_p0, tp_l, tp_w, tp_pcb, tp_top, mod_z, "DodgerBlue");
+    // Zelle und Kontaktplatten
     color("Blue") translate([x_bat + con_t + con_spring, 0, cell_z]) xcyl(cell_d, cell_len);
-    for (x = [x_bat, x_bat + cell_bay - con_t]) color("Silver") {
+    for (x = [x_bat, x_bat + cell_bay - con_t]) color("Silver")
         translate([x, -con_w/2, cell_z - con_w/2]) cube([con_t, con_w, con_w]);
-    }
-    // Lötfahnen umgebogen, von der Zelle weg
-    color("Silver") for (t = [[x_bat + con_t, -1], [x_bat + cell_bay - con_t, 1]])
-        translate([t[0] + (t[1] < 0 ? -con_tab : 0), -1.5, cell_z + con_w/2 + con_bend - con_t]) cube([con_tab, 3, con_t]);
+    color("Silver") translate([x_bat + con_t - con_tab, -1.5, pcb_top]) cube([con_tab, 3, con_t]);
+    color("Silver") translate([x_bat + cell_bay - con_t, -1.5, cell_z + con_w/2 + con_bend - con_t]) cube([con_tab, 3, con_t]);
     color("Silver") translate([x_bat + con_t, 0, cell_z]) xcyl(7, con_spring);
     color("Silver") translate([x_bat + cell_bay - con_t - con_dome, 0, cell_z]) xcyl(6, con_dome);
+    // Pluskabel über der Zelle zur Platine
+    color("Red") translate([u_e1 - 2, -0.45, cell_d/2 + cell_fit + kapton]) cube([x_bat + cell_bay - u_e1 + 2, wire_d, wire_d]);
 }
 
 module assembly() {
     color("SteelBlue") bracket();
     color("SteelBlue") translate([W, 0, 0]) mirror([1, 0, 0]) bracket();
     color("LimeGreen")  translate([br_t, 0, 0]) key();
-    color("LightSkyBlue") translate([x_h, 0, 0]) head();
+    color("LightSkyBlue") translate([x_h, 0, 0]) sled();
     color("LimeGreen")  translate([x_h + u_cp, 0, 0]) coupler();
-    color("Orange")     translate([x_h, 0, 0]) adapter();
-    color("Khaki")      translate([x_c0, 0, 0]) cartridge();
     color("Gold")       translate([W - br_t, 0, 0]) mirror([1, 0, 0]) idle_axle();
     tube();
-    translate([x_h, 0, 0]) head_ghost();
-    translate([x_c0, 0, 0]) cart_ghost();
+    translate([x_h, 0, 0]) sled_ghost();
     color("DimGray") translate([x_tube1 - brg_w, 0, 0]) difference() { xcyl(brg_d, brg_w); translate([-1, 0, 0]) xcyl(brg_id, brg_w + 2); }
     %translate([x_tube0 + 2, 0, 0]) xcyl(2*r_roll, tube_len - 4);
     %translate([x_tube0 + 2, r_roll - 0.2, -150]) cube([tube_len - 4, 0.4, 150]);
     %translate([0, y_wall, -150]) cube([W, 2, 250]);
+    %translate([0, y_wall - sh_gap - 12, br_h/2]) cube([W, 12, 60]);       // Täferverkleidung, Unterkante bündig mit dem Arm
 }
 
 // ---------- Ausgabe (druckfertig orientiert) ----------
 
 if      (part == "assembly")      assembly();
-else if (part == "section")       intersection() { assembly(); translate([0, 0, -100]) cube([x_c0 + cart_len + 10, 100, 200]); }
-else if (part == "bracket_motor") translate([0, 0, wp_h/2]) bracket();                       // liegt flach
-else if (part == "bracket_idle")  translate([0, 0, wp_h/2]) mirror([1, 0, 0]) bracket();
+else if (part == "section")       intersection() { assembly(); translate([0, 0, -100]) cube([x_h + sled_l + 10, 100, 200]); }
+else if (part == "tube_section")  linear_extrude(tsec_l) tube_profile(tsec_comp);            // Rohrstück, stehend: Schlitten zur Probe hineinschieben
+else if (part == "bracket_motor") rotate([0, -90, 0]) bracket();                             // liegt auf der Aussenseite
+else if (part == "bracket_idle")  rotate([0, 90, 0]) mirror([1, 0, 0]) bracket();
 else if (part == "key")           translate([0, 0, pocket_d - 0.2]) rotate([0, -90, 0]) key();
 else if (part == "hex_rod")       translate([0, 0, (hex_af - rod_shrink)/2]) hex_rod();
-else if (part == "head")          rotate([0, -90, 0]) head();
 else if (part == "coupler")       translate([0, 0, cp_l]) rotate([0, 90, 0]) coupler();
-else if (part == "motor_stop")    rotate([0, -90, 0]) motor_stop();
-else if (part == "adapter")       translate([0, 0, head_l + sh_t + tail_l - 0.3]) rotate([0, 90, 0]) adapter();
-else if (part == "cartridge")     translate([0, 0, cart_od/2 - cart_flat]) cartridge();
+else if (part == "sled")          translate([0, 0, sled_od/2 - sled_flat]) sled();             // liegt auf der Abflachung
 else if (part == "idle_axle")     translate([0, 0, pocket_d - 0.2]) rotate([0, -90, 0]) idle_axle();
+else if (part == "pcb_outline")   difference() {                                                // x ab Antennenkante
+    translate([0, -pcb_w/2]) square([pcb_l, pcb_w]);
+    translate([-1, usb_off - (usb_w + 0.3)/2]) square([6.7 + 1, usb_w + 0.3]);                      // Aussparung USB-C
+}
