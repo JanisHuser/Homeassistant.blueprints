@@ -126,6 +126,12 @@
       },
       "long_away_hours": {
         "name": "Long away after"
+      },
+      "window_delay": {
+        "name": "Window delay"
+      },
+      "away_delay": {
+        "name": "Away delay"
       }
     },
     "sensor": {
@@ -197,6 +203,23 @@
           "eco": "Eco",
           "away": "Away",
           "home": "At home (beats away)"
+        }
+      },
+      "savings": {
+        "name": "Comfort vs. savings",
+        "state": {
+          "comfort": "Comfort first",
+          "balanced": "Balanced",
+          "savings": "Save energy"
+        }
+      },
+      "cycle": {
+        "name": "Valve cycle",
+        "state": {
+          "30": "30 min",
+          "60": "60 min",
+          "90": "90 min",
+          "120": "120 min"
         }
       }
     },

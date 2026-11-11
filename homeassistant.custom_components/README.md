@@ -56,6 +56,11 @@ The model and planner are in [`model.py`](smart_floor_heating/model.py) and have
 - The controller sets the heating group to manual mode (`heat`). That also stops the Homematic heating profile, which would otherwise change the setpoint back.
 - To open, it sets the group's **maximum** temperature. The eTRV-C measures the manifold, which is often 23–25 °C, so a maximum of 25 °C may not open it fully. Set the group's maximum to 30 °C in the Homematic IP app, or set "Valve setpoint to open" higher.
 
+### Changing settings later
+
+- **Comfort vs. savings, valve cycle, window delay, away delay**: the room's select and number entities (e.g. on a dashboard). They apply right away.
+- **Valves, room sensors, weather, windows, presence entities, valve setpoints**: Settings → Devices & services → Smart floor heating → the room's ⚙ (Configure).
+
 ## Time control
 
 Everything here is a `select`, `text` or `time` entity of the room, so it can sit on a dashboard and be changed without opening the settings. What applies, from strongest to weakest:

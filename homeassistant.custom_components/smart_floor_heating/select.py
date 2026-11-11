@@ -10,6 +10,12 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SmartFloorHeatingEntry
 from .const import (
+    CONF_CYCLE,
+    CONF_SAVINGS,
+    CYCLE_CHOICES_MIN,
+    DEFAULT_CYCLE_MIN,
+    DEFAULT_SAVINGS,
+    SAVINGS_WEIGHTS,
     CALENDAR_TARGETS,
     COMBINE_BOTH,
     COMBINE_EITHER,
@@ -61,6 +67,8 @@ async def async_setup_entry(
         RuleSelect(c, "presence", [PRESENCE_ON, PRESENCE_OFF]),
         RuleSelect(c, "combine", [COMBINE_EITHER, COMBINE_BOTH]),
         OfficeSelect(c, "target", OFFICE_TARGETS),
+        OptionSelect(c, CONF_SAVINGS, list(SAVINGS_WEIGHTS), DEFAULT_SAVINGS),
+        OptionSelect(c, CONF_CYCLE, [str(m) for m in CYCLE_CHOICES_MIN], str(DEFAULT_CYCLE_MIN)),
     ]
     async_add_entities(entities)
 
@@ -162,3 +170,21 @@ class EventMeansSelect(_Base):
 
     async def async_select_option(self, option: str) -> None:
         await self.controller.async_set_calendar_means(self.calendar, self.slot, option)
+
+
+class OptionSelect(_Base):
+    """A room setup option: comfort vs. savings, valve cycle."""
+
+    def __init__(self, controller: RoomController, key: str, options: list[str], default: str) -> None:
+        super().__init__(controller, f"option_{key}")
+        self.key, self.default = key, default
+        self._attr_translation_key = key
+        self._attr_options = options
+
+    @property
+    def current_option(self) -> str:
+        return str(self.controller.option(self.key, self.default))
+
+    async def async_select_option(self, option: str) -> None:
+        value: str | int = int(option) if self.key == CONF_CYCLE else option
+        await self.controller.async_set_option(self.key, value)

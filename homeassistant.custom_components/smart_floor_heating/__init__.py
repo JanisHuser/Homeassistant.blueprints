@@ -100,4 +100,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmartFloorHeatingEntry)
 
 
 async def _reload(hass: HomeAssistant, entry: SmartFloorHeatingEntry) -> None:
+    controller = entry.runtime_data
+    if isinstance(controller, RoomController) and controller.skip_reload:
+        controller.skip_reload = False  # already applied live
+        return
     await hass.config_entries.async_reload(entry.entry_id)

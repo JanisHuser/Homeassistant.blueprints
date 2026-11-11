@@ -133,12 +133,8 @@ class RoomController:
             TARGET_LONG_AWAY: DEFAULT_LONG_AWAY_TEMP,
         }
 
-        self.cycle_min = int(self.conf.get(CONF_CYCLE, DEFAULT_CYCLE_MIN))
-        self.steps_per_cycle = max(1, self.cycle_min // STEP_MIN)
-        self.w_energy, self.w_setback = SAVINGS_WEIGHTS.get(
-            self.conf.get(CONF_SAVINGS, DEFAULT_SAVINGS),
-            SAVINGS_WEIGHTS[DEFAULT_SAVINGS],
-        )
+        self.skip_reload = False
+        self._apply_options()
 
         # Live readings
         self.room_temp: float | None = None
@@ -266,6 +262,27 @@ class RoomController:
 
     async def async_set_preset(self, preset: str) -> None:
         self.preset = preset
+        await self._changed()
+
+    def _apply_options(self) -> None:
+        self.cycle_min = int(self.conf.get(CONF_CYCLE, DEFAULT_CYCLE_MIN))
+        self.steps_per_cycle = max(1, self.cycle_min // STEP_MIN)
+        self.w_energy, self.w_setback = SAVINGS_WEIGHTS.get(
+            self.conf.get(CONF_SAVINGS, DEFAULT_SAVINGS),
+            SAVINGS_WEIGHTS[DEFAULT_SAVINGS],
+        )
+
+    def option(self, key: str, default: Any) -> Any:
+        return self.conf.get(key, default)
+
+    async def async_set_option(self, key: str, value: Any) -> None:
+        """Change a simple setup option live (savings, cycle, delays), no reload."""
+        self.conf[key] = value
+        self._apply_options()
+        self.skip_reload = True
+        self.hass.config_entries.async_update_entry(
+            self.entry, options={**self.entry.options, key: value}
+        )
         await self._changed()
 
     async def async_set_rule(self, key: str, value: Any) -> None:
