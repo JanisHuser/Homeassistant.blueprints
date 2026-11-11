@@ -42,7 +42,12 @@ async def async_setup_entry(
 ) -> None:
     c = entry.runtime_data
     if isinstance(c, SharedSettings):
-        async_add_entities(CalendarTargetSelect(c, cal, name) for cal, name in calendars(hass))
+        async_add_entities(
+            [
+                OfficeSelect(c, "target", OFFICE_TARGETS),
+                *(CalendarTargetSelect(c, cal, name) for cal, name in calendars(hass)),
+            ]
+        )
         return
     entities: list[SelectEntity] = [
         ScheduleSelect(c),
@@ -96,7 +101,9 @@ class RuleSelect(_Base):
 
 
 class OfficeSelect(_Base):
-    def __init__(self, controller: RoomController, key: str, options: list[str]) -> None:
+    def __init__(
+        self, controller: RoomController | SharedSettings, key: str, options: list[str]
+    ) -> None:
         super().__init__(controller, f"office_{key}")
         self.key = key
         self._attr_translation_key = f"office_{key}"

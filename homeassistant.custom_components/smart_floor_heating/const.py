@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "smart_floor_heating"
 PLATFORMS = ["climate", "number", "select", "sensor", "switch", "time"]
-SHARED_PLATFORMS = ["number", "select", "text"]
+SHARED_PLATFORMS = ["number", "select", "switch", "text", "time"]
 STORAGE_VERSION = 1
 
 CONF_NAME = "name"
@@ -13,6 +13,8 @@ KIND_SHARED = "shared"
 SHARED_TITLE = "Alle Räume"
 OLD_SHARED_TITLES = ("Kalender",)
 EVENT_NAME_SLOTS = 8  # event-name fields per calendar
+# Active from/until per event name; equal times = the event's own times.
+EVENT_TIMES_DEFAULT = ("00:00:00", "00:00:00")
 CONF_VALVES = "valves"
 CONF_ROOM_SENSORS = "room_sensors"
 CONF_WEATHER = "weather"

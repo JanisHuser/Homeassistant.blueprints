@@ -19,7 +19,10 @@ from .const import (
     DEFAULT_LONG_AWAY_TEMP,
     DOMAIN,
     EVENT_NAME_SLOTS,
+    EVENT_TIMES_DEFAULT,
     KIND_SHARED,
+    OFFICE_DAY_GROUPS,
+    OFFICE_DEFAULT,
     STORAGE_VERSION,
     TARGET_AWAY,
     TARGET_COMFORT,
@@ -39,7 +42,11 @@ class SharedSettings:
         self.hass = hass
         self.entry = entry
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.shared")
-        self.rules: dict[str, Any] = {"calendars": {}, "long_away_h": DEFAULT_LONG_AWAY_H}
+        self.rules: dict[str, Any] = {
+            "calendars": {},
+            "long_away_h": DEFAULT_LONG_AWAY_H,
+            "office": dict(OFFICE_DEFAULT),
+        }
         self.targets: dict[str, float] = {
             TARGET_COMFORT: DEFAULT_COMFORT_TEMP,
             TARGET_ECO: DEFAULT_ECO_TEMP,
@@ -52,6 +59,7 @@ class SharedSettings:
         stored = await self._store.async_load() or {}
         self.rules["calendars"].update(stored.get("calendars", {}))
         self.rules["long_away_h"] = stored.get("long_away_h", DEFAULT_LONG_AWAY_H)
+        self.rules["office"] = {**OFFICE_DEFAULT, **stored.get("office", {})}
         self.targets.update(stored.get("targets", {}))
 
     def _data(self) -> dict[str, Any]:
@@ -68,13 +76,34 @@ class SharedSettings:
         self.rules[key] = value
         await self._changed()
 
+    async def async_set_office(self, **changes: Any) -> None:
+        self.rules["office"] = {**self.rules["office"], **changes}
+        await self._changed()
+
+    async def async_set_office_day(self, weekday: int, on: bool) -> None:
+        days = set(office_days(self.rules["office"]))
+        days.add(weekday) if on else days.discard(weekday)
+        await self.async_set_office(days=sorted(days))
+
     def calendar_rule(self, calendar: str) -> dict[str, Any]:
         rule = self.rules["calendars"].get(calendar) or {}
         names = list(rule.get("names") or [])
         if not names and rule.get("words"):  # older single comma-separated field
             names = [w.strip() for w in rule["words"].split(",") if w.strip()]
         names = (names + [""] * EVENT_NAME_SLOTS)[:EVENT_NAME_SLOTS]
-        return {"names": names, "target": rule.get("target", CALENDAR_OFF)}
+        times = [list(t) for t in rule.get("times") or []]
+        times = (times + [list(EVENT_TIMES_DEFAULT)] * EVENT_NAME_SLOTS)[:EVENT_NAME_SLOTS]
+        return {"names": names, "times": times, "target": rule.get("target", CALENDAR_OFF)}
+
+    def calendar_matchers(self, calendar: str) -> list[tuple[str, str, str]]:
+        """(word, active from, active until) for every filled event-name field."""
+        rule = self.calendar_rule(calendar)
+        return [
+            (w.strip().lower(), times[0], times[1])
+            for name, times in zip(rule["names"], rule["times"])
+            for w in name.split(",")
+            if w.strip()
+        ]
 
     def calendar_words(self, calendar: str) -> list[str]:
         """Lower-case names to match; each field may also hold a comma list."""
@@ -90,14 +119,22 @@ class SharedSettings:
         await self._changed()
 
     async def async_set_calendar_name(self, calendar: str, slot: int, value: str) -> None:
-        names = self.calendar_rule(calendar)["names"]
-        names[slot] = value.strip()
-        # Keep filled fields first, so the dashboard only needs "next empty".
-        filled = [n for n in names if n]
-        self.rules["calendars"][calendar] = {
-            **self.calendar_rule(calendar),
-            "names": filled + [""] * (EVENT_NAME_SLOTS - len(filled)),
-        }
+        rule = self.calendar_rule(calendar)
+        rule["names"][slot] = value.strip()
+        # Keep filled fields first (with their times), so the dashboard only
+        # needs to show "the next empty one".
+        pairs = [(n, t) for n, t in zip(rule["names"], rule["times"]) if n]
+        empty = EVENT_NAME_SLOTS - len(pairs)
+        rule["names"] = [n for n, _ in pairs] + [""] * empty
+        rule["times"] = [t for _, t in pairs] + [list(EVENT_TIMES_DEFAULT)] * empty
+        self.rules["calendars"][calendar] = rule
+        await self._changed()
+
+    async def async_set_calendar_time(self, calendar: str, slot: int, which: int, value: str) -> None:
+        """which: 0 = active from, 1 = active until."""
+        rule = self.calendar_rule(calendar)
+        rule["times"][slot][which] = value
+        self.rules["calendars"][calendar] = rule
         await self._changed()
 
     async def _changed(self) -> None:
@@ -121,6 +158,14 @@ class SharedSettings:
     def _notify(self) -> None:
         for update in list(self._listeners):
             update()
+
+
+def office_days(office: dict[str, Any]) -> list[int]:
+    """Weekday numbers of an out-of-office rule (older versions stored a group)."""
+    days = office.get("days", [])
+    if isinstance(days, str):
+        return list(OFFICE_DAY_GROUPS.get(days, ()))
+    return [int(d) for d in days]
 
 
 def get_shared(hass: HomeAssistant) -> SharedSettings | None:

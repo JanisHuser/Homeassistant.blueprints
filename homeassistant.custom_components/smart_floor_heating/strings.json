@@ -202,6 +202,12 @@
       },
       "office_back": {
         "name": "Back home at"
+      },
+      "calendar_event_from": {
+        "name": "{calendar}: event {slot} from"
+      },
+      "calendar_event_until": {
+        "name": "{calendar}: event {slot} until"
       }
     },
     "switch": {
@@ -231,6 +237,9 @@
       },
       "office_sunday": {
         "name": "Out of office Sunday"
+      },
+      "own_office": {
+        "name": "Own out of office"
       }
     }
   }

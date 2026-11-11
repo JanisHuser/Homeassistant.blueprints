@@ -57,7 +57,6 @@ from .const import (
     PRESET_ECO,
     PRESET_SCHEDULE,
     CALENDAR_OFF,
-    OFFICE_DAY_GROUPS,
     OFFICE_DEFAULT,
     COMBINE_BOTH,
     COMBINE_EITHER,
@@ -73,11 +72,12 @@ from .const import (
     TARGET_LONG_AWAY,
     DEFAULT_LONG_AWAY_H,
     DEFAULT_LONG_AWAY_TEMP,
+    EVENT_TIMES_DEFAULT,
     TARGET_COMFORT,
     TARGET_ECO,
 )
 from .model import STEP_H, Plan, RoomModel, StepInput
-from .shared import get_shared
+from .shared import get_shared, office_days
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -122,6 +122,7 @@ class RoomController:
             "office": dict(OFFICE_DEFAULT),
             "long_away_h": DEFAULT_LONG_AWAY_H,
             "own_temps": False,  # False: use the shared default temperatures
+            "own_office": False,  # False: use the shared out-of-office times
         }
         self.targets = {
             TARGET_COMFORT: float(self.conf.get(CONF_COMFORT_TEMP, DEFAULT_COMFORT_TEMP)),
@@ -165,7 +166,8 @@ class RoomController:
         self._forecast_at: datetime | None = None
         self._schedule: dict | None = None
         # Matching calendar events in the horizon: (start, end, target, summary)
-        self._events: list[tuple[datetime, datetime, str, str]] = []
+        # (start, end, target, summary, length of the whole event)
+        self._events: list[tuple[datetime, datetime, str, str, timedelta]] = []
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
         self._replanning = False
@@ -242,6 +244,14 @@ class RoomController:
             return self.targets
         return shared.targets
 
+    @property
+    def office_rule(self) -> dict[str, Any]:
+        """The room's own out-of-office times, or the house's."""
+        shared = get_shared(self.hass)
+        if self.rules["own_office"] or shared is None:
+            return self.rules["office"]
+        return shared.rules["office"]
+
     def _long_away_hours(self) -> float:
         shared = get_shared(self.hass)
         if self.rules["own_temps"] or shared is None:
@@ -270,14 +280,13 @@ class RoomController:
         await self.async_set_office(days=sorted(days))
 
     async def async_shared_changed(self) -> None:
-        """Shared temperatures or calendar rules changed."""
-        if self.rules["follow_calendars"] or not self.rules["own_temps"]:
-            await self._changed()
+        """Shared temperatures, out-of-office times or calendar rules changed."""
+        await self._changed()
 
     @property
     def active_event(self) -> str | None:
         now = dt_util.now()
-        for start, end, _, summary in self._events:
+        for start, end, _, summary, _ in self._events:
             if start <= now < end:
                 return summary
         return None
@@ -285,7 +294,7 @@ class RoomController:
     @property
     def next_event(self) -> tuple[datetime, str] | None:
         now = dt_util.now()
-        upcoming = [(start, summary) for start, _, _, summary in self._events if start > now]
+        upcoming = [(start, summary) for start, _, _, summary, _ in self._events if start > now]
         return min(upcoming) if upcoming else None
 
     async def async_set_hvac_on(self, on: bool) -> None:
@@ -503,9 +512,9 @@ class RoomController:
         """Target from calendar events at that time: long away, away, eco."""
         long_away = timedelta(hours=self._long_away_hours())
         hits = set()
-        for start, end, target, _ in self._events:
+        for start, end, target, _, length in self._events:
             if start <= when < end:
-                long = target == TARGET_AWAY and end - start >= long_away
+                long = target == TARGET_AWAY and length >= long_away
                 hits.add(TARGET_LONG_AWAY if long else target)
         if (office := self._office_target(when)) is not None:
             hits.add(office)
@@ -582,7 +591,7 @@ class RoomController:
 
     def _office_target(self, when: datetime) -> str | None:
         """The fixed out-of-office times: days, leave, back."""
-        office = self.rules["office"]
+        office = self.office_rule
         days = office_days(office)
         local = dt_util.as_local(when)
         if local.weekday() not in days:
@@ -605,7 +614,7 @@ class RoomController:
                 continue
             if self._state(calendar) is None:
                 continue
-            words = shared.calendar_words(calendar)
+            matchers = shared.calendar_matchers(calendar)
             try:
                 resp = await self.hass.services.async_call(
                     "calendar",
@@ -623,11 +632,15 @@ class RoomController:
                 continue
             for event in ((resp or {}).get(calendar) or {}).get("events", []):
                 summary = str(event.get("summary") or "")
-                if not _matches(summary, words):
+                matched = _first_match(summary, matchers)
+                if matched is None:
                     continue
                 start, stop = _event_time(event.get("start")), _event_time(event.get("end"))
-                if start is not None and stop is not None and stop > now:
-                    events.append((start, stop, rule["target"], summary))
+                if start is None or stop is None:
+                    continue
+                for a, b in _active_windows(start, stop, matched[1], matched[2]):
+                    if b > now:
+                        events.append((a, b, rule["target"], summary, stop - start))
         self._events = sorted(events)
 
     def _forecast_at_time(self, when: datetime) -> tuple[float | None, float | None]:
@@ -789,20 +802,47 @@ def _is_home(state: State | None) -> bool:
     return state.state in HOME_STATES
 
 
-def office_days(office: dict[str, Any]) -> list[int]:
-    """Weekday numbers of the out-of-office rule (older versions stored a group)."""
-    days = office.get("days", [])
-    if isinstance(days, str):
-        return list(OFFICE_DAY_GROUPS.get(days, ()))
-    return [int(d) for d in days]
+def _first_match(
+    summary: str, matchers: list[tuple[str, str, str]]
+) -> tuple[str, str, str] | None:
+    """The first event-name field that matches (whole word, any case).
 
-
-def _matches(summary: str, words: list[str]) -> bool:
-    """Empty word list: every event. Otherwise a whole-word match, any case."""
-    if not words:
-        return True
+    No fields: every event matches, with its own times.
+    """
+    if not matchers:
+        return ("", *EVENT_TIMES_DEFAULT)
     text = summary.lower()
-    return any(re.search(rf"(?<!\w){re.escape(w)}(?!\w)", text) for w in words)
+    for matcher in matchers:
+        if re.search(rf"(?<!\w){re.escape(matcher[0])}(?!\w)", text):
+            return matcher
+    return None
+
+
+def _active_windows(
+    start: datetime, stop: datetime, active_from: str, active_until: str
+) -> list[tuple[datetime, datetime]]:
+    """When a matching event counts.
+
+    Equal from/until: the event's own start and end. Otherwise the window on
+    each day of an all-day or day-long event, or on the start day of a shorter
+    one (so a night shift counts once); until before from runs past midnight.
+    """
+    t_from, t_until = _as_time(active_from), _as_time(active_until)
+    if t_from is None or t_until is None or t_from == t_until:
+        return [(start, stop)]
+    all_day = start.time() == time.min and stop.time() == time.min
+    all_day = all_day or stop - start >= timedelta(days=1)
+    windows = []
+    day = start.date()
+    last = (stop - timedelta(microseconds=1)).date() if all_day else day
+    while day <= last:
+        a = dt_util.as_local(datetime.combine(day, t_from, tzinfo=start.tzinfo))
+        b = dt_util.as_local(datetime.combine(day, t_until, tzinfo=start.tzinfo))
+        if b <= a:
+            b += timedelta(days=1)
+        windows.append((a, b))
+        day += timedelta(days=1)
+    return windows
 
 
 def _event_time(value: Any) -> datetime | None:

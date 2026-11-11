@@ -12,7 +12,8 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SmartFloorHeatingEntry
 from .const import WEEKDAY_KEYS
-from .controller import RoomController, office_days
+from .controller import RoomController
+from .shared import SharedSettings, office_days
 from .entity import RoomEntity
 
 
@@ -26,13 +27,11 @@ async def async_setup_entry(
     registry = er.async_get(hass)
     if old := registry.async_get_entity_id("select", "smart_floor_heating", f"{entry.entry_id}_office_days"):
         registry.async_remove(old)
-    async_add_entities(
-        [
-            FollowCalendars(c),
-            OwnTemperatures(c),
-            *(OfficeDay(c, day) for day in range(7)),
-        ]
-    )
+    days = [OfficeDay(c, day) for day in range(7)]
+    if isinstance(c, SharedSettings):
+        async_add_entities(days)
+        return
+    async_add_entities([FollowCalendars(c), OwnTemperatures(c), OwnOffice(c), *days])
 
 
 class FollowCalendars(RoomEntity, SwitchEntity):
@@ -78,7 +77,7 @@ class OfficeDay(RoomEntity, SwitchEntity):
 
     _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(self, controller: RoomController, weekday: int) -> None:
+    def __init__(self, controller: RoomController | SharedSettings, weekday: int) -> None:
         super().__init__(controller, f"office_{WEEKDAY_KEYS[weekday]}")
         self.weekday = weekday
         self._attr_translation_key = f"office_{WEEKDAY_KEYS[weekday]}"
@@ -92,3 +91,23 @@ class OfficeDay(RoomEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.controller.async_set_office_day(self.weekday, False)
+
+
+class OwnOffice(RoomEntity, SwitchEntity):
+    """On: this room's own out-of-office times. Off: the house's."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "own_office"
+
+    def __init__(self, controller: RoomController) -> None:
+        super().__init__(controller, "own_office")
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.controller.rules["own_office"])
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.controller.async_set_rule("own_office", True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.controller.async_set_rule("own_office", False)

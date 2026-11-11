@@ -74,14 +74,16 @@ Everything here is a `select`, `text` or `time` entity of the room, so it can si
 | Out of office Monday … Sunday / from / back home at / means | A fixed weekly time away: a switch per weekday, leave and return time, eco or away. |
 | Follow calendars | Whether this room uses the shared calendar rules. |
 | Own temperatures | Off: the room uses the default temperatures of **Alle Räume**. On: its own comfort, eco, away, long away and long-away-after values. |
+| Own out of office | Off: the room uses the out-of-office days and times of **Alle Räume**. On: its own. |
 | Long away after / Long away temperature | When an away period counts as long, and the temperature for it. |
 
-Default temperatures and the calendar rules are set once for the whole house, on the **Alle Räume** entry the integration creates by itself (comfort, eco, away, long away, long away after, plus per calendar):
+Default temperatures and the calendar rules are set once for the whole house, on the **Alle Räume** entry the integration creates by itself (comfort, eco, away, long away, long away after; out-of-office days, times and eco/away; plus per calendar):
 
 | Entity | Meaning |
 |---|---|
 | *Calendar*: during events | One per calendar in Home Assistant: ignore it, eco or away during its events. |
 | *Calendar*: event name 1–8 | One name per field (whole word, any case), e.g. `FD`, `S1`, `GD`. A field may also hold a comma list. Emptying a field moves the ones after it up. All empty: every event of that calendar. |
+| *Calendar*: event 1–8 from / until | When that event name counts, e.g. FD 06:00–15:00 even if the calendar entry is all-day. Both 00:00: the event's own times. Until before from runs past midnight (night shift). For events over several days, the window applies on each day. Long away still looks at the whole event. |
 
 Calendar events and out-of-office times are known ahead of time, so the planner lets the room cool before you leave and heats it so it is warm when you are back. A new calendar shows up after reloading the Alle Räume entry.
 
