@@ -10,13 +10,14 @@ import math
 import re
 from typing import Any
 
+from astral import Observer
+from astral.sun import elevation as solar_elevation
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers.sun import get_astral_location
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -167,6 +168,11 @@ class RoomController:
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
         self._replanning = False
+        self._observer = Observer(
+            latitude=hass.config.latitude,
+            longitude=hass.config.longitude,
+            elevation=hass.config.elevation or 0,
+        )
 
     # ---- lifecycle -------------------------------------------------------
 
@@ -278,7 +284,11 @@ class RoomController:
         if minute_of_day % STEP_MIN == 0:
             self._finish_step()
         self._sample(now)
-        if minute_of_day % self.cycle_min == 0:
+        # Replan each cycle, and right away if there was no room temperature
+        # at the last plan (sensors still starting after a restart).
+        if minute_of_day % self.cycle_min == 0 or (
+            self.plan is None and self.hvac_on and self.room_temp is not None
+        ):
             await self._replan(now)
         await self._apply_valve(now)
         if self.valve_open:
@@ -567,12 +577,13 @@ class RoomController:
         if shared is None or not self.rules["follow_calendars"]:
             self._events = []
             return
-        for calendar, rule in shared.rules["calendars"].items():
+        for calendar in list(shared.rules["calendars"]):
+            rule = shared.calendar_rule(calendar)
             if rule.get("target", CALENDAR_OFF) == CALENDAR_OFF:
                 continue
             if self._state(calendar) is None:
                 continue
-            words = [w.strip().lower() for w in rule.get("words", "").split(",") if w.strip()]
+            words = shared.calendar_words(calendar)
             try:
                 resp = await self.hass.services.async_call(
                     "calendar",
@@ -612,9 +623,8 @@ class RoomController:
 
     def _sun_factor(self, when: datetime, cloud: float | None) -> float:
         try:
-            location, _ = get_astral_location(self.hass)
-            elevation = location.solar_elevation(when)
-        except (ValueError, AttributeError):
+            elevation = solar_elevation(self._observer, when)
+        except (ValueError, TypeError):
             return 0.0
         clear = max(0.0, math.sin(math.radians(elevation)))
         if cloud is None:

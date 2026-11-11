@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 
-from .const import CALENDAR_OFF, CONF_KIND, DOMAIN, KIND_SHARED, STORAGE_VERSION
+from .const import CALENDAR_OFF, CONF_KIND, DOMAIN, EVENT_NAME_SLOTS, KIND_SHARED, STORAGE_VERSION
 
 
 class SharedSettings:
@@ -29,11 +29,39 @@ class SharedSettings:
     async def async_stop(self) -> None:
         await self._store.async_save(self.rules)
 
-    def calendar_rule(self, calendar: str) -> dict[str, str]:
-        return self.rules["calendars"].get(calendar) or {"words": "", "target": CALENDAR_OFF}
+    def calendar_rule(self, calendar: str) -> dict[str, Any]:
+        rule = self.rules["calendars"].get(calendar) or {}
+        names = list(rule.get("names") or [])
+        if not names and rule.get("words"):  # older single comma-separated field
+            names = [w.strip() for w in rule["words"].split(",") if w.strip()]
+        names = (names + [""] * EVENT_NAME_SLOTS)[:EVENT_NAME_SLOTS]
+        return {"names": names, "target": rule.get("target", CALENDAR_OFF)}
 
-    async def async_set_calendar_rule(self, calendar: str, **changes: str) -> None:
+    def calendar_words(self, calendar: str) -> list[str]:
+        """Lower-case names to match; each field may also hold a comma list."""
+        return [
+            w.strip().lower()
+            for name in self.calendar_rule(calendar)["names"]
+            for w in name.split(",")
+            if w.strip()
+        ]
+
+    async def async_set_calendar_rule(self, calendar: str, **changes: Any) -> None:
         self.rules["calendars"][calendar] = {**self.calendar_rule(calendar), **changes}
+        await self._changed()
+
+    async def async_set_calendar_name(self, calendar: str, slot: int, value: str) -> None:
+        names = self.calendar_rule(calendar)["names"]
+        names[slot] = value.strip()
+        # Keep filled fields first, so the dashboard only needs "next empty".
+        filled = [n for n in names if n]
+        self.rules["calendars"][calendar] = {
+            **self.calendar_rule(calendar),
+            "names": filled + [""] * (EVENT_NAME_SLOTS - len(filled)),
+        }
+        await self._changed()
+
+    async def _changed(self) -> None:
         self._store.async_delay_save(lambda: self.rules, 10)
         self._notify()
         await self.async_update_rooms()

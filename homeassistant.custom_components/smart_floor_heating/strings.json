@@ -201,8 +201,8 @@
       }
     },
     "text": {
-      "calendar_words": {
-        "name": "{calendar}: event names"
+      "calendar_name": {
+        "name": "{calendar}: event name {slot}"
       }
     },
     "time": {

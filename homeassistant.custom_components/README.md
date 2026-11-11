@@ -80,7 +80,7 @@ The calendar rules are set once for the whole house, on the **Kalender** entry t
 | Entity | Meaning |
 |---|---|
 | *Calendar*: during events | One per calendar in Home Assistant: ignore it, eco or away during its events. |
-| *Calendar*: event names | Comma-separated names, whole words, any case, e.g. `FD, S1, GD`. Empty: every event of that calendar. |
+| *Calendar*: event name 1–8 | One name per field (whole word, any case), e.g. `FD`, `S1`, `GD`. A field may also hold a comma list. Emptying a field moves the ones after it up. All empty: every event of that calendar. |
 
 Calendar events and out-of-office times are known ahead of time, so the planner lets the room cool before you leave and heats it so it is warm when you are back. A new calendar shows up after reloading the Kalender entry.
 

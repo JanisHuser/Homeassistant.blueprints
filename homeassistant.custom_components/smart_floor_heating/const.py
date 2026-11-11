@@ -11,6 +11,7 @@ CONF_NAME = "name"
 CONF_KIND = "kind"
 KIND_SHARED = "shared"
 SHARED_TITLE = "Kalender"
+EVENT_NAME_SLOTS = 8  # event-name fields per calendar
 CONF_VALVES = "valves"
 CONF_ROOM_SENSORS = "room_sensors"
 CONF_WEATHER = "weather"

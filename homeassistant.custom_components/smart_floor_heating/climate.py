@@ -39,16 +39,24 @@ class RoomClimate(RoomEntity, ClimateEntity):
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.TURN_OFF
     )
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    # Home Assistant 2026.11 renamed these to native_*; support both.
+    if hasattr(ClimateEntity, "native_current_temperature"):
+        _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
+    else:
+        _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = TEMP_MIN
     _attr_max_temp = TEMP_MAX
 
     def __init__(self, controller) -> None:
         super().__init__(controller, "climate")
 
-    @property
-    def current_temperature(self) -> float | None:
+    def _room_temp(self) -> float | None:
         return self.controller.room_temp
+
+    if hasattr(ClimateEntity, "native_current_temperature"):
+        native_current_temperature = property(_room_temp)
+    else:
+        current_temperature = property(_room_temp)
 
     @property
     def hvac_mode(self) -> HVACMode:
