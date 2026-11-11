@@ -1,0 +1,12 @@
+{
+  "domain": "smart_floor_heating",
+  "name": "Smart floor heating",
+  "codeowners": ["@JanisHuser"],
+  "config_flow": true,
+  "dependencies": ["weather", "schedule"],
+  "documentation": "https://github.com/JanisHuser/Homeassistant.blueprints/tree/main/homeassistant.custom_components",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "requirements": [],
+  "version": "0.1.0"
+}

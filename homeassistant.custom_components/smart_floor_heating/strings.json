@@ -1,0 +1,151 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a floor-heated room",
+        "description": "One entry per room. The controller learns how the room heats up and cools down, then plans the valve ahead of time.",
+        "data": {
+          "name": "Room",
+          "valves": "Valves",
+          "room_sensors": "Room temperature sensors",
+          "weather": "Weather",
+          "outdoor_sensor": "Outdoor temperature sensor",
+          "schedule": "Schedule",
+          "windows": "Windows and doors",
+          "window_delay": "Window delay",
+          "presence": "Presence",
+          "away_delay": "Away delay",
+          "comfort_temp": "Comfort temperature",
+          "eco_temp": "Eco temperature",
+          "away_temp": "Away temperature",
+          "savings": "Comfort vs. savings",
+          "cycle": "Valve cycle",
+          "open_setpoint": "Valve setpoint to open",
+          "closed_setpoint": "Valve setpoint to close"
+        },
+        "data_description": {
+          "valves": "Thermostats or valve heads on the floor-heating manifold. They are only opened and closed; the room sensor decides.",
+          "room_sensors": "Sensors in the room itself, not the ones on the manifold. Several are averaged.",
+          "weather": "For the outdoor and sun forecast.",
+          "outdoor_sensor": "Optional, used instead of the weather's current temperature.",
+          "schedule": "A schedule helper: on means comfort, off means eco. Without one the room stays at comfort.",
+          "window_delay": "Close the valve only after a window has been open this long. Short airing doesn't matter to a floor.",
+          "presence": "People or trackers. When nobody is home for the away delay, the room drops to the away temperature.",
+          "savings": "How much the planner weighs energy against being exactly on target.",
+          "cycle": "The valve opens at most once per cycle. Longer cycles save battery.",
+          "open_setpoint": "Default: the valve's maximum.",
+          "closed_setpoint": "Default: the valve's minimum."
+        }
+      }
+    },
+    "error": {
+      "missing_entities": "Pick at least one valve and one room sensor."
+    },
+    "abort": {
+      "already_configured": "A room with this name already exists."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Room settings",
+        "description": "Temperatures are set with the room's number entities.",
+        "data": {
+          "valves": "Valves",
+          "room_sensors": "Room temperature sensors",
+          "weather": "Weather",
+          "outdoor_sensor": "Outdoor temperature sensor",
+          "schedule": "Schedule",
+          "windows": "Windows and doors",
+          "window_delay": "Window delay",
+          "presence": "Presence",
+          "away_delay": "Away delay",
+          "savings": "Comfort vs. savings",
+          "cycle": "Valve cycle",
+          "open_setpoint": "Valve setpoint to open",
+          "closed_setpoint": "Valve setpoint to close"
+        },
+        "data_description": {
+          "valves": "Thermostats or valve heads on the floor-heating manifold. They are only opened and closed; the room sensor decides.",
+          "room_sensors": "Sensors in the room itself, not the ones on the manifold. Several are averaged.",
+          "weather": "For the outdoor and sun forecast.",
+          "outdoor_sensor": "Optional, used instead of the weather's current temperature.",
+          "schedule": "A schedule helper: on means comfort, off means eco. Without one the room stays at comfort.",
+          "window_delay": "Close the valve only after a window has been open this long. Short airing doesn't matter to a floor.",
+          "presence": "People or trackers. When nobody is home for the away delay, the room drops to the away temperature.",
+          "savings": "How much the planner weighs energy against being exactly on target.",
+          "cycle": "The valve opens at most once per cycle. Longer cycles save battery.",
+          "open_setpoint": "Default: the valve's maximum.",
+          "closed_setpoint": "Default: the valve's minimum."
+        }
+      }
+    }
+  },
+  "selector": {
+    "savings": {
+      "options": {
+        "comfort": "Comfort first",
+        "balanced": "Balanced",
+        "savings": "Save energy"
+      }
+    },
+    "cycle": {
+      "options": {
+        "30": "30 min",
+        "60": "60 min",
+        "90": "90 min",
+        "120": "120 min"
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "room": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "schedule": "Schedule",
+              "comfort": "Comfort",
+              "eco": "Eco",
+              "away": "Away"
+            }
+          }
+        }
+      }
+    },
+    "number": {
+      "comfort_temp": {
+        "name": "Comfort temperature"
+      },
+      "eco_temp": {
+        "name": "Eco temperature"
+      },
+      "away_temp": {
+        "name": "Away temperature"
+      }
+    },
+    "sensor": {
+      "heat_retention": {
+        "name": "Heat retention"
+      },
+      "cooldown_time_constant": {
+        "name": "Cool-down time constant"
+      },
+      "floor_lag": {
+        "name": "Floor lag"
+      },
+      "valve_duty": {
+        "name": "Valve duty"
+      },
+      "predicted_temperature": {
+        "name": "Temperature in 3 h"
+      },
+      "next_heating": {
+        "name": "Next heating"
+      },
+      "model_error": {
+        "name": "Model error (6 h ahead)"
+      }
+    }
+  }
+}
