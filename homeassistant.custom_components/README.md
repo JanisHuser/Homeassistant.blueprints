@@ -71,18 +71,19 @@ Everything here is a `select`, `text` or `time` entity of the room, so it can si
 | Comfort schedule | Which `schedule` helper gives the comfort times, or none. Edit its times under Settings → Helpers. |
 | Presence | Away when nobody is home, or ignore presence. |
 | Calendar and presence | *Either one*: a calendar event or nobody home each lower the target. *Only when both say away*: calendar events and out-of-office times count only while nobody is home (ahead of time they are assumed right, so the planner can still pre-heat for your return). |
-| Out of office on / from / back home at / means | A fixed weekly time away: days (never, Mon–Fri, Mon–Sat, every day), leave and return time, eco or away. |
+| Out of office Monday … Sunday / from / back home at / means | A fixed weekly time away: a switch per weekday, leave and return time, eco or away. |
 | Follow calendars | Whether this room uses the shared calendar rules. |
+| Own temperatures | Off: the room uses the default temperatures of **Alle Räume**. On: its own comfort, eco, away, long away and long-away-after values. |
 | Long away after / Long away temperature | When an away period counts as long, and the temperature for it. |
 
-The calendar rules are set once for the whole house, on the **Kalender** entry the integration creates by itself:
+Default temperatures and the calendar rules are set once for the whole house, on the **Alle Räume** entry the integration creates by itself (comfort, eco, away, long away, long away after, plus per calendar):
 
 | Entity | Meaning |
 |---|---|
 | *Calendar*: during events | One per calendar in Home Assistant: ignore it, eco or away during its events. |
 | *Calendar*: event name 1–8 | One name per field (whole word, any case), e.g. `FD`, `S1`, `GD`. A field may also hold a comma list. Emptying a field moves the ones after it up. All empty: every event of that calendar. |
 
-Calendar events and out-of-office times are known ahead of time, so the planner lets the room cool before you leave and heats it so it is warm when you are back. A new calendar shows up after reloading the Kalender entry.
+Calendar events and out-of-office times are known ahead of time, so the planner lets the room cool before you leave and heats it so it is warm when you are back. A new calendar shows up after reloading the Alle Räume entry.
 
 ## Entities per room
 
@@ -111,6 +112,23 @@ hours: 24        # optional
 ```
 
 It draws the predicted room temperature, the target and the planned valve opening for the next 24 h.
+
+## Out-of-office day picker
+
+Also loaded automatically: a dropdown with a checkbox per weekday for a room's out-of-office day switches.
+
+```yaml
+type: custom:smart-floor-heating-days-card
+title: Out of office days   # optional
+entities:                    # Monday … Sunday, in this order
+  - switch.wohnzimmer_out_of_office_monday
+  - switch.wohnzimmer_out_of_office_tuesday
+  - switch.wohnzimmer_out_of_office_wednesday
+  - switch.wohnzimmer_out_of_office_thursday
+  - switch.wohnzimmer_out_of_office_friday
+  - switch.wohnzimmer_out_of_office_saturday
+  - switch.wohnzimmer_out_of_office_sunday
+```
 
 ## The first days
 

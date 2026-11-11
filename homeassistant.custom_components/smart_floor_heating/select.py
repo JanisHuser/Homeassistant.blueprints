@@ -13,7 +13,6 @@ from .const import (
     CALENDAR_TARGETS,
     COMBINE_BOTH,
     COMBINE_EITHER,
-    OFFICE_DAYS,
     OFFICE_TARGETS,
     PRESENCE_OFF,
     PRESENCE_ON,
@@ -49,7 +48,6 @@ async def async_setup_entry(
         ScheduleSelect(c),
         RuleSelect(c, "presence", [PRESENCE_ON, PRESENCE_OFF]),
         RuleSelect(c, "combine", [COMBINE_EITHER, COMBINE_BOTH]),
-        OfficeSelect(c, "days", list(OFFICE_DAYS)),
         OfficeSelect(c, "target", OFFICE_TARGETS),
     ]
     async_add_entities(entities)

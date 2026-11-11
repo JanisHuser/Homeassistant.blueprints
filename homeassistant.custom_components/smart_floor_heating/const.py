@@ -4,13 +4,14 @@ from __future__ import annotations
 
 DOMAIN = "smart_floor_heating"
 PLATFORMS = ["climate", "number", "select", "sensor", "switch", "time"]
-SHARED_PLATFORMS = ["select", "text"]
+SHARED_PLATFORMS = ["number", "select", "text"]
 STORAGE_VERSION = 1
 
 CONF_NAME = "name"
 CONF_KIND = "kind"
 KIND_SHARED = "shared"
-SHARED_TITLE = "Kalender"
+SHARED_TITLE = "Alle Räume"
+OLD_SHARED_TITLES = ("Kalender",)
 EVENT_NAME_SLOTS = 8  # event-name fields per calendar
 CONF_VALVES = "valves"
 CONF_ROOM_SENSORS = "room_sensors"
@@ -74,15 +75,17 @@ COMBINE_EITHER = "either"
 COMBINE_BOTH = "both"
 SCHEDULE_NONE = "none"
 
-# Fixed out-of-office times: which days, and their weekday numbers.
-OFFICE_DAYS = {
+# Fixed out-of-office times. "days" holds weekday numbers (0 = Monday).
+# OFFICE_DAY_GROUPS converts the day groups of earlier versions.
+WEEKDAY_KEYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+OFFICE_DAY_GROUPS = {
     "off": (),
     "mon_fri": (0, 1, 2, 3, 4),
     "mon_sat": (0, 1, 2, 3, 4, 5),
     "every_day": (0, 1, 2, 3, 4, 5, 6),
 }
 OFFICE_TARGETS = ["eco", "away"]
-OFFICE_DEFAULT = {"days": "off", "leave": "07:30:00", "back": "17:30:00", "target": "eco"}
+OFFICE_DEFAULT = {"days": [], "leave": "07:30:00", "back": "17:30:00", "target": "eco"}
 
 TARGET_COMFORT = "comfort"
 TARGET_ECO = "eco"

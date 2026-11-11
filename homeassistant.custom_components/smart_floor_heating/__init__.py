@@ -14,7 +14,15 @@ from homeassistant.helpers.typing import ConfigType
 
 from homeassistant.helpers import entity_registry as er
 
-from .const import CONF_KIND, DOMAIN, KIND_SHARED, PLATFORMS, SHARED_PLATFORMS
+from .const import (
+    CONF_KIND,
+    DOMAIN,
+    KIND_SHARED,
+    OLD_SHARED_TITLES,
+    PLATFORMS,
+    SHARED_PLATFORMS,
+    SHARED_TITLE,
+)
 from .controller import RoomController
 from .shared import SharedSettings
 
@@ -55,6 +63,8 @@ def _is_shared(entry: ConfigEntry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: SmartFloorHeatingEntry) -> bool:
     if _is_shared(entry):
+        if entry.title in OLD_SHARED_TITLES:
+            hass.config_entries.async_update_entry(entry, title=SHARED_TITLE)
         shared = SharedSettings(hass, entry)
         await shared.async_start()
         entry.runtime_data = shared

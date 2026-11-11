@@ -1,4 +1,4 @@
-"""House-wide settings shared by all rooms: the calendar rules."""
+"""House-wide settings shared by all rooms: default temperatures and calendar rules."""
 
 from __future__ import annotations
 
@@ -9,25 +9,64 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 
-from .const import CALENDAR_OFF, CONF_KIND, DOMAIN, EVENT_NAME_SLOTS, KIND_SHARED, STORAGE_VERSION
+from .const import (
+    CALENDAR_OFF,
+    CONF_KIND,
+    DEFAULT_AWAY_TEMP,
+    DEFAULT_COMFORT_TEMP,
+    DEFAULT_ECO_TEMP,
+    DEFAULT_LONG_AWAY_H,
+    DEFAULT_LONG_AWAY_TEMP,
+    DOMAIN,
+    EVENT_NAME_SLOTS,
+    KIND_SHARED,
+    STORAGE_VERSION,
+    TARGET_AWAY,
+    TARGET_COMFORT,
+    TARGET_ECO,
+    TARGET_LONG_AWAY,
+)
 
 
 class SharedSettings:
-    """The one shared entry. Rooms switch calendars on or off for themselves."""
+    """The one shared entry.
+
+    Rooms use its temperatures unless they have "Own temperatures" on, and its
+    calendar rules while "Follow calendars" is on.
+    """
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.shared")
-        self.rules: dict[str, Any] = {"calendars": {}}
+        self.rules: dict[str, Any] = {"calendars": {}, "long_away_h": DEFAULT_LONG_AWAY_H}
+        self.targets: dict[str, float] = {
+            TARGET_COMFORT: DEFAULT_COMFORT_TEMP,
+            TARGET_ECO: DEFAULT_ECO_TEMP,
+            TARGET_AWAY: DEFAULT_AWAY_TEMP,
+            TARGET_LONG_AWAY: DEFAULT_LONG_AWAY_TEMP,
+        }
         self._listeners: list[Callable[[], None]] = []
 
     async def async_start(self) -> None:
         stored = await self._store.async_load() or {}
         self.rules["calendars"].update(stored.get("calendars", {}))
+        self.rules["long_away_h"] = stored.get("long_away_h", DEFAULT_LONG_AWAY_H)
+        self.targets.update(stored.get("targets", {}))
+
+    def _data(self) -> dict[str, Any]:
+        return {**self.rules, "targets": self.targets}
 
     async def async_stop(self) -> None:
-        await self._store.async_save(self.rules)
+        await self._store.async_save(self._data())
+
+    async def async_set_target(self, kind: str, value: float) -> None:
+        self.targets[kind] = value
+        await self._changed()
+
+    async def async_set_rule(self, key: str, value: Any) -> None:
+        self.rules[key] = value
+        await self._changed()
 
     def calendar_rule(self, calendar: str) -> dict[str, Any]:
         rule = self.rules["calendars"].get(calendar) or {}
@@ -62,7 +101,7 @@ class SharedSettings:
         await self._changed()
 
     async def _changed(self) -> None:
-        self._store.async_delay_save(lambda: self.rules, 10)
+        self._store.async_delay_save(self._data, 10)
         self._notify()
         await self.async_update_rooms()
 

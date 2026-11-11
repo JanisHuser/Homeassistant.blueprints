@@ -24,7 +24,7 @@ async def async_setup_entry(
     entry: SmartFloorHeatingEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    controller = entry.runtime_data
+    controller = entry.runtime_data  # a room, or the shared defaults
     async_add_entities(
         [
             *(

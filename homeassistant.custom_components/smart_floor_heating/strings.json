@@ -175,15 +175,6 @@
           "both": "Only when both say away"
         }
       },
-      "office_days": {
-        "name": "Out of office on",
-        "state": {
-          "off": "Never",
-          "mon_fri": "Mon–Fri",
-          "mon_sat": "Mon–Sat",
-          "every_day": "Every day"
-        }
-      },
       "office_target": {
         "name": "Out of office means",
         "state": {
@@ -216,6 +207,30 @@
     "switch": {
       "follow_calendars": {
         "name": "Follow calendars"
+      },
+      "own_temperatures": {
+        "name": "Own temperatures"
+      },
+      "office_monday": {
+        "name": "Out of office Monday"
+      },
+      "office_tuesday": {
+        "name": "Out of office Tuesday"
+      },
+      "office_wednesday": {
+        "name": "Out of office Wednesday"
+      },
+      "office_thursday": {
+        "name": "Out of office Thursday"
+      },
+      "office_friday": {
+        "name": "Out of office Friday"
+      },
+      "office_saturday": {
+        "name": "Out of office Saturday"
+      },
+      "office_sunday": {
+        "name": "Out of office Sunday"
       }
     }
   }

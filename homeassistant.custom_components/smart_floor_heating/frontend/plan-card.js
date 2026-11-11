@@ -190,3 +190,120 @@ if (!customElements.get("smart-floor-heating-plan-card")) {
     description: "Predicted room temperature, target and valve plan for the next 24 hours.",
   });
 }
+
+// Day picker: a dropdown with a checkbox per weekday, backed by the room's
+// "Out of office <day>" switches.
+//
+//   type: custom:smart-floor-heating-days-card
+//   title: Out of office days        (optional)
+//   entities:                         (Monday … Sunday switches, in order)
+//     - switch.wohnzimmer_out_of_office_monday
+//     - ...
+
+class SmartFloorHeatingDaysCard extends HTMLElement {
+  setConfig(config) {
+    if (!config || !Array.isArray(config.entities) || config.entities.length !== 7) {
+      throw new Error("Set entities: the seven day switches, Monday to Sunday.");
+    }
+    this._config = config;
+    this._key = undefined;
+    if (this._hass) this._update();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._update();
+  }
+
+  getCardSize() {
+    return 1;
+  }
+
+  getGridOptions() {
+    return { columns: 12, rows: "auto" };
+  }
+
+  _days() {
+    const lang = this._hass.locale?.language || undefined;
+    // 2024-01-01 was a Monday.
+    return [0, 1, 2, 3, 4, 5, 6].map((i) => {
+      const d = new Date(2024, 0, 1 + i);
+      return {
+        long: d.toLocaleDateString(lang, { weekday: "long" }),
+        short: d.toLocaleDateString(lang, { weekday: "short" }),
+      };
+    });
+  }
+
+  _update() {
+    if (!this._config || !this._hass) return;
+    const on = this._config.entities.map((e) => this._hass.states[e]?.state === "on");
+    const key = on.join() + (this._hass.locale?.language || "");
+    if (key === this._key) return;
+    this._key = key;
+    this._render(on);
+  }
+
+  _render(on) {
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    const wasOpen = this.shadowRoot.querySelector("details")?.open;
+    const days = this._days();
+    const picked = days.filter((_, i) => on[i]).map((d) => d.short);
+    const summary = !picked.length ? "None" : picked.length === 7 ? "Every day" : picked.join(", ");
+    const title = this._config.title ?? "Out of office days";
+    this.shadowRoot.innerHTML = `
+      <style>
+        ha-card { padding: 12px 16px; }
+        .label { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 4px; }
+        details { position: relative; }
+        summary {
+          list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+          padding: 10px 12px; border-radius: 4px 4px 0 0;
+          background: var(--input-fill-color, rgba(127,127,127,.1));
+          border-bottom: 1px solid var(--input-idle-line-color, var(--divider-color));
+          color: var(--primary-text-color); font-size: 16px;
+        }
+        summary::-webkit-details-marker { display: none; }
+        summary::after { content: "▾"; color: var(--secondary-text-color); margin-left: 8px; }
+        details[open] summary::after { content: "▴"; }
+        .menu {
+          margin-top: 4px; padding: 4px 0; border-radius: 4px;
+          background: var(--card-background-color, var(--ha-card-background));
+          box-shadow: var(--ha-card-box-shadow, 0 2px 6px rgba(0,0,0,.25));
+          border: 1px solid var(--divider-color);
+        }
+        label { display: flex; align-items: center; gap: 12px; padding: 8px 12px; cursor: pointer; color: var(--primary-text-color); }
+        label:hover { background: rgba(127,127,127,.08); }
+        input { width: 18px; height: 18px; accent-color: var(--primary-color); margin: 0; }
+      </style>
+      <ha-card>
+        <div class="label">${esc(title)}</div>
+        <details ${wasOpen ? "open" : ""}>
+          <summary>${esc(summary)}</summary>
+          <div class="menu">
+            ${days
+              .map(
+                (d, i) => `<label><input type="checkbox" data-i="${i}" ${on[i] ? "checked" : ""}>${esc(d.long)}</label>`,
+              )
+              .join("")}
+          </div>
+        </details>
+      </ha-card>`;
+    this.shadowRoot.querySelectorAll("input").forEach((box) =>
+      box.addEventListener("change", (ev) => {
+        const entity = this._config.entities[Number(ev.target.dataset.i)];
+        this._hass.callService("switch", ev.target.checked ? "turn_on" : "turn_off", { entity_id: entity });
+      }),
+    );
+  }
+}
+
+if (!customElements.get("smart-floor-heating-days-card")) {
+  customElements.define("smart-floor-heating-days-card", SmartFloorHeatingDaysCard);
+  window.customCards = window.customCards || [];
+  window.customCards.push({
+    type: "smart-floor-heating-days-card",
+    name: "Smart floor heating days",
+    description: "Dropdown with a checkbox per weekday for the out-of-office days.",
+  });
+}

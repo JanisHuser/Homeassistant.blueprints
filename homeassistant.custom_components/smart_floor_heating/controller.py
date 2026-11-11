@@ -57,7 +57,7 @@ from .const import (
     PRESET_ECO,
     PRESET_SCHEDULE,
     CALENDAR_OFF,
-    OFFICE_DAYS,
+    OFFICE_DAY_GROUPS,
     OFFICE_DEFAULT,
     COMBINE_BOTH,
     COMBINE_EITHER,
@@ -121,6 +121,7 @@ class RoomController:
             "follow_calendars": True,  # the rules themselves are shared, see shared.py
             "office": dict(OFFICE_DEFAULT),
             "long_away_h": DEFAULT_LONG_AWAY_H,
+            "own_temps": False,  # False: use the shared default temperatures
         }
         self.targets = {
             TARGET_COMFORT: float(self.conf.get(CONF_COMFORT_TEMP, DEFAULT_COMFORT_TEMP)),
@@ -182,8 +183,10 @@ class RoomController:
         self.preset = stored.get("preset", PRESET_SCHEDULE)
         self.hvac_on = stored.get("hvac_on", True)
         self.targets.update(stored.get("targets", {}))
+        # Rooms set up before shared defaults existed keep their own values.
+        self.rules["own_temps"] = "targets" in stored
         if "rules" in stored:
-            self.rules.update(stored["rules"])
+            self.rules.update(stored["rules"])  # includes a saved own_temps
             self.rules.pop("calendars", None)  # moved to the shared entry
             self.rules["office"] = {**OFFICE_DEFAULT, **self.rules.get("office", {})}
 
@@ -229,7 +232,21 @@ class RoomController:
 
     @property
     def target_temp(self) -> float:
-        return self.targets[self.active_target]
+        return self.effective_targets[self.active_target]
+
+    @property
+    def effective_targets(self) -> dict[str, float]:
+        """The room's own temperatures, or the shared defaults."""
+        shared = get_shared(self.hass)
+        if self.rules["own_temps"] or shared is None:
+            return self.targets
+        return shared.targets
+
+    def _long_away_hours(self) -> float:
+        shared = get_shared(self.hass)
+        if self.rules["own_temps"] or shared is None:
+            return float(self.rules["long_away_h"])
+        return float(shared.rules["long_away_h"])
 
     async def async_set_target(self, kind: str, value: float) -> None:
         self.targets[kind] = value
@@ -243,13 +260,18 @@ class RoomController:
         self.rules[key] = value
         await self._changed()
 
-    async def async_set_office(self, **changes: str) -> None:
+    async def async_set_office(self, **changes: Any) -> None:
         self.rules["office"] = {**self.rules["office"], **changes}
         await self._changed()
 
+    async def async_set_office_day(self, weekday: int, on: bool) -> None:
+        days = set(office_days(self.rules["office"]))
+        days.add(weekday) if on else days.discard(weekday)
+        await self.async_set_office(days=sorted(days))
+
     async def async_shared_changed(self) -> None:
-        """The shared calendar rules changed."""
-        if self.rules["follow_calendars"]:
+        """Shared temperatures or calendar rules changed."""
+        if self.rules["follow_calendars"] or not self.rules["own_temps"]:
             await self._changed()
 
     @property
@@ -440,7 +462,7 @@ class RoomController:
                 StepInput(
                     outdoor=outdoor if outdoor is not None else 5.0,
                     sun=self._sun_factor(mid, cloud),
-                    target=self.targets[kind],
+                    target=self.effective_targets[kind],
                     comfort=kind == TARGET_COMFORT,
                 )
             )
@@ -474,12 +496,12 @@ class RoomController:
     def _long_absence(self) -> bool:
         """Nobody home for at least the long-away hours."""
         return self._away_since is not None and dt_util.now() - self._away_since >= timedelta(
-            hours=float(self.rules["long_away_h"])
+            hours=self._long_away_hours()
         )
 
     def _event_target(self, when: datetime) -> str | None:
         """Target from calendar events at that time: long away, away, eco."""
-        long_away = timedelta(hours=float(self.rules["long_away_h"]))
+        long_away = timedelta(hours=self._long_away_hours())
         hits = set()
         for start, end, target, _ in self._events:
             if start <= when < end:
@@ -561,7 +583,7 @@ class RoomController:
     def _office_target(self, when: datetime) -> str | None:
         """The fixed out-of-office times: days, leave, back."""
         office = self.rules["office"]
-        days = OFFICE_DAYS.get(office.get("days", "off"), ())
+        days = office_days(office)
         local = dt_util.as_local(when)
         if local.weekday() not in days:
             return None
@@ -765,6 +787,14 @@ def _is_home(state: State | None) -> bool:
     if state.domain == "zone":
         return (_float(state.state) or 0) > 0
     return state.state in HOME_STATES
+
+
+def office_days(office: dict[str, Any]) -> list[int]:
+    """Weekday numbers of the out-of-office rule (older versions stored a group)."""
+    days = office.get("days", [])
+    if isinstance(days, str):
+        return list(OFFICE_DAY_GROUPS.get(days, ()))
+    return [int(d) for d in days]
 
 
 def _matches(summary: str, words: list[str]) -> bool:
