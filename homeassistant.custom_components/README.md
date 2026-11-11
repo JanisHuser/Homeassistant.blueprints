@@ -106,12 +106,14 @@ The integration brings its own dashboard card, loaded automatically:
 
 ```yaml
 type: custom:smart-floor-heating-plan-card
-entity: sensor.wohnzimmer_temperature_in_3_h
-title: Plan      # optional
-hours: 24        # optional
+entity: sensor.wohnzimmer_temperature_in_3_h          # the plan
+actual_entity: sensor.wohnzimmer_temperatursensor_wohnzimmer_temperatur  # optional
+target_entity: sensor.wohnzimmer_target_temperature    # optional
+past_hours: 24                                         # optional, 0 = plan only
+title: Temperature & plan                              # optional
 ```
 
-It draws the predicted room temperature, the target and the planned valve opening for the next 24 h.
+Left of "now" it draws the measured room temperature and the target of the last `past_hours`; right of it the predicted temperature (dashed), the planned target and the planned valve opening for the next 24 h.
 
 ## Out-of-office day picker
 
