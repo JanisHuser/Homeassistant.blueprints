@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "rollo_board") (type "KiCad") (uri "${KIPRJMOD}/rollo_board.kicad_sym") (options "") (descr "Board parts"))
+)

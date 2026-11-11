@@ -1,140 +1,205 @@
 blueprint:
   name: Room Master
-  description: >
-    A virtual "room" switch (an input_boolean) that is the single source of truth
-    for a room, exposed to Apple Home / HomeKit while the real devices stay hidden.
+  description: |
+    A virtual "room" switch (an input_boolean) that is the single source of truth for a room, exposed to Apple Home / HomeKit while the real devices stay hidden.
 
-    Behavior:
-      - Master ON from Home Assistant / HomeKit:
-          Bright scene during the bright window
-          Dim scene outside the bright window
-      - Master OFF:
-          Off scene
+    Every input of the first Room Master keeps its name and meaning.
 
-      - Normal physical source:
-          Master OFF -> turn master ON and apply time-based Bright/Dim
-          Master ON  -> turn master OFF and apply Off
+    Short press / switch flip:
+      Master OFF -> ON with the scene for the time of day (Bright / Dim / Night)
+      Master ON  -> OFF
+      Force-Bright / Force-Dim sources pick Bright / Dim instead of the time.
 
-      - Force-Bright physical source:
-          Master OFF -> turn master ON and apply Bright
-          Master ON  -> turn master OFF and apply Off
+    Double press (event entities, e.g. IKEA BILRESA):
+      Master ON  -> next scene (Bright -> Dim -> Night -> Bright)
+      Master OFF -> ON with Bright
 
-      - Force-Dim physical source:
-          Master OFF -> turn master ON and apply Dim
-          Master ON  -> turn master OFF and apply Off
+    Long press (event entities):
+      Master ON  -> dims or brightens the "Dimmable lights" while held
+      Master OFF -> ON with Night (or Dim if there is no Night scene)
 
-      - Optional, only while the master is ON:
-          Bright window starts -> switch to Bright
-          Bright window ends   -> switch to Dim
+    Master switched from HA / HomeKit / a time-triggered automation:
+      ON -> time-of-day scene, OFF -> Off scene
+      (Changes made by state-triggered automations are ignored, as in v1,
+      so the automation can never loop on itself.)
 
-    Source precedence:
-      Force-Bright > Force-Dim > Normal
+    Scene sync (optional):
+      Activating one of the room's scenes anywhere (dashboard, Siri, a script)
+      keeps the master in step: Off scene -> master OFF, any other -> master ON.
+
+    Follow the time (optional, only while ON):
+      Bright window starts -> Bright, ends -> Dim, Night window starts -> Night.
+
+    Virtual sun (optional):
+      Point every Room Master at the same two input_number helpers (hours,
+      positive = later) to move sunrise / sunset for all rooms at once. The
+      shift is added on top of each room's own Bright offsets.
 
     No mode helper is required.
-
   domain: automation
+  source_url: https://github.com/JanisHuser/Homeassistant.blueprints/blob/main/homeassistant.blueprints/room-master.yaml
   author: Janis
-
   input:
-
     master:
       name: Room master
-      description: >
-        The input_boolean that represents this room.
-        Expose THIS entity to Apple Home / HomeKit.
+      description: |
+        The input_boolean that represents this room. Expose THIS entity to Apple Home / HomeKit.
       selector:
         entity:
           filter:
-            domain: input_boolean
-
+          - domain:
+            - input_boolean
+          reorder: false
+          multiple: false
     sources:
       name: Physical input devices
-      description: >
-        Normal physical inputs such as switches, buttons and motion sensors.
-        When the master is turned ON by one of these sources, Bright or Dim
-        is selected according to the time-of-day window.
+      description: |
+        Switches, buttons, event entities and motion sensors. Turning the room on picks Bright / Dim / Night by time of day.
+      default: []
       selector:
         entity:
           multiple: true
-
+          reorder: false
     bright_sources:
       name: Physical inputs — force Bright
-      description: >
-        Physical inputs that always turn the room ON with the Bright scene.
-        When the room is already ON, the next press turns it OFF.
-        Force-Bright has priority over Force-Dim and Normal.
+      description: Short press always turns the room ON with Bright.
       default: []
       selector:
         entity:
           multiple: true
-
+          reorder: false
     dim_sources:
       name: Physical inputs — force Dim
-      description: >
-        Physical inputs that always turn the room ON with the Dim scene.
-        When the room is already ON, the next press turns it OFF.
-        Force-Dim has priority over Normal, but loses to Force-Bright.
+      description: Short press always turns the room ON with Dim.
       default: []
       selector:
         entity:
           multiple: true
-
+          reorder: false
     map_mode:
-      name: How normal inputs map to the master
-      description: >
-        Toggle:
-          Every physical on/off change toggles the master.
-          Recommended for wall switches and momentary buttons.
-
-        Follow:
-          Any normal source turning ON turns the master ON.
-          The master turns OFF only when all normal sources are OFF.
+      name: How on/off sources map to the master
+      description: |
+        Toggle: every physical on/off change flips the master (wall switches, buttons). Follow: any source ON turns the master ON; it turns OFF when all are OFF.
       default: toggle
       selector:
         select:
           options:
-            - label: "Toggle (every physical change flips master) — recommended"
-              value: toggle
-            - label: "Follow (any on / all off)"
-              value: follow
-
+          - label: Toggle (every physical change flips master) — recommended
+            value: toggle
+          - label: Follow (any on / all off)
+            value: follow
+          custom_value: false
+          sort: false
+          multiple: false
     scene_off:
-      name: "Off scene"
+      name: Off scene
       selector:
         entity:
           filter:
-            domain: scene
-
+          - domain:
+            - scene
+          reorder: false
+          multiple: false
     scene_bright:
-      name: "Bright scene"
+      name: Bright scene
       selector:
         entity:
           filter:
-            domain: scene
-
+          - domain:
+            - scene
+          reorder: false
+          multiple: false
     scene_dim:
-      name: "Dim scene"
+      name: Dim scene
       selector:
         entity:
           filter:
-            domain: scene
-
+          - domain:
+            - scene
+          reorder: false
+          multiple: false
+    scene_night:
+      name: Night scene (optional)
+      description: |
+        Used inside the Night window and as the third step of the double-press cycle. Leave empty to keep the room two-tier (Bright / Dim).
+      default: []
+      selector:
+        entity:
+          filter:
+          - domain:
+            - scene
+          reorder: false
+          multiple: false
+    night_start:
+      name: Night window starts
+      default: '23:00:00'
+      selector:
+        time: {}
+    night_end:
+      name: Night window ends
+      default: 05:00:00
+      selector:
+        time: {}
+    lights:
+      name: Dimmable lights (optional)
+      description: |
+        Lights (or a light group) that a long press dims / brightens. Leave empty and a long press while ON applies the Dim scene instead.
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+          - domain:
+            - light
+          reorder: false
+    double_press:
+      name: Double press
+      default: cycle
+      selector:
+        select:
+          options:
+          - label: Cycle Bright → Dim → Night
+            value: cycle
+          - label: Always Bright
+            value: bright
+          - label: Same as a short press
+            value: none
+          custom_value: false
+          sort: false
+          multiple: false
+    long_press:
+      name: Long press
+      default: dim
+      selector:
+        select:
+          options:
+          - label: Dim / brighten while held (Night when the room is off)
+            value: dim
+          - label: Hold (or quick double flip) for Bright
+            value: bright
+          - label: Same as a short press
+            value: none
+          custom_value: false
+          sort: false
+          multiple: false
+    sync_scenes:
+      name: Keep the master in sync when a room scene is activated elsewhere
+      default: true
+      selector:
+        boolean: {}
     sun_entity:
       name: Sun entity
-      description: >
-        Provides sunrise and sunset times for the Bright window.
       default: sun.sun
       selector:
         entity:
           filter:
-            domain: sun
-
+          - domain:
+            - sun
+          reorder: false
+          multiple: false
     bright_before_sunrise:
       name: Bright starts before sunrise
-      description: >
-        Hours to shift the start of Bright relative to sunrise.
-        Positive = Bright starts before sunrise.
-        Negative = Bright starts after sunrise.
+      description: Hours. Positive = before sunrise, negative = after.
       default: 0
       selector:
         number:
@@ -143,13 +208,9 @@ blueprint:
           step: 0.25
           unit_of_measurement: h
           mode: slider
-
     bright_after_sunset:
       name: Bright ends after sunset
-      description: >
-        Hours to shift the end of Bright relative to sunset.
-        Positive = Bright continues after sunset.
-        Negative = Bright ends before sunset.
+      description: Hours. Positive = after sunset, negative = before.
       default: 0
       selector:
         number:
@@ -158,24 +219,37 @@ blueprint:
           step: 0.25
           unit_of_measurement: h
           mode: slider
-
+    virtual_sunrise:
+      name: Virtual sun — sunrise shift (optional)
+      description: |
+        An input_number in hours shared by all rooms. Positive = the virtual sunrise comes later, negative = earlier.
+      default: []
+      selector:
+        entity:
+          filter:
+          - domain:
+            - input_number
+          reorder: false
+          multiple: false
+    virtual_sunset:
+      name: Virtual sun — sunset shift (optional)
+      description: |
+        An input_number in hours shared by all rooms. Positive = the virtual sunset comes later, negative = earlier.
+      default: []
+      selector:
+        entity:
+          filter:
+          - domain:
+            - input_number
+          reorder: false
+          multiple: false
     auto_time_switch:
       name: Follow the time while the room is on
-      description: >
-        When the Bright window starts or ends while the room is already ON,
-        change the scene automatically:
-
-          Bright window starts -> Bright scene
-          Bright window ends   -> Dim scene
-
-        A room that is OFF is never turned on by this.
-
-        The boundary is checked about once a minute, so the change can be
-        up to a minute late.
+      description: |
+        When a Bright or Night window boundary passes while the room is ON, switch the scene. A room that is OFF is never turned on by this. Checked once a minute.
       default: false
       selector:
-        boolean:
-
+        boolean: {}
     transition:
       name: Transition
       description: Fade time when a scene is applied.
@@ -186,761 +260,320 @@ blueprint:
           max: 30
           step: 0.5
           unit_of_measurement: s
-
-
 mode: queued
 max: 10
 max_exceeded: silent
-
-
 variables:
   master: !input master
   sources: !input sources
   bright_sources: !input bright_sources
   dim_sources: !input dim_sources
   map_mode: !input map_mode
+  scene_off: !input scene_off
+  scene_bright: !input scene_bright
+  scene_dim: !input scene_dim
+  scene_night: !input scene_night
+  night_start: !input night_start
+  night_end: !input night_end
+  lights: !input lights
+  double_press: !input double_press
+  long_press: !input long_press
+  sync_scenes: !input sync_scenes
   sun_entity: !input sun_entity
   bright_before_sunrise: !input bright_before_sunrise
   bright_after_sunset: !input bright_after_sunset
   auto_time_switch: !input auto_time_switch
   transition: !input transition
-
-
+  virtual_sunrise: !input virtual_sunrise
+  virtual_sunset: !input virtual_sunset
+  sunrise_shift: |
+    {{ states(virtual_sunrise) | float(0)
+       if virtual_sunrise is string and virtual_sunrise | length > 0 else 0 }}
+  sunset_shift: |
+    {{ states(virtual_sunset) | float(0)
+       if virtual_sunset is string and virtual_sunset | length > 0 else 0 }}
+  has_night: '{{ scene_night is string and scene_night | length > 0 }}'
+  phases: |
+    {% set n = now().timestamp() %} {% set nr = as_timestamp(state_attr(sun_entity, 'next_rising'), 0) %} {% set ns = as_timestamp(state_attr(sun_entity, 'next_setting'), 0) %} {% set lc = as_timestamp(states[sun_entity].last_changed, 0) %} {% if is_state(sun_entity, 'above_horizon') %}
+      {% set rise = lc if (lc - (nr - 86400)) | abs < 600 else nr - 86400 %}
+      {% set set_ = ns %}
+    {% elif nr | timestamp_custom('%Y-%m-%d') == now().strftime('%Y-%m-%d') %}
+      {# after midnight, before today's sunrise #}
+      {% set rise = nr %}
+      {% set set_ = ns %}
+    {% else %}
+      {# after today's sunset #}
+      {% set rise = nr - 86400 %}
+      {% set set_ = lc if (lc - (ns - 86400)) | abs < 600 else ns - 86400 %}
+    {% endif %} {% set rise = rise + (sunrise_shift | float(0)) * 3600 %} {% set set_ = set_ + (sunset_shift | float(0)) * 3600 %} {% set start = rise - (bright_before_sunrise | float(0)) * 3600 %} {% set end = set_ + (bright_after_sunset | float(0)) * 3600 %} {% macro phase(t, start, end) -%}
+      {%- set tod = t | timestamp_custom('%H:%M:%S') -%}
+      {%- set in_night = (night_start <= tod < night_end) if night_start <= night_end
+                         else (tod >= night_start or tod < night_end) -%}
+      {%- if has_night and in_night -%}night
+      {%- elif start <= t <= end -%}bright
+      {%- else -%}dim{%- endif -%}
+    {%- endmacro %} {{ phase(n, start, end) }}|{{ phase(n - 60, start, end) }}
+  phase_now: '{{ phases.split(''|'')[0] | trim }}'
+  phase_prev: '{{ phases.split(''|'')[1] | trim }}'
+  scene_for_time: |
+    {{ scene_night if phase_now == 'night'
+       else scene_bright if phase_now == 'bright'
+       else scene_dim }}
+  cycle: |
+    {{ ([scene_bright, scene_dim] + ([scene_night] if has_night else [])) | unique | list }}
+  current_scene: |
+    {{ expand(cycle)
+       | rejectattr('state', 'in', ['unknown', 'unavailable'])
+       | sort(attribute='state')
+       | map(attribute='entity_id') | list | last | default(scene_bright) }}
+  next_scene: |
+    {% set i = cycle.index(current_scene) if current_scene in cycle else -1 %} {{ cycle[(i + 1) % (cycle | count)] }}
+  press: |
+    {% if trigger.id not in ['source', 'bright_source', 'dim_source'] %}none {% elif trigger.id == 'source' and (trigger.entity_id in bright_sources or trigger.entity_id in dim_sources) %}none {% elif trigger.id == 'dim_source' and trigger.entity_id in bright_sources %}none {% elif trigger.to_state is none or trigger.from_state is none
+         or trigger.to_state.state in ['unknown', 'unavailable']
+         or trigger.from_state.state == 'unavailable' %}none
+    {% elif trigger.entity_id.startswith('event.') %}
+      {% set e = trigger.to_state.attributes.event_type | default('') %}
+      {% if e in ['multi_press_2', 'double_press', 'double', 'double_push'] %}double
+      {% elif e in ['long_press', 'hold', 'long', 'long_push'] %}long
+      {% elif e in ['long_release', 'release', 'multi_press_ongoing', 'btn_down', 'btn_up', 'triple_push'] %}none
+      {% else %}short{% endif %}
+    {% elif trigger.entity_id.split('.')[0] in ['button', 'input_button'] %}short {% elif trigger.from_state.state in ['on', 'off']
+         and trigger.to_state.state in ['on', 'off']
+         and trigger.from_state.state != trigger.to_state.state %}
+      {% if map_mode == 'follow' and trigger.id == 'source' %}
+        {{ 'follow_on' if trigger.to_state.state == 'on' else 'follow_off' }}
+      {% elif long_press == 'bright'
+         and (trigger.to_state.last_changed - trigger.from_state.last_changed).total_seconds() < 1.5 %}flip_double
+      {% else %}short{% endif %}
+    {% else %}none{% endif %}
+  on_scene: |
+    {{ scene_bright if trigger.id == 'bright_source'
+       else scene_dim if trigger.id == 'dim_source'
+       else scene_for_time }}
+  from_elsewhere: |
+    {{ trigger.to_state is defined and trigger.to_state is not none
+       and trigger.to_state.context.parent_id is none
+       and trigger.to_state.state == states(trigger.entity_id) }}
+  latest_room_scene: |
+    {{ expand(([scene_off] + cycle) | unique | list)
+       | rejectattr('state', 'in', ['unknown', 'unavailable'])
+       | sort(attribute='state')
+       | map(attribute='entity_id') | list | last | default('') }}
 triggers:
-
-  # ============================================================
-  # NORMAL SOURCES
-  # ============================================================
-  - trigger: state
-    entity_id: !input sources
-    id: source
-
-  # ============================================================
-  # FORCE-BRIGHT SOURCES
-  # ============================================================
-  - trigger: state
-    entity_id: !input bright_sources
-    id: bright_source
-
-  # ============================================================
-  # FORCE-DIM SOURCES
-  # ============================================================
-  - trigger: state
-    entity_id: !input dim_sources
-    id: dim_source
-
-  # ============================================================
-  # MASTER
-  #
-  # This is used for changes made from Home Assistant / HomeKit.
-  # Changes caused by this automation itself are ignored.
-  # ============================================================
-  - trigger: state
-    entity_id: !input master
-    id: master
-
-  # ============================================================
-  # TIME BOUNDARY
-  #
-  # A plain minute tick. The actions work out whether a Bright
-  # window boundary fell into the last minute.
-  # ============================================================
-  - trigger: time_pattern
-    id: window_tick
-    minutes: "/1"
-
-
+- trigger: state
+  entity_id: !input sources
+  id: source
+- trigger: state
+  entity_id: !input bright_sources
+  id: bright_source
+- trigger: state
+  entity_id: !input dim_sources
+  id: dim_source
+- trigger: state
+  entity_id: !input master
+  id: master
+- trigger: state
+  entity_id: !input scene_off
+  id: scene_sync
+- trigger: state
+  entity_id: !input scene_bright
+  id: scene_sync
+- trigger: state
+  entity_id: !input scene_dim
+  id: scene_sync
+- trigger: state
+  entity_id: !input scene_night
+  id: scene_sync
+- trigger: time_pattern
+  id: window_tick
+  minutes: /1
 conditions: []
-
-
 actions:
-
-  # ============================================================
-  # FORCE-BRIGHT SOURCE
-  # ============================================================
-  - choose:
-
-      - conditions:
-
-          - condition: template
-            value_template: "{{ trigger.id == 'bright_source' }}"
-
-          - condition: template
-            value_template: >
-              {{ trigger.to_state.state not in ['unknown', 'unavailable'] }}
-
-          # Button/event entities fire on any state change.
-          # Normal entities require a real on/off transition.
-          - condition: template
-            value_template: >
-              {{
-                trigger.entity_id.split('.')[0] in ['button', 'event']
-                or (
-                  trigger.to_state.state in ['on', 'off']
-                  and trigger.from_state.state in ['on', 'off']
-                  and trigger.from_state.state != trigger.to_state.state
-                )
-              }}
-
-        sequence:
-
-          # ------------------------------------------------------
-          # Master currently ON
-          #
-          # Physical Force-Bright source turns the room OFF.
-          # ------------------------------------------------------
-          - choose:
-
-              - conditions:
-                  - condition: state
-                    entity_id: !input master
-                    state: "on"
-
-                sequence:
-
-                  - action: input_boolean.turn_off
-                    target:
-                      entity_id: !input master
-
-                  - action: scene.turn_on
-                    target:
-                      entity_id: !input scene_off
-                    data:
-                      transition: "{{ transition }}"
-
-            # ----------------------------------------------------
-            # Master currently OFF
-            #
-            # Physical Force-Bright source turns the room ON
-            # and ALWAYS uses Bright.
-            # ----------------------------------------------------
-            default:
-
-              - action: input_boolean.turn_on
-                target:
-                  entity_id: !input master
-
-              - action: scene.turn_on
-                target:
-                  entity_id: !input scene_bright
-                data:
-                  transition: "{{ transition }}"
-
-
-  # ============================================================
-  # FORCE-DIM SOURCE
-  # ============================================================
-  - choose:
-
-      - conditions:
-
-          - condition: template
-            value_template: "{{ trigger.id == 'dim_source' }}"
-
-          # Force-Bright wins if the same entity is configured twice.
-          - condition: template
-            value_template: "{{ trigger.entity_id not in bright_sources }}"
-
-          - condition: template
-            value_template: >
-              {{ trigger.to_state.state not in ['unknown', 'unavailable'] }}
-
-          - condition: template
-            value_template: >
-              {{
-                trigger.entity_id.split('.')[0] in ['button', 'event']
-                or (
-                  trigger.to_state.state in ['on', 'off']
-                  and trigger.from_state.state in ['on', 'off']
-                  and trigger.from_state.state != trigger.to_state.state
-                )
-              }}
-
-        sequence:
-
-          # ------------------------------------------------------
-          # Master currently ON -> OFF
-          # ------------------------------------------------------
-          - choose:
-
-              - conditions:
-                  - condition: state
-                    entity_id: !input master
-                    state: "on"
-
-                sequence:
-
-                  - action: input_boolean.turn_off
-                    target:
-                      entity_id: !input master
-
-                  - action: scene.turn_on
-                    target:
-                      entity_id: !input scene_off
-                    data:
-                      transition: "{{ transition }}"
-
-            # ----------------------------------------------------
-            # Master currently OFF -> ON + Dim
-            # ----------------------------------------------------
-            default:
-
-              - action: input_boolean.turn_on
-                target:
-                  entity_id: !input master
-
-              - action: scene.turn_on
-                target:
-                  entity_id: !input scene_dim
-                data:
-                  transition: "{{ transition }}"
-
-
-  # ============================================================
-  # NORMAL SOURCE
-  # ============================================================
-  - choose:
-
-      - conditions:
-
-          - condition: template
-            value_template: "{{ trigger.id == 'source' }}"
-
-          # Force-Bright wins.
-          - condition: template
-            value_template: "{{ trigger.entity_id not in bright_sources }}"
-
-          # Force-Dim wins over Normal.
-          - condition: template
-            value_template: "{{ trigger.entity_id not in dim_sources }}"
-
-        sequence:
-
-          - choose:
-
-              # ==================================================
-              # TOGGLE — BUTTON / EVENT
-              # ==================================================
-              - conditions:
-
-                  - condition: template
-                    value_template: "{{ map_mode == 'toggle' }}"
-
-                  - condition: template
-                    value_template: >
-                      {{ trigger.entity_id.split('.')[0] in ['button', 'event'] }}
-
-                  - condition: template
-                    value_template: >
-                      {{ trigger.to_state.state not in ['unknown', 'unavailable'] }}
-
-                sequence:
-
-                  - choose:
-
-                      # ------------------------------------------
-                      # Master ON -> OFF
-                      # ------------------------------------------
-                      - conditions:
-                          - condition: state
-                            entity_id: !input master
-                            state: "on"
-
-                        sequence:
-
-                          - action: input_boolean.turn_off
-                            target:
-                              entity_id: !input master
-
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input scene_off
-                            data:
-                              transition: "{{ transition }}"
-
-                    # --------------------------------------------
-                    # Master OFF -> ON + time-based scene
-                    # --------------------------------------------
-                    default:
-
-                      - action: input_boolean.turn_on
-                        target:
-                          entity_id: !input master
-
-                      - choose:
-
-                          # Bright window
-                          - conditions:
-                              - condition: template
-                                value_template: >
-                                  {% set r = as_timestamp(state_attr(sun_entity, 'next_rising')) %}
-                                  {% set s = as_timestamp(state_attr(sun_entity, 'next_setting')) %}
-                                  {% set n = as_timestamp(now()) %}
-                                  {% set pre = (bright_before_sunrise | float(0)) * 3600 %}
-                                  {% set post = (bright_after_sunset | float(0)) * 3600 %}
-                                  {% set day = is_state(sun_entity, 'above_horizon') %}
-
-                                  {{
-                                    (
-                                      day
-                                      and (
-                                        r is none
-                                        or ((r - 86400) - n) <= pre
-                                      )
-                                      and (
-                                        s is none
-                                        or (n - s) <= post
-                                      )
-                                    )
-                                    or
-                                    (
-                                      not day
-                                      and r is not none
-                                      and (r - n) <= pre
-                                    )
-                                    or
-                                    (
-                                      not day
-                                      and s is not none
-                                      and (n - (s - 86400)) <= post
-                                    )
-                                  }}
-
-                            sequence:
-
-                              - action: scene.turn_on
-                                target:
-                                  entity_id: !input scene_bright
-                                data:
-                                  transition: "{{ transition }}"
-
-                        # Dark
-                        default:
-
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input scene_dim
-                            data:
-                              transition: "{{ transition }}"
-
-
-              # ==================================================
-              # TOGGLE — NORMAL ON/OFF ENTITY
-              # ==================================================
-              - conditions:
-
-                  - condition: template
-                    value_template: "{{ map_mode == 'toggle' }}"
-
-                  - condition: template
-                    value_template: >
-                      {{
-                        trigger.to_state.state in ['on', 'off']
-                        and trigger.from_state.state in ['on', 'off']
-                        and trigger.from_state.state != trigger.to_state.state
-                      }}
-
-                sequence:
-
-                  - choose:
-
-                      # ------------------------------------------
-                      # Master ON -> OFF
-                      # ------------------------------------------
-                      - conditions:
-                          - condition: state
-                            entity_id: !input master
-                            state: "on"
-
-                        sequence:
-
-                          - action: input_boolean.turn_off
-                            target:
-                              entity_id: !input master
-
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input scene_off
-                            data:
-                              transition: "{{ transition }}"
-
-                    # --------------------------------------------
-                    # Master OFF -> ON + time-based scene
-                    # --------------------------------------------
-                    default:
-
-                      - action: input_boolean.turn_on
-                        target:
-                          entity_id: !input master
-
-                      - choose:
-
-                          - conditions:
-                              - condition: template
-                                value_template: >
-                                  {% set r = as_timestamp(state_attr(sun_entity, 'next_rising')) %}
-                                  {% set s = as_timestamp(state_attr(sun_entity, 'next_setting')) %}
-                                  {% set n = as_timestamp(now()) %}
-                                  {% set pre = (bright_before_sunrise | float(0)) * 3600 %}
-                                  {% set post = (bright_after_sunset | float(0)) * 3600 %}
-                                  {% set day = is_state(sun_entity, 'above_horizon') %}
-
-                                  {{
-                                    (
-                                      day
-                                      and (
-                                        r is none
-                                        or ((r - 86400) - n) <= pre
-                                      )
-                                      and (
-                                        s is none
-                                        or (n - s) <= post
-                                      )
-                                    )
-                                    or
-                                    (
-                                      not day
-                                      and r is not none
-                                      and (r - n) <= pre
-                                    )
-                                    or
-                                    (
-                                      not day
-                                      and s is not none
-                                      and (n - (s - 86400)) <= post
-                                    )
-                                  }}
-
-                            sequence:
-
-                              - action: scene.turn_on
-                                target:
-                                  entity_id: !input scene_bright
-                                data:
-                                  transition: "{{ transition }}"
-
-                        default:
-
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input scene_dim
-                            data:
-                              transition: "{{ transition }}"
-
-
-              # ==================================================
-              # FOLLOW — SOURCE TURNED ON
-              # ==================================================
-              - conditions:
-
-                  - condition: template
-                    value_template: "{{ map_mode == 'follow' }}"
-
-                  - condition: template
-                    value_template: >
-                      {{ trigger.to_state.state == 'on' }}
-
-                sequence:
-
-                  - action: input_boolean.turn_on
-                    target:
-                      entity_id: !input master
-
-                  - choose:
-
-                      - conditions:
-                          - condition: template
-                            value_template: >
-                              {% set r = as_timestamp(state_attr(sun_entity, 'next_rising')) %}
-                              {% set s = as_timestamp(state_attr(sun_entity, 'next_setting')) %}
-                              {% set n = as_timestamp(now()) %}
-                              {% set pre = (bright_before_sunrise | float(0)) * 3600 %}
-                              {% set post = (bright_after_sunset | float(0)) * 3600 %}
-                              {% set day = is_state(sun_entity, 'above_horizon') %}
-
-                              {{
-                                (
-                                  day
-                                  and (
-                                    r is none
-                                    or ((r - 86400) - n) <= pre
-                                  )
-                                  and (
-                                    s is none
-                                    or (n - s) <= post
-                                  )
-                                )
-                                or
-                                (
-                                  not day
-                                  and r is not none
-                                  and (r - n) <= pre
-                                )
-                                or
-                                (
-                                  not day
-                                  and s is not none
-                                  and (n - (s - 86400)) <= post
-                                )
-                              }}
-
-                        sequence:
-
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input scene_bright
-                            data:
-                              transition: "{{ transition }}"
-
-                    default:
-
-                      - action: scene.turn_on
-                        target:
-                          entity_id: !input scene_dim
-                        data:
-                          transition: "{{ transition }}"
-
-
-              # ==================================================
-              # FOLLOW — ALL SOURCES OFF
-              # ==================================================
-              - conditions:
-
-                  - condition: template
-                    value_template: "{{ map_mode == 'follow' }}"
-
-                  - condition: template
-                    value_template: >
-                      {{
-                        expand(sources)
-                        | selectattr('state', 'eq', 'on')
-                        | list
-                        | count == 0
-                      }}
-
-                sequence:
-
-                  - action: input_boolean.turn_off
-                    target:
-                      entity_id: !input master
-
-                  - action: scene.turn_on
-                    target:
-                      entity_id: !input scene_off
-                    data:
-                      transition: "{{ transition }}"
-
-
-  # ============================================================
-  # TIME BOUNDARY CROSSED
-  #
-  # Runs once a minute, but only acts when a Bright window
-  # boundary fell into the last 60 seconds. Anything else is a
-  # no-op, so a manual Force-Bright / Force-Dim is never undone
-  # before the next real boundary.
-  #
-  # Only acts while the room is ON. A room that is OFF stays OFF.
-  # ============================================================
-  - choose:
-
-      - conditions:
-
-          - condition: template
-            value_template: "{{ trigger.id == 'window_tick' }}"
-
-          - condition: template
-            value_template: "{{ auto_time_switch }}"
-
-          - condition: state
-            entity_id: !input master
-            state: "on"
-
-        sequence:
-
-          - variables:
-
-              # 'bright' when the window just started,
-              # 'dim' when it just ended,
-              # 'none' the other 1438 minutes of the day.
-              crossed: >
-                {% set nr = as_timestamp(state_attr(sun_entity, 'next_rising')) %}
-                {% set ns = as_timestamp(state_attr(sun_entity, 'next_setting')) %}
-
-                {% if nr is none or ns is none %}
-                  none
-                {% else %}
-                  {% set n = as_timestamp(now()) %}
-                  {% set pre = (bright_before_sunrise | float(0)) * 3600 %}
-                  {% set post = (bright_after_sunset | float(0)) * 3600 %}
-
-                  {# Once sunrise/sunset has passed, next_rising/next_setting
-                     already point at tomorrow, and tomorrow minus 24 h is off
-                     by the daily drift (~2 min). That is enough to miss a
-                     boundary at a small offset. The sun entity flips state
-                     exactly at the event, so its last_changed is today's real
-                     time -- used when it is close to the estimate, which
-                     rules out a last_changed reset by a restart. #}
-                  {% set lc = as_timestamp(states[sun_entity].last_changed) %}
-                  {% set rise = nr - 86400 %}
-                  {% set set_ = ns - 86400 %}
-                  {% if is_state(sun_entity, 'above_horizon') and (lc - rise) | abs < 600 %}
-                    {% set rise = lc %}
-                  {% elif is_state(sun_entity, 'below_horizon') and (lc - set_) | abs < 600 %}
-                    {% set set_ = lc %}
-                  {% endif %}
-
-                  {# the upcoming boundary and the one that already
-                     passed today #}
-                  {% set starts = [nr - pre, rise - pre] %}
-                  {% set ends = [ns + post, set_ + post] %}
-
-                  {% set hit = namespace(start=false, end=false) %}
-
-                  {% for t in starts %}
-                    {% if (n - t) >= 0 and (n - t) < 60 %}
-                      {% set hit.start = true %}
-                    {% endif %}
-                  {% endfor %}
-
-                  {% for t in ends %}
-                    {% if (n - t) >= 0 and (n - t) < 60 %}
-                      {% set hit.end = true %}
-                    {% endif %}
-                  {% endfor %}
-
-                  {% if hit.start %}bright{% elif hit.end %}dim{% else %}none{% endif %}
-                {% endif %}
-
-          - choose:
-
-              - conditions:
-                  - condition: template
-                    value_template: "{{ crossed | trim == 'bright' }}"
-
-                sequence:
-
-                  - action: scene.turn_on
-                    target:
-                      entity_id: !input scene_bright
-                    data:
-                      transition: "{{ transition }}"
-
-              - conditions:
-                  - condition: template
-                    value_template: "{{ crossed | trim == 'dim' }}"
-
-                sequence:
-
-                  - action: scene.turn_on
-                    target:
-                      entity_id: !input scene_dim
-                    data:
-                      transition: "{{ transition }}"
-
-
-  # ============================================================
-  # MASTER CHANGED
-  #
-  # This handles Home Assistant / HomeKit changes.
-  #
-  # If the master change was caused by THIS automation, the
-  # physical-source branch has already applied the correct scene,
-  # so we do nothing here.
-  # ============================================================
-  - choose:
-
-      - conditions:
-
-          - condition: template
-            value_template: "{{ trigger.id == 'master' }}"
-
-          # Ignore master changes caused by another action inside
-          # this automation.
-          - condition: template
-            value_template: >
-              {{ trigger.to_state.context.parent_id is none }}
-
-        sequence:
-
-          # ------------------------------------------------------
-          # Master OFF
-          # ------------------------------------------------------
-          - choose:
-
-              - conditions:
-                  - condition: state
-                    entity_id: !input master
-                    state: "off"
-
-                sequence:
-
-                  - action: scene.turn_on
-                    target:
-                      entity_id: !input scene_off
-                    data:
-                      transition: "{{ transition }}"
-
-            # ----------------------------------------------------
-            # Master ON
-            # ----------------------------------------------------
-            default:
-
-              - choose:
-
-                  # ==================================================
-                  # BRIGHT WINDOW
-                  # ==================================================
-                  - conditions:
-                      - condition: template
-                        value_template: >
-                          {% set r = as_timestamp(state_attr(sun_entity, 'next_rising')) %}
-                          {% set s = as_timestamp(state_attr(sun_entity, 'next_setting')) %}
-                          {% set n = as_timestamp(now()) %}
-                          {% set pre = (bright_before_sunrise | float(0)) * 3600 %}
-                          {% set post = (bright_after_sunset | float(0)) * 3600 %}
-                          {% set day = is_state(sun_entity, 'above_horizon') %}
-
-                          {{
-                            (
-                              day
-                              and (
-                                r is none
-                                or ((r - 86400) - n) <= pre
-                              )
-                              and (
-                                s is none
-                                or (n - s) <= post
-                              )
-                            )
-                            or
-                            (
-                              not day
-                              and r is not none
-                              and (r - n) <= pre
-                            )
-                            or
-                            (
-                              not day
-                              and s is not none
-                              and (n - (s - 86400)) <= post
-                            )
-                          }}
-
-                    sequence:
-
-                      - action: scene.turn_on
-                        target:
-                          entity_id: !input scene_bright
-                        data:
-                          transition: "{{ transition }}"
-
-                # ==================================================
-                # DARK
-                # ==================================================
-                default:
-
-                  - action: scene.turn_on
-                    target:
-                      entity_id: !input scene_dim
-                    data:
-                      transition: "{{ transition }}"
+- choose:
+  - conditions: '{{ press == ''long'' and long_press == ''dim'' }}'
+    sequence:
+    - if: '{{ is_state(master, ''off'') }}'
+      then:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: '{{ master }}'
+      - action: scene.turn_on
+        target:
+          entity_id: '{{ scene_night if has_night else scene_dim }}'
+        data:
+          transition: '{{ transition }}'
+      else:
+      - variables:
+          on_lights: |
+            {{ expand(lights) | selectattr('state', 'eq', 'on')
+               | map(attribute='entity_id') | list }}
+          step: |
+            {% set b = expand(on_lights) | map(attribute='attributes.brightness')
+               | reject('none') | list %}
+            {{ -10 if (b | average(0)) > 127 else 10 }}
+          pressed_at: '{{ trigger.to_state.state }}'
+      - if: '{{ on_lights | count == 0 }}'
+        then:
+        - action: scene.turn_on
+          target:
+            entity_id: '{{ scene_dim }}'
+          data:
+            transition: '{{ transition }}'
+        else:
+        - repeat:
+            sequence:
+            - action: light.turn_on
+              target:
+                entity_id: '{{ on_lights }}'
+              data:
+                brightness_step_pct: '{{ step }}'
+                transition: 0.4
+            - wait_template: '{{ states(trigger.entity_id) != pressed_at }}'
+              timeout: '00:00:00.4'
+              continue_on_timeout: true
+            until: '{{ wait.completed or repeat.index >= 15 }}'
+  - conditions: '{{ press == ''double'' and double_press != ''none'' }}'
+    sequence:
+    - variables:
+        target_scene: |
+          {{ next_scene if double_press == 'cycle' and is_state(master, 'on')
+             else scene_bright }}
+    - action: input_boolean.turn_on
+      target:
+        entity_id: '{{ master }}'
+    - action: scene.turn_on
+      target:
+        entity_id: '{{ target_scene }}'
+      data:
+        transition: '{{ transition }}'
+  - conditions: '{{ press == ''long'' and long_press == ''bright'' }}'
+    sequence:
+    - variables:
+        pressed_at: '{{ trigger.to_state.state }}'
+    - wait_template: '{{ states(trigger.entity_id) != pressed_at }}'
+      timeout: '00:00:01.5'
+      continue_on_timeout: true
+    - if: '{{ wait.completed }}'
+      then:
+      - if: '{{ is_state(master, ''on'') }}'
+        then:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: '{{ master }}'
+        - action: scene.turn_on
+          target:
+            entity_id: '{{ scene_off }}'
+          data:
+            transition: '{{ transition }}'
+        else:
+        - action: input_boolean.turn_on
+          target:
+            entity_id: '{{ master }}'
+        - action: scene.turn_on
+          target:
+            entity_id: '{{ on_scene }}'
+          data:
+            transition: '{{ transition }}'
+      else:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: '{{ master }}'
+      - action: scene.turn_on
+        target:
+          entity_id: '{{ scene_bright }}'
+        data:
+          transition: '{{ transition }}'
+  - conditions: '{{ press == ''flip_double'' }}'
+    sequence:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: '{{ master }}'
+    - action: scene.turn_on
+      target:
+        entity_id: '{{ scene_bright }}'
+      data:
+        transition: '{{ transition }}'
+  - conditions: '{{ press in [''short'', ''double'', ''long''] }}'
+    sequence:
+    - if: '{{ is_state(master, ''on'') }}'
+      then:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: '{{ master }}'
+      - action: scene.turn_on
+        target:
+          entity_id: '{{ scene_off }}'
+        data:
+          transition: '{{ transition }}'
+      else:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: '{{ master }}'
+      - action: scene.turn_on
+        target:
+          entity_id: '{{ on_scene }}'
+        data:
+          transition: '{{ transition }}'
+  - conditions: '{{ press == ''follow_on'' and is_state(master, ''off'') }}'
+    sequence:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: '{{ master }}'
+    - action: scene.turn_on
+      target:
+        entity_id: '{{ scene_for_time }}'
+      data:
+        transition: '{{ transition }}'
+  - conditions: |
+      {{ press == 'follow_off'
+         and expand(sources) | selectattr('state', 'eq', 'on') | list | count == 0 }}
+    sequence:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: '{{ master }}'
+    - action: scene.turn_on
+      target:
+        entity_id: '{{ scene_off }}'
+      data:
+        transition: '{{ transition }}'
+  - conditions: |
+      {{ trigger.id == 'window_tick' and auto_time_switch
+         and is_state(master, 'on') and phase_now != phase_prev }}
+    sequence:
+    - action: scene.turn_on
+      target:
+        entity_id: '{{ scene_for_time }}'
+      data:
+        transition: '{{ transition }}'
+  - conditions: |
+      {{ trigger.id == 'master' and from_elsewhere
+         and trigger.from_state is not none
+         and trigger.from_state.state in ['on', 'off']
+         and trigger.to_state.state in ['on', 'off'] }}
+    sequence:
+    - action: scene.turn_on
+      target:
+        entity_id: |
+          {{ scene_for_time if trigger.to_state.state == 'on' else scene_off }}
+      data:
+        transition: '{{ transition }}'
+  - conditions: |
+      {{ trigger.id == 'scene_sync' and sync_scenes and from_elsewhere
+         and trigger.entity_id == latest_room_scene
+         and trigger.from_state is not none
+         and trigger.from_state.state != 'unavailable' }}
+    sequence:
+    - if: '{{ trigger.entity_id == scene_off }}'
+      then:
+      - if: '{{ is_state(master, ''on'') }}'
+        then:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: '{{ master }}'
+      else:
+      - if: '{{ is_state(master, ''off'') }}'
+        then:
+        - action: input_boolean.turn_on
+          target:
+            entity_id: '{{ master }}'

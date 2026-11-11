@@ -67,6 +67,10 @@ con_dome = 1;    // button plate: height of its dome (MEASURE)
 con_slot = 0.5;  // seat: slot for the plate
 con_lip  = 0.8;  // seat: lip in front of the plate
 rib_t    = 3;    // ribs that hold the cell, along the body
+mark_l   = 6;    // polarity marks in the tray's side walls: bar length
+mark_t   = 1.4;  // bar width
+mark_d   = 0.6;  // cut depth
+mark_z   = 4.5;  // centre, above the lid's inside face
 // Motor board (../motor-board): Super Mini on top, the other parts on its underside. It lies flat over the battery,
 // Super Mini towards the front face, wire pads towards the drive, Super Mini's antenna towards the back wall.
 brd_l    = 27.6; // along the body (Y)
@@ -121,8 +125,13 @@ neck_d    = 24;    // its top is the shoulder against the tray's bottom face
 lip_id    = neck_d + 1;
 lip_play  = 0.2;   // gap between the nut's lip cone and the adapter's flange cone
 bt_d      = 19;    // left-hand thread into the body: outer diameter
-bt_p      = 1.5;   // its pitch
-bt_gap    = 0.40;  // its clearance per side on the adapter, from thread_test.scad: 0.35 binds, 0.45 is loose (too tight or loose: change it, reprint only the adapter)
+bt_p      = 4;     // its pitch: ridge to ridge, a coarse thread so each ridge is about 10 layers thick at 0.2 mm
+bt_starts = 2;     // two ridges side by side: 0.6 turn from first catch to the shoulder
+bt_lead   = bt_p * bt_starts;   // one turn moves it this far
+bt_h      = 1.2;   // ridge height; 45 deg flanks, so the layer steps barely eat the clearance
+bt_crest  = bt_p / 2 - bt_h;    // flat on top of the ridge: same ridge on the adapter and in the tray
+bt_entry  = 0.8;   // lead-in at the tray's mouth, so no thin edge is left where the ridges run out
+bt_gap    = 0.25;  // its clearance on the adapter, from thread_test.scad (too tight or loose: change it, reprint only the adapter)
 slot_w    = 2;     // tool slot across the flange's underside: holds the adapter with a flat screwdriver
 slot_d    = 1.5;   // its depth
 slot_r    = 11.5;  // it ends here, inside the neck, so the flange's rim stays whole under the nut's clamp
@@ -189,7 +198,7 @@ z_usb     = (z_cover + batt_h + z_top) / 2;    // USB-C socket, centred over the
 echo(str("total depth from thread face: ", depth_total, " mm (available ", depth_avail, ")"));
 echo(str("body: ", body_w, " x ", body_len, " mm (X x Y)"));
 echo(str("pusher: tip ", z_tip, " .. top ", z_nut1, ", travel ", travel, " mm"));
-echo(str("body thread: ", base_t / bt_p, " turns"));
+echo(str("body thread: ", base_t / bt_lead, " turns"));
 assert(tab_t + 0.6 <= cover_t, "lid too thin for its spring tab");
 assert(lid_tg_z + lid_tg_h <= cover_t, "lid too thin for its tongues");
 assert(depth_total <= depth_avail, "head is deeper than the available space");
@@ -207,7 +216,9 @@ assert(z_tip < z_body0 - 1, "pusher tip does not reach the pin - pin is too far 
 assert(lip_ch <= lip_t - 0.6, "lip too thin for its 45 deg cone: raise lip_t or lip_id");
 assert(neck_d / 2 >= bt_d / 2 + clr + 1, "adapter's shoulder too narrow to seat on the tray");
 assert(slot_r <= neck_d / 2, "adapter's tool slot runs out under the nut's clamp");
-assert(bt_d / 2 - 2 * bt_p * 0.36 - bt_gap - (tip_d / 2 + clr + tip_sh) >= 1.5, "adapter wall too thin between its countersink and its thread");
+assert(bt_d / 2 - bt_h - bt_gap - (tip_d / 2 + clr + tip_sh) >= 1.5, "adapter wall too thin between its countersink and its thread");
+assert(bt_crest > 0, "thread ridges too tall for their pitch");
+assert(bt_d / 2 - bt_h > sqrt(col_x * col_x + col_y0 * col_y0) - 0.5, "drive column cuts too much off the tray's ridges");
 assert(brd_w / 2 + board_fit <= in_half, "board wider than the body");
 assert(esp_w / 2 + 0.2 <= brd_w / 2 - board_clip, "Super Mini hits the board's stops");
 assert(y_esp_end + 2 <= y_max - wall - usb_body, "Super Mini's antenna end hits the USB-C socket");
@@ -256,13 +267,30 @@ module outer_solid(i = 0) {
     translate([0, (y_min + y_max) / 2, z_body0 + i]) rounded_box([body_w - 2 * i, body_len - 2 * i, depth_total - z_body0 - 2 * i], corner_r);
 }
 
-// the body's left-hand thread, same shape as int_thread_cut; c = clearance (negative on the adapter).
+// radius of the body's thread at angle a: a trapezoid ridge with 45 deg flanks, bt_starts times round
+function bt_r(a, c) = let(t = ((a * bt_lead / 360) % bt_p + bt_p) % bt_p)
+    bt_d / 2 - bt_h + c + min(bt_h, max(0, bt_crest / 2 + bt_h - abs(t - bt_p / 2)));
+
+// the body's left-hand thread; c = clearance (negative on the adapter).
 // Lined up over the whole height, so the tray's and the adapter's meet whatever z0 each starts at.
 module body_thread(z0, len, c) {
-    e = bt_p * 0.36;
-    translate([0, 0, z0]) rotate(-(z0 - z_body0) * 360 / bt_p)
-        linear_extrude(height = len, twist = 360 * len / bt_p, slices = ceil(len / bt_p * 24), convexity = 4)
-            translate([e, 0]) circle(r = bt_d / 2 - e + c, $fn = 72);
+    n = 240;
+    translate([0, 0, z0]) rotate(-(z0 - z_body0) * 360 / bt_lead)
+        linear_extrude(height = len, twist = 360 * len / bt_lead, slices = ceil(len / bt_lead * 120), convexity = 6)
+            polygon([for (i = [0 : n - 1]) let(a = i * 360 / n) bt_r(a, c) * [cos(a), sin(a)]]);
+}
+
+// the adapter's side of the thread with clearance g, a lead-in on its end: from the ridge's root at the tip up to its crest
+module adapter_thread(g) {
+    r_root = bt_d / 2 - bt_h - g;
+    intersection() {
+        body_thread(z_body0 - 0.01, base_t + 0.01, -g);
+        union() {
+            translate([0, 0, z_body0 - 1]) cylinder(d = bt_d + 1, h = base_t - bt_h + 1 - 0.05);
+            // ends just inside the root, so it cuts through instead of touching it
+            translate([0, 0, z_floor - bt_h - 0.05]) cylinder(r1 = r_root + bt_h + 0.01, r2 = r_root - 0.05, h = bt_h + 0.05);
+        }
+    }
 }
 
 /* ---------------- parts ---------------- */
@@ -290,15 +318,8 @@ module adapter() {
             translate([0, 0, flange_h + 0.4 - lip_play]) cylinder(d1 = flange_d, d2 = neck_d, h = (flange_d - neck_d) / 2);
             // neck up to the shoulder on the tray's bottom face
             cylinder(d = neck_d, h = z_body0);
-            // left-hand thread into the body, a lead-in on its end: from the thread's root at the tip up to its crest
-            r_root = bt_d / 2 - 2 * bt_p * 0.36 - bt_gap;
-            intersection() {
-                body_thread(z_body0 - 0.01, base_t + 0.01, -bt_gap);
-                union() {
-                    translate([0, 0, z_body0 - 1]) cylinder(d = bt_d + 1, h = base_t - 0.1);
-                    translate([0, 0, z_floor - 1.11]) cylinder(r1 = r_root + 1.11, r2 = r_root, h = 1.11);
-                }
-            }
+            // left-hand thread into the body
+            adapter_thread(bt_gap);
         }
         // round bore for the pusher's tip
         translate([0, 0, -1]) cylinder(d = tip_d + 2 * clr, h = z_floor + 2);
@@ -404,6 +425,14 @@ module batt_ribs() {
     }
 }
 
+module polarity_mark(y, plus) {
+    // + or - cut into the +X side wall's inside face, centred on y
+    translate([in_half - 0.01, y, z_cover + mark_z]) {
+        translate([0, -mark_l / 2, -mark_t / 2]) cube([mark_d + 0.01, mark_l, mark_t]);
+        if (plus) translate([0, -mark_t / 2, -mark_l / 2]) cube([mark_d + 0.01, mark_t, mark_l]);
+    }
+}
+
 module tray() {
     difference() {
         union() {
@@ -439,6 +468,12 @@ module tray() {
         }
         // left-hand thread for the adapter, through the ears and the end wall
         body_thread(z_body0 - 1, base_t + 1 + clr, 0.01);
+        translate([0, 0, z_body0 - 0.01]) cylinder(r1 = bt_d / 2 + 0.01, r2 = bt_d / 2 - bt_entry, h = bt_entry + 0.01);
+        // polarity, cut into both side walls beside each end of the cell, where the cell curves away from the wall
+        for (sx = [0, 1]) mirror([sx, 0, 0]) {
+            polarity_mark(y_cell0 + 5, false);
+            polarity_mark(y_cell1 - 5, true);
+        }
         // the USB-C socket through the back wall, a recess outside so its wall suits the socket's snaps and the plug reaches it
         translate([-usb_w / 2, y_max - wall - 0.5, z_usb - usb_h / 2]) cube([usb_w, wall + 1, usb_h]);
         translate([-6.5, y_max - (wall - usb_wall), z_usb - 3.75]) cube([13, 2, 7.5]);

@@ -1,0 +1,71 @@
+menu "Rollo"
+
+    config ROLLO_TRAVEL_UP_MS
+        int "Run time from fully down to fully up (ms)"
+        default 30000
+        help
+            There is no encoder: the position comes from the motor's run time. Time a full
+            run up once and enter it here.
+
+    config ROLLO_TRAVEL_DOWN_MS
+        int "Run time from fully up to fully down (ms)"
+        default 30000
+        help
+            Time a full run down once and enter it here. It can differ from the run up
+            (the bottom bar pulls with it going down); if it doesn't, enter the same time.
+
+    config ROLLO_VIRTUAL_MAX_PERCENT
+        int "Virtual fully down (% of the full run down)"
+        range 1 100
+        default 100
+        help
+            Where "fully closed" is, as a share of the full height timed above. With 80,
+            closing stops at 80 % of the full run, and Matter's 0-100 % spans only that
+            range: 50 % is 40 % of the full height. Change it without measuring the travel
+            times again; the saved position stays where the blind really is.
+
+    config ROLLO_JOG_MS
+        int "Jog run time (ms)"
+        range 50 10000
+        default 1000
+        help
+            How long the jog up / jog down switches run the motor. A jog ignores fully up
+            and the virtual fully down, so an out-of-step blind can be brought to the real
+            top and set as fully up there.
+
+    config ROLLO_TOP_OVERRUN_MS
+        int "Extra run time past fully up (ms)"
+        default 0
+        help
+            Only if the bottom bar stops against the head and the motor can stall there
+            safely: then every move to fully up runs this much longer and corrects the drift
+            of time-based positioning. Leave it at 0 if nothing stops the fabric at the top.
+
+    config ROLLO_REVERSE
+        bool "Swap motor direction"
+        default n
+        help
+            Same as swapping the two motor wires. The direction can also be swapped over
+            Matter, without flashing (the MotorDirectionReversed bit of the Window Covering
+            Mode attribute); the two add up.
+
+    config ROLLO_PIN_IN1
+        int "GPIO to DRV8833 AIN1"
+        default 10
+
+    config ROLLO_PIN_IN2
+        int "GPIO to DRV8833 AIN2"
+        default 11
+
+    config ROLLO_PIN_SLEEP
+        int "GPIO to DRV8833 STBY / nSLEEP"
+        default 4
+
+    config ROLLO_LIGHT_SLEEP
+        bool "Light-sleep between Thread polls"
+        default y
+        help
+            Saves the battery. Turn it off to rule out sleep problems: the device then stays
+            awake (still a sleepy Thread device that polls its parent).
+
+endmenu

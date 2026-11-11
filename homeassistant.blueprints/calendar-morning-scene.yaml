@@ -19,6 +19,7 @@ blueprint:
     Uses calendar.get_events so it sees ALL of today's events (all-day and timed),
     not just whatever event happens to be active at the trigger time.
   domain: automation
+  source_url: https://github.com/JanisHuser/Homeassistant.blueprints/blob/main/homeassistant.blueprints/calendar-morning-scene.yaml
   author: Janis
   input:
     calendar:
