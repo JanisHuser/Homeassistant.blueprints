@@ -161,3 +161,12 @@ def test_heat_retention_matches_real_cooldown():
     print(f"1 K drop with valve shut: real {real:.1f} h, predicted {predicted} h")
     assert real and predicted
     assert abs(predicted - real) / real < 0.35
+
+
+def test_cools_at_night():
+    """Outside comfort time the room drifts below the comfort target."""
+    _, _, log = run(days=21)
+    night = [t for h, t, _ in log if h >= 14 * 24 and not is_comfort(h)]
+    mean = sum(night) / len(night)
+    print(f"night mean {mean:.2f} °C")
+    assert mean < COMFORT - 0.1

@@ -23,7 +23,7 @@ room[k+1] = room[k] + a·(outdoor − room) + b·floor_duty + e·(floor_room −
 
 `floor_duty` and `floor_room` are the valve opening and the room temperature, smoothed by the screed's time constant. `a`..`e` are learned with recursive least squares, which forgets slowly over about 10 days. The screed time constant is picked from 0.5–8 h by which candidate predicts best 6 h ahead. Until about two days of data are in, the model blends from a typical-room guess.
 
-The planner tries valve levels of 0, 25, 50, 75 and 100 % per cycle. It picks the plan with the lowest cost: being cold during comfort time costs the most, being cold during setback costs less, being more than 0.2 K too warm during comfort time costs something, and energy costs a little ("Comfort vs. savings" sets how much).
+The planner tries valve levels of 0, 25, 50, 75 and 100 % per cycle. It picks the plan with the lowest cost: being cold during comfort time costs the most, being cold during setback costs less, being more than 0.2 K too warm during comfort time or more than 0.3 K above eco outside it costs something, and energy costs a little ("Comfort vs. savings" sets the last two).
 
 The model and planner are in [`model.py`](smart_floor_heating/model.py) and have no Home Assistant code. [`tests/test_model.py`](tests/test_model.py) runs them for three weeks against a simulated two-node room with sensor noise. On that room it learns the cool-down time constant within 5 % and stays within 0.25 K of comfort.
 
@@ -47,7 +47,7 @@ The model and planner are in [`model.py`](smart_floor_heating/model.py) and have
 | Presence | People, trackers, `input_boolean`s. Away when none of them is home. |
 | Away delay | How long nobody must be home before the away temperature applies (default 60 min). |
 | Comfort / eco / away temperature | Start values. Change them later with the room's number entities. |
-| Comfort vs. savings | How much energy counts against comfort. |
+| Comfort vs. savings | How much energy counts against comfort, and how hard it pushes the room down to eco outside comfort time. A screed holds heat for a long time, so "Comfort first" barely lets it cool at night; "Save energy" lets it cool most, at the risk of slightly cool evenings. |
 | Valve cycle | 30, 60, 90 or 120 min. Longer saves battery, shorter reacts faster. |
 | Valve setpoint to open / close | What the valve is set to. Default: the valve's own max and min. |
 

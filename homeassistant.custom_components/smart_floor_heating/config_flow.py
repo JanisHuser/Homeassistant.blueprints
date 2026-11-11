@@ -37,7 +37,7 @@ from .const import (
     DEFAULT_SAVINGS,
     DEFAULT_WINDOW_DELAY_MIN,
     DOMAIN,
-    SAVINGS_ENERGY_WEIGHT,
+    SAVINGS_WEIGHTS,
     TEMP_MAX,
     TEMP_MIN,
 )
@@ -138,7 +138,7 @@ def _schema(values: dict[str, Any], with_temps: bool) -> vol.Schema:
             CONF_SAVINGS, default=values.get(CONF_SAVINGS, DEFAULT_SAVINGS)
         ): selector.SelectSelector(
             selector.SelectSelectorConfig(
-                options=list(SAVINGS_ENERGY_WEIGHT), translation_key=CONF_SAVINGS
+                options=list(SAVINGS_WEIGHTS), translation_key=CONF_SAVINGS
             )
         ),
         vol.Required(

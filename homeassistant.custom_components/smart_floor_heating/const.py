@@ -33,8 +33,13 @@ DEFAULT_CYCLE_MIN = 60
 CYCLE_CHOICES_MIN = (30, 60, 90, 120)
 DEFAULT_SAVINGS = "balanced"
 
-# How much the planner weighs energy against comfort.
-SAVINGS_ENERGY_WEIGHT = {"comfort": 0.05, "balanced": 0.15, "savings": 0.4}
+# How much the planner weighs energy against comfort, and how hard it pushes
+# the room down to the setback target at night: (energy, setback).
+SAVINGS_WEIGHTS = {
+    "comfort": (0.05, 0.2),
+    "balanced": (0.15, 0.5),
+    "savings": (0.4, 1.5),
+}
 
 TEMP_MIN = 5.0
 TEMP_MAX = 28.0

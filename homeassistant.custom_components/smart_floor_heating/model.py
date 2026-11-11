@@ -70,6 +70,10 @@ W_COLD_COMFORT = 10.0
 W_COLD_SETBACK = 2.0
 W_WARM = 6.0
 OVERSHOOT_K = 0.2
+# Above the setback target, so the room really cools at night instead of
+# being held at comfort because reheating looks risky.
+DEFAULT_W_WARM_SETBACK = 0.5  # set per room ("savings")
+SETBACK_SLACK_K = 0.3
 DEFAULT_W_ENERGY = 0.15
 DUTY_LEVELS = (0.0, 0.25, 0.5, 0.75, 1.0)
 PLAN_PASSES = 3
@@ -370,11 +374,13 @@ class RoomModel:
         steps: list[StepInput],
         steps_per_cycle: int,
         w_energy: float = DEFAULT_W_ENERGY,
+        w_setback: float = DEFAULT_W_WARM_SETBACK,
     ) -> Plan:
         """Pick a duty per valve cycle over the horizon (receding horizon).
 
         Cost: being colder than target (much more inside comfort periods),
-        being more than OVERSHOOT_K warmer during comfort, and energy. Pre-heat
+        being more than OVERSHOOT_K warmer during comfort or SETBACK_SLACK_K
+        warmer during setback, and energy. Pre-heat
         before comfort and coasting before setback come out of this on their
         own, because the model knows how slow the floor is.
         """
@@ -390,7 +396,9 @@ class RoomModel:
 
         def cost(c: list[float]) -> float:
             duties = expand(c)
-            return _cost(steps, self.simulate(room, steps, duties), duties, w_energy)
+            return _cost(
+                steps, self.simulate(room, steps, duties), duties, w_energy, w_setback
+            )
 
         best = cost(choice)
         for _ in range(PLAN_PASSES):
@@ -438,7 +446,11 @@ class RoomModel:
 
 
 def _cost(
-    steps: list[StepInput], temps: list[float], duties: list[float], w_energy: float
+    steps: list[StepInput],
+    temps: list[float],
+    duties: list[float],
+    w_energy: float,
+    w_setback: float,
 ) -> float:
     total = 0.0
     for step, temp, duty in zip(steps, temps, duties):
@@ -448,6 +460,9 @@ def _cost(
         elif step.comfort and -cold > OVERSHOOT_K:
             warm = -cold - OVERSHOOT_K
             total += W_WARM * warm * warm
+        elif not step.comfort and -cold > SETBACK_SLACK_K:
+            warm = -cold - SETBACK_SLACK_K
+            total += w_setback * warm * warm
         total += w_energy * duty
     return total
 

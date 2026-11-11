@@ -57,7 +57,7 @@ from .const import (
     RETENTION_DROP_K,
     RETENTION_HORIZON_H,
     SAVE_DELAY_S,
-    SAVINGS_ENERGY_WEIGHT,
+    SAVINGS_WEIGHTS,
     STORAGE_VERSION,
     SUN_CLOUD_DAMPING,
     TARGET_AWAY,
@@ -107,9 +107,9 @@ class RoomController:
 
         self.cycle_min = int(self.conf.get(CONF_CYCLE, DEFAULT_CYCLE_MIN))
         self.steps_per_cycle = max(1, self.cycle_min // STEP_MIN)
-        self.w_energy = SAVINGS_ENERGY_WEIGHT.get(
+        self.w_energy, self.w_setback = SAVINGS_WEIGHTS.get(
             self.conf.get(CONF_SAVINGS, DEFAULT_SAVINGS),
-            SAVINGS_ENERGY_WEIGHT[DEFAULT_SAVINGS],
+            SAVINGS_WEIGHTS[DEFAULT_SAVINGS],
         )
 
         # Live readings
@@ -324,7 +324,12 @@ class RoomController:
             steps = self._horizon(start, HORIZON_H)
             snapshot = RoomModel.from_dict(self.model.to_dict())
             plan: Plan = await self.hass.async_add_executor_job(
-                snapshot.plan, room, steps, self.steps_per_cycle, self.w_energy
+                snapshot.plan,
+                room,
+                steps,
+                self.steps_per_cycle,
+                self.w_energy,
+                self.w_setback,
             )
             self.plan, self.plan_start = plan, start
             self.duty = sum(plan.duties[: self.steps_per_cycle]) / self.steps_per_cycle
