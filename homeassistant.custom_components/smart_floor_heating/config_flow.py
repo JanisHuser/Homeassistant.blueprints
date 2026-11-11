@@ -87,7 +87,13 @@ def _schema(values: dict[str, Any], with_temps: bool) -> vol.Schema:
             CONF_ROOM_SENSORS, default=values.get(CONF_ROOM_SENSORS, [])
         ): selector.EntitySelector(
             selector.EntitySelectorConfig(
-                domain="sensor", device_class="temperature", multiple=True
+                filter=[
+                    selector.EntityFilterSelectorConfig(
+                        domain="sensor", device_class="temperature"
+                    ),
+                    selector.EntityFilterSelectorConfig(domain="climate"),
+                ],
+                multiple=True,
             )
         ),
         opt(CONF_WEATHER): selector.EntitySelector(

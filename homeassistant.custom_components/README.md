@@ -38,7 +38,7 @@ The model and planner are in [`model.py`](smart_floor_heating/model.py) and have
 | Setting | What to pick |
 |---|---|
 | Valves | The thermostats / valve heads of that room's heating circuit (one or more `climate` entities). |
-| Room temperature sensors | Sensors in the room itself. Several are averaged. |
+| Room temperature sensors and thermostats | Temperature sensors and room thermostats (`climate` entities, their current temperature) in the room itself. With several, their average is used. Don't add valve heads on the manifold: they measure the manifold, not the room. |
 | Weather | Your weather entity, for the outdoor and sun forecast. |
 | Outdoor temperature sensor | Optional, used instead of the weather's current temperature. |
 | Schedule | Optional `schedule` helper: on = comfort, off = eco. Without one the room stays at comfort. |

@@ -7,7 +7,7 @@
         "data": {
           "name": "Room",
           "valves": "Valves",
-          "room_sensors": "Room temperature sensors",
+          "room_sensors": "Room temperature sensors and thermostats",
           "weather": "Weather",
           "outdoor_sensor": "Outdoor temperature sensor",
           "schedule": "Schedule",
@@ -25,7 +25,7 @@
         },
         "data_description": {
           "valves": "Thermostats or valve heads on the floor-heating manifold. They are only opened and closed; the room sensor decides.",
-          "room_sensors": "Sensors in the room itself, not the ones on the manifold. Several are averaged.",
+          "room_sensors": "Temperature sensors and room thermostats in the room itself, not the valve heads on the manifold. With several, their average is used.",
           "weather": "For the outdoor and sun forecast.",
           "outdoor_sensor": "Optional, used instead of the weather's current temperature.",
           "schedule": "A schedule helper: on means comfort, off means eco. Without one the room stays at comfort.",
@@ -52,7 +52,7 @@
         "description": "Temperatures are set with the room's number entities.",
         "data": {
           "valves": "Valves",
-          "room_sensors": "Room temperature sensors",
+          "room_sensors": "Room temperature sensors and thermostats",
           "weather": "Weather",
           "outdoor_sensor": "Outdoor temperature sensor",
           "schedule": "Schedule",
@@ -67,7 +67,7 @@
         },
         "data_description": {
           "valves": "Thermostats or valve heads on the floor-heating manifold. They are only opened and closed; the room sensor decides.",
-          "room_sensors": "Sensors in the room itself, not the ones on the manifold. Several are averaged.",
+          "room_sensors": "Temperature sensors and room thermostats in the room itself, not the valve heads on the manifold. With several, their average is used.",
           "weather": "For the outdoor and sun forecast.",
           "outdoor_sensor": "Optional, used instead of the weather's current temperature.",
           "schedule": "A schedule helper: on means comfort, off means eco. Without one the room stays at comfort.",

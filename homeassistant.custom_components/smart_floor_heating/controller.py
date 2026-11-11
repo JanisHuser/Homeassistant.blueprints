@@ -528,10 +528,18 @@ class RoomController:
         return self.hass.states.get(entity_id) if entity_id else None
 
     def _numbers(self, entity_ids: list[str | None]) -> list[float]:
+        """Temperatures of sensors and thermostats (their current temperature)."""
         values = []
         for entity_id in entity_ids:
             state = self._state(entity_id)
-            if state is not None and (value := _float(state.state)) is not None:
+            if state is None:
+                continue
+            raw = (
+                state.attributes.get("current_temperature")
+                if state.domain == "climate"
+                else state.state
+            )
+            if (value := _float(raw)) is not None:
                 values.append(value)
         return values
 
