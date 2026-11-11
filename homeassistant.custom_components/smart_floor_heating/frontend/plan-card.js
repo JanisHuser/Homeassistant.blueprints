@@ -431,6 +431,8 @@ class SmartFloorHeatingSensorsCard extends HTMLElement {
       .filter((st) => {
         const id = st.entity_id;
         if (selected.includes(id) || id === own) return false;
+        // Not the integration's own entities (targets, forecasts, room thermostats).
+        if (this._hass.entities?.[id]?.platform === "smart_floor_heating") return false;
         if (id.startsWith("climate.")) return st.attributes.current_temperature != null;
         return id.startsWith("sensor.") && st.attributes.device_class === "temperature";
       })
