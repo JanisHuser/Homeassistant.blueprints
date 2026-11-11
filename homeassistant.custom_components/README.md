@@ -59,7 +59,8 @@ The model and planner are in [`model.py`](smart_floor_heating/model.py) and have
 ### Changing settings later
 
 - **Comfort vs. savings, valve cycle, window delay, away delay**: the room's select and number entities (e.g. on a dashboard). They apply right away.
-- **Valves, room sensors, weather, windows, presence entities, valve setpoints**: Settings → Devices & services → Smart floor heating → the room's ⚙ (Configure).
+- **Room temperature inputs**: the `smart-floor-heating-sensors-card` (below), or the action `smart_floor_heating.set_room_sensors` (target: the room's climate entity; `sensors`: list). Live, no reload.
+- **Valves, weather, windows, presence entities, valve setpoints**: Settings → Devices & services → Smart floor heating → the room's ⚙ (Configure).
 
 ## Time control
 
@@ -138,6 +139,15 @@ entities:                    # Monday … Sunday, in this order
   - switch.wohnzimmer_out_of_office_friday
   - switch.wohnzimmer_out_of_office_saturday
   - switch.wohnzimmer_out_of_office_sunday
+```
+
+## Temperature inputs card
+
+Lists the sensors and thermostats a room averages, with their readings and the average; remove one, or add any temperature sensor or thermostat from a dropdown.
+
+```yaml
+type: custom:smart-floor-heating-sensors-card
+entity: climate.wohnzimmer
 ```
 
 ## The first days

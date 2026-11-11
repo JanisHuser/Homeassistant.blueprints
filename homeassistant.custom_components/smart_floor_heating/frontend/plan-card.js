@@ -384,3 +384,154 @@ if (!customElements.get("smart-floor-heating-days-card")) {
     description: "Dropdown with a checkbox per weekday for the out-of-office days.",
   });
 }
+
+// Room temperature inputs: the sensors/thermostats a room averages, with
+// their readings; remove one, or add any temperature sensor or thermostat.
+//
+//   type: custom:smart-floor-heating-sensors-card
+//   entity: climate.wohnzimmer      # the room's Smart floor heating thermostat
+//   title: Temperature inputs       # optional
+
+class SmartFloorHeatingSensorsCard extends HTMLElement {
+  setConfig(config) {
+    if (!config || !config.entity) throw new Error("Set entity: the room's thermostat (climate.<room>).");
+    this._config = config;
+    this._key = undefined;
+    if (this._hass) this._update();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._update();
+  }
+
+  getCardSize() {
+    return 3;
+  }
+
+  getGridOptions() {
+    return { columns: 12, rows: "auto" };
+  }
+
+  _reading(id) {
+    const st = this._hass.states[id];
+    if (!st) return { name: id, value: null, unit: "" };
+    const raw = id.startsWith("climate.") ? st.attributes.current_temperature : st.state;
+    const value = parseFloat(raw);
+    return {
+      name: st.attributes.friendly_name || id,
+      value: Number.isFinite(value) ? value : null,
+      unit: id.startsWith("climate.") ? "°C" : st.attributes.unit_of_measurement || "°C",
+    };
+  }
+
+  _candidates(selected) {
+    const own = this._config.entity;
+    return Object.values(this._hass.states)
+      .filter((st) => {
+        const id = st.entity_id;
+        if (selected.includes(id) || id === own) return false;
+        if (id.startsWith("climate.")) return st.attributes.current_temperature != null;
+        return id.startsWith("sensor.") && st.attributes.device_class === "temperature";
+      })
+      .map((st) => ({ id: st.entity_id, name: st.attributes.friendly_name || st.entity_id }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  _update() {
+    if (!this._config || !this._hass) return;
+    const room = this._hass.states[this._config.entity];
+    const selected = (room && room.attributes.room_sensors) || [];
+    const readings = selected.map((id) => [id, this._reading(id).value]);
+    const key = JSON.stringify(readings) + Object.keys(this._hass.states).length;
+    if (key === this._key) return;
+    this._key = key;
+    this._render(room, selected);
+  }
+
+  _set(sensors) {
+    this._hass.callService("smart_floor_heating", "set_room_sensors", {
+      entity_id: this._config.entity,
+      sensors,
+    });
+  }
+
+  _render(room, selected) {
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    const title = this._config.title ?? "Temperature inputs";
+    if (!room) {
+      this.shadowRoot.innerHTML = `<ha-card header="${esc(title)}"><div style="padding:0 16px 16px">Unknown room: ${esc(this._config.entity)}</div></ha-card>`;
+      return;
+    }
+    const rows = selected.map((id) => ({ id, ...this._reading(id) }));
+    const vals = rows.map((r) => r.value).filter((v) => v != null);
+    const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    const cands = this._candidates(selected);
+    const sensors = cands.filter((c) => c.id.startsWith("sensor."));
+    const thermostats = cands.filter((c) => c.id.startsWith("climate."));
+    const opt = (c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`;
+    this.shadowRoot.innerHTML = `
+      <style>
+        .body { padding: 0 16px 16px; }
+        .row { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--divider-color); }
+        .row:last-of-type { border-bottom: none; }
+        .name { flex: 1; min-width: 0; }
+        .name div:first-child { color: var(--primary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .id { font-size: 12px; color: var(--secondary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .value { font-variant-numeric: tabular-nums; color: var(--primary-text-color); }
+        .muted { color: var(--secondary-text-color); }
+        button { cursor: pointer; border: none; border-radius: 4px; font: inherit; }
+        .remove { background: none; color: var(--secondary-text-color); font-size: 20px; line-height: 1; padding: 4px 8px; }
+        .remove:hover:not(:disabled) { color: var(--error-color, #db4437); }
+        .remove:disabled { opacity: .3; cursor: default; }
+        .avg { display: flex; justify-content: space-between; margin: 8px 0 12px; font-weight: 500; color: var(--primary-text-color); }
+        .add { display: flex; gap: 8px; }
+        select {
+          flex: 1; min-width: 0; padding: 10px 8px; border-radius: 4px 4px 0 0; border: none;
+          border-bottom: 1px solid var(--input-idle-line-color, var(--divider-color));
+          background: var(--input-fill-color, rgba(127,127,127,.1)); color: var(--primary-text-color); font: inherit;
+        }
+        .add button { background: var(--primary-color); color: var(--text-primary-color, #fff); padding: 0 16px; }
+        .add button:disabled { opacity: .4; cursor: default; }
+      </style>
+      <ha-card header="${esc(title)}">
+        <div class="body">
+          ${rows
+            .map(
+              (r) => `<div class="row">
+                <div class="name"><div>${esc(r.name)}</div><div class="id">${esc(r.id)}</div></div>
+                <span class="value">${r.value == null ? '<span class="muted">unavailable</span>' : `${r.value.toFixed(1)} ${esc(r.unit)}`}</span>
+                <button class="remove" data-id="${esc(r.id)}" title="Remove" ${rows.length < 2 ? "disabled" : ""}>×</button>
+              </div>`,
+            )
+            .join("")}
+          <div class="avg"><span>Room temperature (average)</span><span>${avg == null ? "–" : `${avg.toFixed(1)} °C`}</span></div>
+          <div class="add">
+            <select>
+              <option value="">Add a sensor or thermostat…</option>
+              ${sensors.length ? `<optgroup label="Temperature sensors">${sensors.map(opt).join("")}</optgroup>` : ""}
+              ${thermostats.length ? `<optgroup label="Thermostats">${thermostats.map(opt).join("")}</optgroup>` : ""}
+            </select>
+            <button class="add-btn" disabled>Add</button>
+          </div>
+        </div>
+      </ha-card>`;
+    const select = this.shadowRoot.querySelector("select");
+    const add = this.shadowRoot.querySelector(".add-btn");
+    select.addEventListener("change", () => (add.disabled = !select.value));
+    add.addEventListener("click", () => select.value && this._set([...selected, select.value]));
+    this.shadowRoot.querySelectorAll(".remove").forEach((b) =>
+      b.addEventListener("click", () => this._set(selected.filter((id) => id !== b.dataset.id))),
+    );
+  }
+}
+
+if (!customElements.get("smart-floor-heating-sensors-card")) {
+  customElements.define("smart-floor-heating-sensors-card", SmartFloorHeatingSensorsCard);
+  window.customCards = window.customCards || [];
+  window.customCards.push({
+    type: "smart-floor-heating-sensors-card",
+    name: "Smart floor heating temperature inputs",
+    description: "The sensors and thermostats a room averages, with their readings; add or remove them.",
+  });
+}

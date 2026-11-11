@@ -5,10 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import voluptuous as vol
+
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.const import ATTR_ENTITY_ID
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
@@ -16,6 +20,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_KIND,
+    CONF_ROOM_SENSORS,
     DOMAIN,
     KIND_SHARED,
     OLD_SHARED_TITLES,
@@ -32,6 +37,8 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 CARD_FILE = Path(__file__).parent / "frontend" / "plan-card.js"
 CARD_URL = f"/{DOMAIN}/plan-card.js"
+SERVICE_SET_ROOM_SENSORS = "set_room_sensors"
+ATTR_SENSORS = "sensors"
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -44,6 +51,33 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         [StaticPathConfig(CARD_URL, str(CARD_FILE), False)]
     )
     add_extra_js_url(hass, f"{CARD_URL}?v={version}")
+
+    async def set_room_sensors(call: ServiceCall) -> None:
+        """Replace a room's temperature inputs (sensors and/or thermostats)."""
+        registry = er.async_get(hass)
+        sensors = [s for s in dict.fromkeys(call.data[ATTR_SENSORS]) if s]
+        if not sensors:
+            raise ServiceValidationError("A room needs at least one temperature input.")
+        for entity_id in call.data[ATTR_ENTITY_ID]:
+            reg = registry.async_get(entity_id)
+            entry = hass.config_entries.async_get_entry(reg.config_entry_id) if reg else None
+            if entry is None or entry.domain != DOMAIN or not isinstance(
+                getattr(entry, "runtime_data", None), RoomController
+            ):
+                raise ServiceValidationError(f"{entity_id} is not a Smart floor heating room.")
+            await entry.runtime_data.async_set_option(CONF_ROOM_SENSORS, sensors)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_ROOM_SENSORS,
+        set_room_sensors,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
+                vol.Required(ATTR_SENSORS): vol.All(cv.ensure_list, [cv.entity_id]),
+            }
+        ),
+    )
 
     # The shared "Kalender" entry holds the house-wide calendar rules.
     if not any(

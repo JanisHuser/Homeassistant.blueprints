@@ -1,0 +1,15 @@
+set_room_sensors:
+  target:
+    entity:
+      integration: smart_floor_heating
+      domain: climate
+  fields:
+    sensors:
+      required: true
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: sensor
+              device_class: temperature
+            - domain: climate

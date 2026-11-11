@@ -274,5 +274,17 @@
         "name": "Own out of office"
       }
     }
+  },
+  "services": {
+    "set_room_sensors": {
+      "name": "Set room temperature inputs",
+      "description": "Replace the temperature sensors and thermostats a room averages.",
+      "fields": {
+        "sensors": {
+          "name": "Sensors and thermostats",
+          "description": "Temperature sensors and/or thermostats in the room. Their average is the room temperature."
+        }
+      }
+    }
   }
 }
