@@ -385,17 +385,95 @@ if (!customElements.get("smart-floor-heating-days-card")) {
   });
 }
 
-// Room temperature inputs: the sensors/thermostats a room averages, with
-// their readings; remove one, or add any temperature sensor or thermostat.
+// A room's entity lists, editable from a dashboard: temperature inputs,
+// window/door contacts or presence. Shows each entity with its reading;
+// remove one, or add one from a dropdown.
 //
 //   type: custom:smart-floor-heating-sensors-card
 //   entity: climate.wohnzimmer      # the room's Smart floor heating thermostat
-//   title: Temperature inputs       # optional
+//   kind: sensors | windows | presence   (default: sensors)
+//   title: ...                      # optional
+
+const OPENING_CLASSES = ["door", "window", "opening", "garage_door"];
+const PRESENCE_DOMAINS = ["person", "device_tracker", "input_boolean", "group", "zone"];
+const PRESENCE_CLASSES = ["occupancy", "presence"];
+
+const KINDS = {
+  sensors: {
+    title: "Temperature inputs",
+    attribute: "room_sensors",
+    service: "set_room_sensors",
+    field: "sensors",
+    min: 1,
+    placeholder: "Add a sensor or thermostat…",
+    groups: [
+      ["Temperature sensors", (st) => st.entity_id.startsWith("sensor.") && st.attributes.device_class === "temperature"],
+      ["Thermostats", (st) => st.entity_id.startsWith("climate.") && st.attributes.current_temperature != null],
+    ],
+    reading(st) {
+      const raw = st.entity_id.startsWith("climate.") ? st.attributes.current_temperature : st.state;
+      const v = parseFloat(raw);
+      return Number.isFinite(v) ? { text: `${v.toFixed(1)} °C`, value: v } : null;
+    },
+    summary(readings) {
+      const vals = readings.filter((r) => r).map((r) => r.value);
+      return ["Room temperature (average)", vals.length ? `${(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1)} °C` : "–"];
+    },
+  },
+  windows: {
+    title: "Windows and doors",
+    attribute: "window_sensors",
+    service: "set_room_windows",
+    field: "windows",
+    min: 0,
+    placeholder: "Add a window or door contact…",
+    groups: [
+      ["Windows and doors", (st) => st.entity_id.startsWith("binary_sensor.") && OPENING_CLASSES.includes(st.attributes.device_class)],
+      ["Other binary sensors", (st) => st.entity_id.startsWith("binary_sensor.") && !OPENING_CLASSES.includes(st.attributes.device_class)],
+    ],
+    reading(st) {
+      if (st.state === "on") return { text: "Open", value: 1 };
+      if (st.state === "off") return { text: "Closed", value: 0 };
+      return null;
+    },
+    summary(readings) {
+      return ["Any open", readings.some((r) => r && r.value) ? "Yes" : "No"];
+    },
+  },
+  presence: {
+    title: "Presence",
+    attribute: "presence_entities",
+    service: "set_room_presence",
+    field: "presence",
+    min: 0,
+    placeholder: "Add a person or tracker…",
+    groups: [
+      ["People", (st) => st.entity_id.startsWith("person.")],
+      ["Trackers and others", (st) => {
+        const d = st.entity_id.split(".")[0];
+        if (d === "person") return false;
+        if (PRESENCE_DOMAINS.includes(d)) return true;
+        return d === "binary_sensor" && PRESENCE_CLASSES.includes(st.attributes.device_class);
+      }],
+    ],
+    reading(st) {
+      const d = st.entity_id.split(".")[0];
+      const home = d === "zone" ? parseFloat(st.state) > 0 : ["home", "on"].includes(st.state);
+      if (["unavailable", "unknown"].includes(st.state)) return null;
+      return { text: home ? "Home" : "Away", value: home ? 1 : 0 };
+    },
+    summary(readings) {
+      return ["Someone home", readings.some((r) => r && r.value) ? "Yes" : "No"];
+    },
+  },
+};
 
 class SmartFloorHeatingSensorsCard extends HTMLElement {
   setConfig(config) {
     if (!config || !config.entity) throw new Error("Set entity: the room's thermostat (climate.<room>).");
+    if (config.kind && !KINDS[config.kind]) throw new Error(`kind must be one of: ${Object.keys(KINDS).join(", ")}`);
     this._config = config;
+    this._kind = KINDS[config.kind || "sensors"];
     this._key = undefined;
     if (this._hass) this._update();
   }
@@ -413,80 +491,73 @@ class SmartFloorHeatingSensorsCard extends HTMLElement {
     return { columns: 12, rows: "auto" };
   }
 
-  _reading(id) {
+  _row(id) {
     const st = this._hass.states[id];
-    if (!st) return { name: id, value: null, unit: "" };
-    const raw = id.startsWith("climate.") ? st.attributes.current_temperature : st.state;
-    const value = parseFloat(raw);
-    return {
-      name: st.attributes.friendly_name || id,
-      value: Number.isFinite(value) ? value : null,
-      unit: id.startsWith("climate.") ? "°C" : st.attributes.unit_of_measurement || "°C",
-    };
+    if (!st) return { id, name: id, reading: null };
+    return { id, name: st.attributes.friendly_name || id, reading: this._kind.reading(st) };
   }
 
   _candidates(selected) {
     const own = this._config.entity;
-    return Object.values(this._hass.states)
-      .filter((st) => {
-        const id = st.entity_id;
-        if (selected.includes(id) || id === own) return false;
-        // Not the integration's own entities (targets, forecasts, room thermostats).
-        if (this._hass.entities?.[id]?.platform === "smart_floor_heating") return false;
-        if (id.startsWith("climate.")) return st.attributes.current_temperature != null;
-        return id.startsWith("sensor.") && st.attributes.device_class === "temperature";
-      })
-      .map((st) => ({ id: st.entity_id, name: st.attributes.friendly_name || st.entity_id }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const pool = Object.values(this._hass.states).filter((st) => {
+      const id = st.entity_id;
+      if (selected.includes(id) || id === own) return false;
+      return this._hass.entities?.[id]?.platform !== "smart_floor_heating";
+    });
+    return this._kind.groups
+      .map(([label, test]) => [
+        label,
+        pool
+          .filter(test)
+          .map((st) => ({ id: st.entity_id, name: st.attributes.friendly_name || st.entity_id }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      ])
+      .filter(([, items]) => items.length);
   }
 
   _update() {
     if (!this._config || !this._hass) return;
     const room = this._hass.states[this._config.entity];
-    const selected = (room && room.attributes.room_sensors) || [];
-    const readings = selected.map((id) => [id, this._reading(id).value]);
-    const key = JSON.stringify(readings) + Object.keys(this._hass.states).length;
+    const selected = (room && room.attributes[this._kind.attribute]) || [];
+    const key = JSON.stringify(selected.map((id) => [id, this._hass.states[id]?.state, this._hass.states[id]?.attributes.current_temperature])) + Object.keys(this._hass.states).length;
     if (key === this._key) return;
     this._key = key;
     this._render(room, selected);
   }
 
-  _set(sensors) {
-    this._hass.callService("smart_floor_heating", "set_room_sensors", {
+  _set(values) {
+    this._hass.callService("smart_floor_heating", this._kind.service, {
       entity_id: this._config.entity,
-      sensors,
+      [this._kind.field]: values,
     });
   }
 
   _render(room, selected) {
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
-    const title = this._config.title ?? "Temperature inputs";
+    const title = this._config.title ?? this._kind.title;
     if (!room) {
       this.shadowRoot.innerHTML = `<ha-card header="${esc(title)}"><div style="padding:0 16px 16px">Unknown room: ${esc(this._config.entity)}</div></ha-card>`;
       return;
     }
-    const rows = selected.map((id) => ({ id, ...this._reading(id) }));
-    const vals = rows.map((r) => r.value).filter((v) => v != null);
-    const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-    const cands = this._candidates(selected);
-    const sensors = cands.filter((c) => c.id.startsWith("sensor."));
-    const thermostats = cands.filter((c) => c.id.startsWith("climate."));
+    const rows = selected.map((id) => this._row(id));
+    const [sumLabel, sumValue] = this._kind.summary(rows.map((r) => r.reading));
+    const groups = this._candidates(selected);
     const opt = (c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`;
     this.shadowRoot.innerHTML = `
       <style>
         .body { padding: 0 16px 16px; }
         .row { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--divider-color); }
-        .row:last-of-type { border-bottom: none; }
         .name { flex: 1; min-width: 0; }
         .name div:first-child { color: var(--primary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .id { font-size: 12px; color: var(--secondary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .value { font-variant-numeric: tabular-nums; color: var(--primary-text-color); }
-        .muted { color: var(--secondary-text-color); }
+        .muted, .empty { color: var(--secondary-text-color); }
+        .empty { padding: 4px 0 8px; }
         button { cursor: pointer; border: none; border-radius: 4px; font: inherit; }
         .remove { background: none; color: var(--secondary-text-color); font-size: 20px; line-height: 1; padding: 4px 8px; }
         .remove:hover:not(:disabled) { color: var(--error-color, #db4437); }
         .remove:disabled { opacity: .3; cursor: default; }
-        .avg { display: flex; justify-content: space-between; margin: 8px 0 12px; font-weight: 500; color: var(--primary-text-color); }
+        .sum { display: flex; justify-content: space-between; margin: 8px 0 12px; font-weight: 500; color: var(--primary-text-color); }
         .add { display: flex; gap: 8px; }
         select {
           flex: 1; min-width: 0; padding: 10px 8px; border-radius: 4px 4px 0 0; border: none;
@@ -498,21 +569,21 @@ class SmartFloorHeatingSensorsCard extends HTMLElement {
       </style>
       <ha-card header="${esc(title)}">
         <div class="body">
+          ${rows.length ? "" : '<div class="empty">None yet.</div>'}
           ${rows
             .map(
               (r) => `<div class="row">
                 <div class="name"><div>${esc(r.name)}</div><div class="id">${esc(r.id)}</div></div>
-                <span class="value">${r.value == null ? '<span class="muted">unavailable</span>' : `${r.value.toFixed(1)} ${esc(r.unit)}`}</span>
-                <button class="remove" data-id="${esc(r.id)}" title="Remove" ${rows.length < 2 ? "disabled" : ""}>×</button>
+                <span class="value">${r.reading ? esc(r.reading.text) : '<span class="muted">unavailable</span>'}</span>
+                <button class="remove" data-id="${esc(r.id)}" title="Remove" ${rows.length <= this._kind.min ? "disabled" : ""}>×</button>
               </div>`,
             )
             .join("")}
-          <div class="avg"><span>Room temperature (average)</span><span>${avg == null ? "–" : `${avg.toFixed(1)} °C`}</span></div>
+          ${rows.length ? `<div class="sum"><span>${esc(sumLabel)}</span><span>${esc(sumValue)}</span></div>` : ""}
           <div class="add">
             <select>
-              <option value="">Add a sensor or thermostat…</option>
-              ${sensors.length ? `<optgroup label="Temperature sensors">${sensors.map(opt).join("")}</optgroup>` : ""}
-              ${thermostats.length ? `<optgroup label="Thermostats">${thermostats.map(opt).join("")}</optgroup>` : ""}
+              <option value="">${esc(this._kind.placeholder)}</option>
+              ${groups.map(([label, items]) => `<optgroup label="${esc(label)}">${items.map(opt).join("")}</optgroup>`).join("")}
             </select>
             <button class="add-btn" disabled>Add</button>
           </div>
@@ -533,7 +604,7 @@ if (!customElements.get("smart-floor-heating-sensors-card")) {
   window.customCards = window.customCards || [];
   window.customCards.push({
     type: "smart-floor-heating-sensors-card",
-    name: "Smart floor heating temperature inputs",
-    description: "The sensors and thermostats a room averages, with their readings; add or remove them.",
+    name: "Smart floor heating room entities",
+    description: "A room's temperature inputs, windows or presence, with readings; add or remove them.",
   });
 }

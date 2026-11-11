@@ -13,3 +13,29 @@ set_room_sensors:
             - domain: sensor
               device_class: temperature
             - domain: climate
+
+set_room_windows:
+  target:
+    entity:
+      integration: smart_floor_heating
+      domain: climate
+  fields:
+    windows:
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: binary_sensor
+
+set_room_presence:
+  target:
+    entity:
+      integration: smart_floor_heating
+      domain: climate
+  fields:
+    presence:
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: [person, device_tracker, binary_sensor, input_boolean, group, zone]

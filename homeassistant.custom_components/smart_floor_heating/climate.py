@@ -15,7 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SmartFloorHeatingEntry
-from .const import CONF_ROOM_SENSORS, PRESETS, TEMP_MAX, TEMP_MIN
+from .const import CONF_PRESENCE, CONF_ROOM_SENSORS, CONF_WINDOWS, PRESETS, TEMP_MAX, TEMP_MIN
 from .entity import RoomEntity
 
 
@@ -79,6 +79,8 @@ class RoomClimate(RoomEntity, ClimateEntity):
             "target": c.active_target,
             "target_temperature": c.target_temp,
             "room_sensors": list(c.conf.get(CONF_ROOM_SENSORS, [])),
+            "window_sensors": list(c.conf.get(CONF_WINDOWS, [])),
+            "presence_entities": list(c.conf.get(CONF_PRESENCE, [])),
             "window_open": c.window_open,
             "window_holds_valve": c.window_holds_valve,
             "away": c.away,

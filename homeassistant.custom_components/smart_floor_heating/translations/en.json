@@ -285,6 +285,26 @@
           "description": "Temperature sensors and/or thermostats in the room. Their average is the room temperature."
         }
       }
+    },
+    "set_room_windows": {
+      "name": "Set room windows",
+      "description": "Replace the window and door contacts of a room.",
+      "fields": {
+        "windows": {
+          "name": "Windows and doors",
+          "description": "Binary sensors; empty: none."
+        }
+      }
+    },
+    "set_room_presence": {
+      "name": "Set room presence",
+      "description": "Replace the people and trackers whose absence lowers a room's target.",
+      "fields": {
+        "presence": {
+          "name": "Presence",
+          "description": "People, trackers, input booleans, groups or zones; empty: none."
+        }
+      }
     }
   }
 }
