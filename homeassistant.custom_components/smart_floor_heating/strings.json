@@ -189,6 +189,15 @@
           "eco": "Eco",
           "away": "Away"
         }
+      },
+      "calendar_event_means": {
+        "name": "{calendar}: event {slot} means",
+        "state": {
+          "default": "Calendar setting",
+          "eco": "Eco",
+          "away": "Away",
+          "home": "At home (beats away)"
+        }
       }
     },
     "text": {

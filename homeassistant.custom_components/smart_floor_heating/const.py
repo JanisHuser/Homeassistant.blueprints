@@ -71,6 +71,11 @@ PRESETS = [PRESET_SCHEDULE, PRESET_COMFORT, PRESET_ECO, PRESET_AWAY]
 
 CALENDAR_OFF = "off"
 CALENDAR_TARGETS = [CALENDAR_OFF, "eco", "away"]  # "eco"/"away" equal TARGET_ECO/TARGET_AWAY
+# What one event-name field means: the calendar's setting, eco, away, or at
+# home, which beats every away/eco from calendars and out-of-office times.
+MEANS_DEFAULT = "default"
+MEANS_HOME = "home"
+EVENT_MEANS = [MEANS_DEFAULT, "eco", "away", MEANS_HOME]
 PRESENCE_ON = "on"
 PRESENCE_OFF = "off"
 COMBINE_EITHER = "either"

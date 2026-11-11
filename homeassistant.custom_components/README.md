@@ -82,7 +82,8 @@ Default temperatures and the calendar rules are set once for the whole house, on
 | Entity | Meaning |
 |---|---|
 | *Calendar*: during events | One per calendar in Home Assistant: ignore it, eco or away during its events. |
-| *Calendar*: event name 1–8 | One name per field (whole word, any case), e.g. `FD`, `S1`, `GD`. A field may also hold a comma list. Emptying a field moves the ones after it up. All empty: every event of that calendar. |
+| *Calendar*: event name 1–8 | A filter per field; fields are OR'd. Inside a field: `,` = OR, `&` = AND, `!` = NOT; words match whole, any case. E.g. `FD, S1` or `SD & !Homeoffice`. Emptying a field moves the ones after it up. All empty: every event of that calendar. |
+| *Calendar*: event 1–8 means | Calendar setting, eco, away, or **at home**. At home beats every away/eco from calendars and out-of-office times at that time (e.g. `Homeoffice` → at home, even while an `SD` shift says away); the schedule then decides. Nobody home (presence) still counts. |
 | *Calendar*: event 1–8 from / until | When that event name counts, e.g. FD 06:00–15:00 even if the calendar entry is all-day. Both 00:00: the event's own times. Until before from runs past midnight (night shift). For events over several days, the window applies on each day. Long away still looks at the whole event. |
 
 Calendar events and out-of-office times are known ahead of time, so the planner lets the room cool before you leave and heats it so it is warm when you are back. A new calendar shows up after reloading the Alle Räume entry.

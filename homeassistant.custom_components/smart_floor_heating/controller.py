@@ -73,6 +73,8 @@ from .const import (
     DEFAULT_LONG_AWAY_H,
     DEFAULT_LONG_AWAY_TEMP,
     EVENT_TIMES_DEFAULT,
+    MEANS_DEFAULT,
+    MEANS_HOME,
     TARGET_COMFORT,
     TARGET_ECO,
 )
@@ -485,6 +487,8 @@ class RoomController:
         if self.preset == PRESET_AWAY:
             return TARGET_AWAY
         event = self._event_target(when)
+        if event == MEANS_HOME:
+            event = None  # at home: the schedule decides (presence still counts)
         presence_on = self.rules["presence"] == PRESENCE_ON
         if self.rules["combine"] == COMBINE_BOTH and presence_on:
             # Calendar counts only while nobody is home. Ahead of time, assume
@@ -518,6 +522,8 @@ class RoomController:
                 hits.add(TARGET_LONG_AWAY if long else target)
         if (office := self._office_target(when)) is not None:
             hits.add(office)
+        if MEANS_HOME in hits:  # e.g. a home-office event: beats away and eco
+            return MEANS_HOME
         if TARGET_LONG_AWAY in hits:
             return TARGET_LONG_AWAY
         if TARGET_AWAY in hits:
@@ -632,15 +638,14 @@ class RoomController:
                 continue
             for event in ((resp or {}).get(calendar) or {}).get("events", []):
                 summary = str(event.get("summary") or "")
-                matched = _first_match(summary, matchers)
-                if matched is None:
-                    continue
                 start, stop = _event_time(event.get("start")), _event_time(event.get("end"))
                 if start is None or stop is None:
                     continue
-                for a, b in _active_windows(start, stop, matched[1], matched[2]):
-                    if b > now:
-                        events.append((a, b, rule["target"], summary, stop - start))
+                for _, active_from, active_until, means in _matching_fields(summary, matchers):
+                    target = rule["target"] if means == MEANS_DEFAULT else means
+                    for a, b in _active_windows(start, stop, active_from, active_until):
+                        if b > now:
+                            events.append((a, b, target, summary, stop - start))
         self._events = sorted(events)
 
     def _forecast_at_time(self, when: datetime) -> tuple[float | None, float | None]:
@@ -802,20 +807,36 @@ def _is_home(state: State | None) -> bool:
     return state.state in HOME_STATES
 
 
-def _first_match(
-    summary: str, matchers: list[tuple[str, str, str]]
-) -> tuple[str, str, str] | None:
-    """The first event-name field that matches (whole word, any case).
-
-    No fields: every event matches, with its own times.
-    """
+def _matching_fields(
+    summary: str, matchers: list[tuple[str, str, str, str]]
+) -> list[tuple[str, str, str, str]]:
+    """Every event-name field the event matches. No fields: every event, own times."""
     if not matchers:
-        return ("", *EVENT_TIMES_DEFAULT)
+        return [("", *EVENT_TIMES_DEFAULT, MEANS_DEFAULT)]
     text = summary.lower()
-    for matcher in matchers:
-        if re.search(rf"(?<!\w){re.escape(matcher[0])}(?!\w)", text):
-            return matcher
-    return None
+    return [m for m in matchers if filter_matches(m[0], text)]
+
+
+def filter_matches(expression: str, text: str) -> bool:
+    """One event-name field against an event title (both lower case).
+
+    "," separates alternatives (OR), "&" joins words that must all appear
+    (AND), "!" in front of a word means it must not appear (NOT). Words match
+    whole, any case: "sd & !homeoffice, s1".
+    """
+
+    def present(word: str) -> bool:
+        return re.search(rf"(?<!\w){re.escape(word)}(?!\w)", text) is not None
+
+    for alternative in expression.split(","):
+        terms = [t.strip() for t in alternative.split("&") if t.strip()]
+        if not terms:
+            continue
+        if all(
+            (not present(t[1:].strip())) if t.startswith("!") else present(t) for t in terms
+        ):
+            return True
+    return False
 
 
 def _active_windows(

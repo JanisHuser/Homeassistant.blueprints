@@ -13,6 +13,8 @@ from .const import (
     CALENDAR_TARGETS,
     COMBINE_BOTH,
     COMBINE_EITHER,
+    EVENT_MEANS,
+    EVENT_NAME_SLOTS,
     OFFICE_TARGETS,
     PRESENCE_OFF,
     PRESENCE_ON,
@@ -46,6 +48,11 @@ async def async_setup_entry(
             [
                 OfficeSelect(c, "target", OFFICE_TARGETS),
                 *(CalendarTargetSelect(c, cal, name) for cal, name in calendars(hass)),
+                *(
+                    EventMeansSelect(c, cal, name, slot)
+                    for cal, name in calendars(hass)
+                    for slot in range(EVENT_NAME_SLOTS)
+                ),
             ]
         )
         return
@@ -135,3 +142,23 @@ class CalendarTargetSelect(_Base):
 
     async def async_select_option(self, option: str) -> None:
         await self.controller.async_set_calendar_rule(self.calendar, target=option)
+
+
+class EventMeansSelect(_Base):
+    """What one event-name field means: calendar default, eco, away, at home."""
+
+    _attr_translation_key = "calendar_event_means"
+    _attr_entity_category = None
+    _attr_options = EVENT_MEANS
+
+    def __init__(self, controller: SharedSettings, calendar: str, name: str, slot: int) -> None:
+        super().__init__(controller, f"calendar_{calendar}_{slot + 1}_means")
+        self.calendar, self.slot = calendar, slot
+        self._attr_translation_placeholders = {"calendar": name, "slot": str(slot + 1)}
+
+    @property
+    def current_option(self) -> str:
+        return self.controller.calendar_rule(self.calendar)["means"][self.slot]
+
+    async def async_select_option(self, option: str) -> None:
+        await self.controller.async_set_calendar_means(self.calendar, self.slot, option)

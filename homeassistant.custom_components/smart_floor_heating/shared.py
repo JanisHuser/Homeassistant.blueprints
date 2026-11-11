@@ -20,6 +20,7 @@ from .const import (
     DOMAIN,
     EVENT_NAME_SLOTS,
     EVENT_TIMES_DEFAULT,
+    MEANS_DEFAULT,
     KIND_SHARED,
     OFFICE_DAY_GROUPS,
     OFFICE_DEFAULT,
@@ -93,26 +94,24 @@ class SharedSettings:
         names = (names + [""] * EVENT_NAME_SLOTS)[:EVENT_NAME_SLOTS]
         times = [list(t) for t in rule.get("times") or []]
         times = (times + [list(EVENT_TIMES_DEFAULT)] * EVENT_NAME_SLOTS)[:EVENT_NAME_SLOTS]
-        return {"names": names, "times": times, "target": rule.get("target", CALENDAR_OFF)}
+        means = list(rule.get("means") or [])
+        means = (means + [MEANS_DEFAULT] * EVENT_NAME_SLOTS)[:EVENT_NAME_SLOTS]
+        return {
+            "names": names,
+            "times": times,
+            "means": means,
+            "target": rule.get("target", CALENDAR_OFF),
+        }
 
-    def calendar_matchers(self, calendar: str) -> list[tuple[str, str, str]]:
-        """(word, active from, active until) for every filled event-name field."""
+    def calendar_matchers(self, calendar: str) -> list[tuple[str, str, str, str]]:
+        """(filter, active from, active until, means) for every filled field."""
         rule = self.calendar_rule(calendar)
         return [
-            (w.strip().lower(), times[0], times[1])
-            for name, times in zip(rule["names"], rule["times"])
-            for w in name.split(",")
-            if w.strip()
+            (name.lower(), times[0], times[1], means)
+            for name, times, means in zip(rule["names"], rule["times"], rule["means"])
+            if name.strip()
         ]
 
-    def calendar_words(self, calendar: str) -> list[str]:
-        """Lower-case names to match; each field may also hold a comma list."""
-        return [
-            w.strip().lower()
-            for name in self.calendar_rule(calendar)["names"]
-            for w in name.split(",")
-            if w.strip()
-        ]
 
     async def async_set_calendar_rule(self, calendar: str, **changes: Any) -> None:
         self.rules["calendars"][calendar] = {**self.calendar_rule(calendar), **changes}
@@ -123,10 +122,17 @@ class SharedSettings:
         rule["names"][slot] = value.strip()
         # Keep filled fields first (with their times), so the dashboard only
         # needs to show "the next empty one".
-        pairs = [(n, t) for n, t in zip(rule["names"], rule["times"]) if n]
-        empty = EVENT_NAME_SLOTS - len(pairs)
-        rule["names"] = [n for n, _ in pairs] + [""] * empty
-        rule["times"] = [t for _, t in pairs] + [list(EVENT_TIMES_DEFAULT)] * empty
+        fields = [f for f in zip(rule["names"], rule["times"], rule["means"]) if f[0]]
+        empty = EVENT_NAME_SLOTS - len(fields)
+        rule["names"] = [f[0] for f in fields] + [""] * empty
+        rule["times"] = [f[1] for f in fields] + [list(EVENT_TIMES_DEFAULT)] * empty
+        rule["means"] = [f[2] for f in fields] + [MEANS_DEFAULT] * empty
+        self.rules["calendars"][calendar] = rule
+        await self._changed()
+
+    async def async_set_calendar_means(self, calendar: str, slot: int, value: str) -> None:
+        rule = self.calendar_rule(calendar)
+        rule["means"][slot] = value
         self.rules["calendars"][calendar] = rule
         await self._changed()
 
