@@ -1,0 +1,190 @@
+"""Time-control choices: schedule, presence, out-of-office and calendar rules."""
+
+from __future__ import annotations
+
+from homeassistant.components.select import SelectEntity
+from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
+from . import SmartFloorHeatingEntry
+from .const import (
+    CONF_CYCLE,
+    CONF_SAVINGS,
+    CYCLE_CHOICES_MIN,
+    DEFAULT_CYCLE_MIN,
+    DEFAULT_SAVINGS,
+    SAVINGS_WEIGHTS,
+    CALENDAR_TARGETS,
+    COMBINE_BOTH,
+    COMBINE_EITHER,
+    EVENT_MEANS,
+    EVENT_NAME_SLOTS,
+    OFFICE_TARGETS,
+    PRESENCE_OFF,
+    PRESENCE_ON,
+    SCHEDULE_NONE,
+)
+from .controller import RoomController
+from .entity import RoomEntity
+from .shared import SharedSettings
+
+
+def calendars(hass: HomeAssistant) -> list[tuple[str, str]]:
+    """(entity_id, name) of every calendar, from the registry so it works at startup."""
+    found = {}
+    for entry in er.async_get(hass).entities.values():
+        if entry.domain == "calendar" and not entry.disabled:
+            found[entry.entity_id] = entry.name or entry.original_name or entry.entity_id
+    for entity_id in hass.states.async_entity_ids("calendar"):
+        state = hass.states.get(entity_id)
+        found.setdefault(entity_id, state.name if state else entity_id)
+    return sorted(found.items(), key=lambda item: item[1].lower())
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: SmartFloorHeatingEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    c = entry.runtime_data
+    if isinstance(c, SharedSettings):
+        async_add_entities(
+            [
+                OfficeSelect(c, "target", OFFICE_TARGETS),
+                *(CalendarTargetSelect(c, cal, name) for cal, name in calendars(hass)),
+                *(
+                    EventMeansSelect(c, cal, name, slot)
+                    for cal, name in calendars(hass)
+                    for slot in range(EVENT_NAME_SLOTS)
+                ),
+            ]
+        )
+        return
+    entities: list[SelectEntity] = [
+        ScheduleSelect(c),
+        RuleSelect(c, "presence", [PRESENCE_ON, PRESENCE_OFF]),
+        RuleSelect(c, "combine", [COMBINE_EITHER, COMBINE_BOTH]),
+        OfficeSelect(c, "target", OFFICE_TARGETS),
+        OptionSelect(c, CONF_SAVINGS, list(SAVINGS_WEIGHTS), DEFAULT_SAVINGS),
+        OptionSelect(c, CONF_CYCLE, [str(m) for m in CYCLE_CHOICES_MIN], str(DEFAULT_CYCLE_MIN)),
+    ]
+    async_add_entities(entities)
+
+
+class _Base(RoomEntity, SelectEntity):
+    _attr_entity_category = EntityCategory.CONFIG
+
+
+class ScheduleSelect(_Base):
+    """Which schedule helper sets comfort times."""
+
+    _attr_translation_key = "schedule"
+
+    def __init__(self, controller: RoomController) -> None:
+        super().__init__(controller, "rule_schedule")
+
+    @property
+    def options(self) -> list[str]:
+        found = self.hass.states.async_entity_ids("schedule") if self.hass else []
+        current = self.controller.rules["schedule"]
+        extra = [current] if current and current not in found else []
+        return [SCHEDULE_NONE, *sorted(found), *extra]
+
+    @property
+    def current_option(self) -> str:
+        return self.controller.rules["schedule"] or SCHEDULE_NONE
+
+    async def async_select_option(self, option: str) -> None:
+        await self.controller.async_set_rule("schedule", None if option == SCHEDULE_NONE else option)
+
+
+class RuleSelect(_Base):
+    def __init__(self, controller: RoomController, key: str, options: list[str]) -> None:
+        super().__init__(controller, f"rule_{key}")
+        self.key = key
+        self._attr_translation_key = key
+        self._attr_options = options
+
+    @property
+    def current_option(self) -> str:
+        return self.controller.rules[self.key]
+
+    async def async_select_option(self, option: str) -> None:
+        await self.controller.async_set_rule(self.key, option)
+
+
+class OfficeSelect(_Base):
+    def __init__(
+        self, controller: RoomController | SharedSettings, key: str, options: list[str]
+    ) -> None:
+        super().__init__(controller, f"office_{key}")
+        self.key = key
+        self._attr_translation_key = f"office_{key}"
+        self._attr_options = options
+
+    @property
+    def current_option(self) -> str:
+        return self.controller.rules["office"][self.key]
+
+    async def async_select_option(self, option: str) -> None:
+        await self.controller.async_set_office(**{self.key: option})
+
+
+class CalendarTargetSelect(_Base):
+    """What a calendar's matching events do: nothing, eco or away."""
+
+    _attr_translation_key = "calendar_target"
+    _attr_entity_category = None  # shown on the shared device's main page
+
+    def __init__(self, controller: SharedSettings, calendar: str, name: str) -> None:
+        super().__init__(controller, f"calendar_{calendar}_target")
+        self.calendar = calendar
+        self._attr_translation_placeholders = {"calendar": name}
+        self._attr_options = CALENDAR_TARGETS
+
+    @property
+    def current_option(self) -> str:
+        return self.controller.calendar_rule(self.calendar)["target"]
+
+    async def async_select_option(self, option: str) -> None:
+        await self.controller.async_set_calendar_rule(self.calendar, target=option)
+
+
+class EventMeansSelect(_Base):
+    """What one event-name field means: calendar default, eco, away, at home."""
+
+    _attr_translation_key = "calendar_event_means"
+    _attr_entity_category = None
+    _attr_options = EVENT_MEANS
+
+    def __init__(self, controller: SharedSettings, calendar: str, name: str, slot: int) -> None:
+        super().__init__(controller, f"calendar_{calendar}_{slot + 1}_means")
+        self.calendar, self.slot = calendar, slot
+        self._attr_translation_placeholders = {"calendar": name, "slot": str(slot + 1)}
+
+    @property
+    def current_option(self) -> str:
+        return self.controller.calendar_rule(self.calendar)["means"][self.slot]
+
+    async def async_select_option(self, option: str) -> None:
+        await self.controller.async_set_calendar_means(self.calendar, self.slot, option)
+
+
+class OptionSelect(_Base):
+    """A room setup option: comfort vs. savings, valve cycle."""
+
+    def __init__(self, controller: RoomController, key: str, options: list[str], default: str) -> None:
+        super().__init__(controller, f"option_{key}")
+        self.key, self.default = key, default
+        self._attr_translation_key = key
+        self._attr_options = options
+
+    @property
+    def current_option(self) -> str:
+        return str(self.controller.option(self.key, self.default))
+
+    async def async_select_option(self, option: str) -> None:
+        value: str | int = int(option) if self.key == CONF_CYCLE else option
+        await self.controller.async_set_option(self.key, value)

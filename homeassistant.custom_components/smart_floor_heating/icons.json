@@ -1,0 +1,19 @@
+{
+  "entity": {
+    "climate": {
+      "room": {
+        "state_attributes": {
+          "preset_mode": {
+            "default": "mdi:calendar-clock",
+            "state": {
+              "schedule": "mdi:calendar-clock",
+              "comfort": "mdi:sofa",
+              "eco": "mdi:leaf",
+              "away": "mdi:home-export-outline"
+            }
+          }
+        }
+      }
+    }
+  }
+}

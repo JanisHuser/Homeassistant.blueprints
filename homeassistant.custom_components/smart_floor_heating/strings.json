@@ -1,0 +1,310 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a floor-heated room",
+        "description": "One entry per room. The controller learns how the room heats up and cools down, then plans the valve ahead of time.",
+        "data": {
+          "name": "Room",
+          "valves": "Valves",
+          "room_sensors": "Room temperature sensors and thermostats",
+          "weather": "Weather",
+          "outdoor_sensor": "Outdoor temperature sensor",
+          "schedule": "Schedule",
+          "windows": "Windows and doors",
+          "window_delay": "Window delay",
+          "presence": "Presence",
+          "away_delay": "Away delay",
+          "comfort_temp": "Comfort temperature",
+          "eco_temp": "Eco temperature",
+          "away_temp": "Away temperature",
+          "savings": "Comfort vs. savings",
+          "cycle": "Valve cycle",
+          "open_setpoint": "Valve setpoint to open",
+          "closed_setpoint": "Valve setpoint to close"
+        },
+        "data_description": {
+          "valves": "Thermostats or valve heads on the floor-heating manifold. They are only opened and closed; the room sensor decides.",
+          "room_sensors": "Temperature sensors and room thermostats in the room itself, not the valve heads on the manifold. With several, their average is used.",
+          "weather": "For the outdoor and sun forecast.",
+          "outdoor_sensor": "Optional, used instead of the weather's current temperature.",
+          "schedule": "A schedule helper: on means comfort, off means eco. Can be changed later on the room's settings entities.",
+          "window_delay": "Close the valve only after a window has been open this long. Short airing doesn't matter to a floor.",
+          "presence": "People or trackers. When nobody is home for the away delay, the room drops to the away temperature.",
+          "savings": "How much the planner weighs energy against being exactly on target, and how far it lets the room cool outside comfort time.",
+          "cycle": "The valve opens at most once per cycle. Longer cycles save battery.",
+          "open_setpoint": "Default: the valve's maximum.",
+          "closed_setpoint": "Default: the valve's minimum."
+        }
+      }
+    },
+    "error": {
+      "missing_entities": "Pick at least one valve and one room sensor."
+    },
+    "abort": {
+      "already_configured": "This already exists."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Room settings",
+        "description": "Temperatures, schedule, calendars and out-of-office times are set with the room's entities (for example on the Heizung dashboard).",
+        "data": {
+          "valves": "Valves",
+          "room_sensors": "Room temperature sensors and thermostats",
+          "weather": "Weather",
+          "outdoor_sensor": "Outdoor temperature sensor",
+          "windows": "Windows and doors",
+          "window_delay": "Window delay",
+          "presence": "Presence",
+          "away_delay": "Away delay",
+          "savings": "Comfort vs. savings",
+          "cycle": "Valve cycle",
+          "open_setpoint": "Valve setpoint to open",
+          "closed_setpoint": "Valve setpoint to close"
+        },
+        "data_description": {
+          "valves": "Thermostats or valve heads on the floor-heating manifold. They are only opened and closed; the room sensor decides.",
+          "room_sensors": "Temperature sensors and room thermostats in the room itself, not the valve heads on the manifold. With several, their average is used.",
+          "weather": "For the outdoor and sun forecast.",
+          "outdoor_sensor": "Optional, used instead of the weather's current temperature.",
+          "window_delay": "Close the valve only after a window has been open this long. Short airing doesn't matter to a floor.",
+          "presence": "People or trackers. When nobody is home for the away delay, the room drops to the away temperature.",
+          "savings": "How much the planner weighs energy against being exactly on target, and how far it lets the room cool outside comfort time.",
+          "cycle": "The valve opens at most once per cycle. Longer cycles save battery.",
+          "open_setpoint": "Default: the valve's maximum.",
+          "closed_setpoint": "Default: the valve's minimum."
+        }
+      }
+    }
+  },
+  "selector": {
+    "savings": {
+      "options": {
+        "comfort": "Comfort first",
+        "balanced": "Balanced",
+        "savings": "Save energy"
+      }
+    },
+    "cycle": {
+      "options": {
+        "30": "30 min",
+        "60": "60 min",
+        "90": "90 min",
+        "120": "120 min"
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "room": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "schedule": "Schedule",
+              "comfort": "Comfort",
+              "eco": "Eco",
+              "away": "Away"
+            }
+          }
+        }
+      }
+    },
+    "number": {
+      "comfort_temp": {
+        "name": "Comfort temperature"
+      },
+      "eco_temp": {
+        "name": "Eco temperature"
+      },
+      "away_temp": {
+        "name": "Away temperature"
+      },
+      "long_away_temp": {
+        "name": "Long away temperature"
+      },
+      "long_away_hours": {
+        "name": "Long away after"
+      },
+      "window_delay": {
+        "name": "Window delay"
+      },
+      "away_delay": {
+        "name": "Away delay"
+      }
+    },
+    "sensor": {
+      "heat_retention": {
+        "name": "Heat retention"
+      },
+      "cooldown_time_constant": {
+        "name": "Cool-down time constant"
+      },
+      "floor_lag": {
+        "name": "Floor lag"
+      },
+      "valve_duty": {
+        "name": "Valve duty"
+      },
+      "predicted_temperature": {
+        "name": "Temperature in 3 h"
+      },
+      "next_heating": {
+        "name": "Next heating"
+      },
+      "model_error": {
+        "name": "Model error (6 h ahead)"
+      },
+      "target_temperature": {
+        "name": "Target temperature"
+      }
+    },
+    "select": {
+      "schedule": {
+        "name": "Comfort schedule",
+        "state": {
+          "none": "None (always comfort)"
+        }
+      },
+      "presence": {
+        "name": "Presence",
+        "state": {
+          "on": "Away when nobody is home",
+          "off": "Ignore"
+        }
+      },
+      "combine": {
+        "name": "Calendar and presence",
+        "state": {
+          "either": "Either one",
+          "both": "Only when both say away"
+        }
+      },
+      "office_target": {
+        "name": "Out of office means",
+        "state": {
+          "eco": "Eco",
+          "away": "Away"
+        }
+      },
+      "calendar_target": {
+        "name": "{calendar}: during events",
+        "state": {
+          "off": "Ignore calendar",
+          "eco": "Eco",
+          "away": "Away"
+        }
+      },
+      "calendar_event_means": {
+        "name": "{calendar}: event {slot} means",
+        "state": {
+          "default": "Calendar setting",
+          "eco": "Eco",
+          "away": "Away",
+          "home": "At home (beats away)"
+        }
+      },
+      "savings": {
+        "name": "Comfort vs. savings",
+        "state": {
+          "comfort": "Comfort first",
+          "balanced": "Balanced",
+          "savings": "Save energy"
+        }
+      },
+      "cycle": {
+        "name": "Valve cycle",
+        "state": {
+          "30": "30 min",
+          "60": "60 min",
+          "90": "90 min",
+          "120": "120 min"
+        }
+      }
+    },
+    "text": {
+      "calendar_name": {
+        "name": "{calendar}: event name {slot}"
+      }
+    },
+    "time": {
+      "office_leave": {
+        "name": "Out of office from"
+      },
+      "office_back": {
+        "name": "Back home at"
+      },
+      "calendar_event_from": {
+        "name": "{calendar}: event {slot} from"
+      },
+      "calendar_event_until": {
+        "name": "{calendar}: event {slot} until"
+      }
+    },
+    "switch": {
+      "follow_calendars": {
+        "name": "Follow calendars"
+      },
+      "own_temperatures": {
+        "name": "Own temperatures"
+      },
+      "office_monday": {
+        "name": "Out of office Monday"
+      },
+      "office_tuesday": {
+        "name": "Out of office Tuesday"
+      },
+      "office_wednesday": {
+        "name": "Out of office Wednesday"
+      },
+      "office_thursday": {
+        "name": "Out of office Thursday"
+      },
+      "office_friday": {
+        "name": "Out of office Friday"
+      },
+      "office_saturday": {
+        "name": "Out of office Saturday"
+      },
+      "office_sunday": {
+        "name": "Out of office Sunday"
+      },
+      "own_office": {
+        "name": "Own out of office"
+      }
+    }
+  },
+  "services": {
+    "set_room_sensors": {
+      "name": "Set room temperature inputs",
+      "description": "Replace the temperature sensors and thermostats a room averages.",
+      "fields": {
+        "sensors": {
+          "name": "Sensors and thermostats",
+          "description": "Temperature sensors and/or thermostats in the room. Their average is the room temperature."
+        }
+      }
+    },
+    "set_room_windows": {
+      "name": "Set room windows",
+      "description": "Replace the window and door contacts of a room.",
+      "fields": {
+        "windows": {
+          "name": "Windows and doors",
+          "description": "Binary sensors; empty: none."
+        }
+      }
+    },
+    "set_room_presence": {
+      "name": "Set room presence",
+      "description": "Replace the people and trackers whose absence lowers a room's target.",
+      "fields": {
+        "presence": {
+          "name": "Presence",
+          "description": "People, trackers, input booleans, groups or zones; empty: none."
+        }
+      }
+    }
+  }
+}
