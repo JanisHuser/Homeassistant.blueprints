@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "smart_floor_heating"
-PLATFORMS = ["climate", "number", "sensor"]
+PLATFORMS = ["climate", "number", "select", "sensor", "text", "time"]
 STORAGE_VERSION = 1
 
 CONF_NAME = "name"
@@ -58,6 +58,24 @@ PRESET_COMFORT = "comfort"
 PRESET_ECO = "eco"
 PRESET_AWAY = "away"
 PRESETS = [PRESET_SCHEDULE, PRESET_COMFORT, PRESET_ECO, PRESET_AWAY]
+
+CALENDAR_OFF = "off"
+CALENDAR_TARGETS = [CALENDAR_OFF, "eco", "away"]  # "eco"/"away" equal TARGET_ECO/TARGET_AWAY
+PRESENCE_ON = "on"
+PRESENCE_OFF = "off"
+COMBINE_EITHER = "either"
+COMBINE_BOTH = "both"
+SCHEDULE_NONE = "none"
+
+# Fixed out-of-office times: which days, and their weekday numbers.
+OFFICE_DAYS = {
+    "off": (),
+    "mon_fri": (0, 1, 2, 3, 4),
+    "mon_sat": (0, 1, 2, 3, 4, 5),
+    "every_day": (0, 1, 2, 3, 4, 5, 6),
+}
+OFFICE_TARGETS = ["eco", "away"]
+OFFICE_DEFAULT = {"days": "off", "leave": "07:30:00", "back": "17:30:00", "target": "eco"}
 
 TARGET_COMFORT = "comfort"
 TARGET_ECO = "eco"

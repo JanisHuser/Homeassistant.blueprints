@@ -77,6 +77,9 @@ class RoomClimate(RoomEntity, ClimateEntity):
             "window_holds_valve": c.window_holds_valve,
             "away": c.away,
             "outdoor_temperature": c.outdoor_temp,
+            "calendar_event": c.active_event,
+            "next_calendar_event": c.next_event[1] if c.next_event else None,
+            "next_calendar_event_start": c.next_event[0].isoformat() if c.next_event else None,
         }
 
     async def async_set_temperature(self, **kwargs: Any) -> None:

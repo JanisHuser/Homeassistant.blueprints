@@ -102,9 +102,6 @@ def _schema(values: dict[str, Any], with_temps: bool) -> vol.Schema:
         opt(CONF_OUTDOOR_SENSOR): selector.EntitySelector(
             selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
         ),
-        opt(CONF_SCHEDULE): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="schedule")
-        ),
         vol.Optional(CONF_WINDOWS, default=values.get(CONF_WINDOWS, [])): selector.EntitySelector(
             selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)
         ),
@@ -121,8 +118,11 @@ def _schema(values: dict[str, Any], with_temps: bool) -> vol.Schema:
             CONF_AWAY_DELAY, default=values.get(CONF_AWAY_DELAY, DEFAULT_AWAY_DELAY_MIN)
         ): _minutes(1440),
     }
-    if with_temps:
+    if with_temps:  # first setup only; afterwards the dashboard's selects
         fields |= {
+            opt(CONF_SCHEDULE): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="schedule")
+            ),
             vol.Required(
                 CONF_COMFORT_TEMP, default=values.get(CONF_COMFORT_TEMP, DEFAULT_COMFORT_TEMP)
             ): _temp(DEFAULT_COMFORT_TEMP),
@@ -190,11 +190,19 @@ class SmartFloorHeatingConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class SmartFloorHeatingOptionsFlow(OptionsFlow):
-    """Change entities and behaviour. Temperatures live in the number entities."""
+    """Change entities and behaviour.
+
+    Temperatures, schedule, calendars and out-of-office times are set with the
+    room's entities, so they can sit on a dashboard.
+    """
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         current = dict(self.config_entry.options)
         if user_input is not None:
-            kept = {k: current[k] for k in (CONF_COMFORT_TEMP, CONF_ECO_TEMP, CONF_AWAY_TEMP) if k in current}
+            kept = {
+                k: current[k]
+                for k in (CONF_COMFORT_TEMP, CONF_ECO_TEMP, CONF_AWAY_TEMP, CONF_SCHEDULE)
+                if k in current
+            }
             return self.async_create_entry(data={**kept, **_clean(user_input)})
         return self.async_show_form(step_id="init", data_schema=_schema(current, with_temps=False))

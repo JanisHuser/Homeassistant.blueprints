@@ -41,7 +41,7 @@ The model and planner are in [`model.py`](smart_floor_heating/model.py) and have
 | Room temperature sensors and thermostats | Temperature sensors and room thermostats (`climate` entities, their current temperature) in the room itself. With several, their average is used. Don't add valve heads on the manifold: they measure the manifold, not the room. |
 | Weather | Your weather entity, for the outdoor and sun forecast. |
 | Outdoor temperature sensor | Optional, used instead of the weather's current temperature. |
-| Schedule | Optional `schedule` helper: on = comfort, off = eco. Without one the room stays at comfort. |
+| Schedule | Optional `schedule` helper: on = comfort, off = eco. Without one the room stays at comfort. Can be changed later with the room's "Comfort schedule" select. |
 | Windows and doors | Binary sensors. |
 | Window delay | How long a window must be open before the valve closes (default 30 min). |
 | Presence | People, trackers, `input_boolean`s. Away when none of them is home. |
@@ -55,6 +55,26 @@ The model and planner are in [`model.py`](smart_floor_heating/model.py) and have
 
 - The controller sets the heating group to manual mode (`heat`). That also stops the Homematic heating profile, which would otherwise change the setpoint back.
 - To open, it sets the group's **maximum** temperature. The eTRV-C measures the manifold, which is often 23–25 °C, so a maximum of 25 °C may not open it fully. Set the group's maximum to 30 °C in the Homematic IP app, or set "Valve setpoint to open" higher.
+
+## Time control
+
+Everything here is a `select`, `text` or `time` entity of the room, so it can sit on a dashboard and be changed without opening the settings. What applies, from strongest to weakest:
+
+1. **Preset** on the thermostat: comfort, eco or away hold until you set it back to `schedule`.
+2. **Away**: nobody home (Presence = "Away when nobody is home"), or a calendar event / out-of-office time set to away.
+3. **Eco** from a calendar event or out-of-office time set to eco.
+4. **Comfort schedule**: on = comfort, off = eco. No schedule = comfort.
+
+| Entity | Meaning |
+|---|---|
+| Comfort schedule | Which `schedule` helper gives the comfort times, or none. Edit its times under Settings → Helpers. |
+| Presence | Away when nobody is home, or ignore presence. |
+| Calendar and presence | *Either one*: a calendar event or nobody home each lower the target. *Only when both say away*: calendar events and out-of-office times count only while nobody is home (ahead of time they are assumed right, so the planner can still pre-heat for your return). |
+| Out of office on / from / back home at / means | A fixed weekly time away: days (never, Mon–Fri, Mon–Sat, every day), leave and return time, eco or away. |
+| *Calendar*: during events | One per calendar in Home Assistant: ignore it, eco or away during its events. |
+| *Calendar*: event names | Comma-separated names, whole words, any case, e.g. `FD, S1, GD`. Empty: every event of that calendar. |
+
+Calendar events and out-of-office times are known ahead of time, so the planner lets the room cool before you leave and heats it so it is warm when you are back. A new calendar shows up after reloading the integration.
 
 ## Entities per room
 

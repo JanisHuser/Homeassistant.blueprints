@@ -28,7 +28,7 @@
           "room_sensors": "Temperature sensors and room thermostats in the room itself, not the valve heads on the manifold. With several, their average is used.",
           "weather": "For the outdoor and sun forecast.",
           "outdoor_sensor": "Optional, used instead of the weather's current temperature.",
-          "schedule": "A schedule helper: on means comfort, off means eco. Without one the room stays at comfort.",
+          "schedule": "A schedule helper: on means comfort, off means eco. Can be changed later on the room's settings entities.",
           "window_delay": "Close the valve only after a window has been open this long. Short airing doesn't matter to a floor.",
           "presence": "People or trackers. When nobody is home for the away delay, the room drops to the away temperature.",
           "savings": "How much the planner weighs energy against being exactly on target, and how far it lets the room cool outside comfort time.",
@@ -49,13 +49,12 @@
     "step": {
       "init": {
         "title": "Room settings",
-        "description": "Temperatures are set with the room's number entities.",
+        "description": "Temperatures, schedule, calendars and out-of-office times are set with the room's entities (for example on the Heizung dashboard).",
         "data": {
           "valves": "Valves",
           "room_sensors": "Room temperature sensors and thermostats",
           "weather": "Weather",
           "outdoor_sensor": "Outdoor temperature sensor",
-          "schedule": "Schedule",
           "windows": "Windows and doors",
           "window_delay": "Window delay",
           "presence": "Presence",
@@ -70,7 +69,6 @@
           "room_sensors": "Temperature sensors and room thermostats in the room itself, not the valve heads on the manifold. With several, their average is used.",
           "weather": "For the outdoor and sun forecast.",
           "outdoor_sensor": "Optional, used instead of the weather's current temperature.",
-          "schedule": "A schedule helper: on means comfort, off means eco. Without one the room stays at comfort.",
           "window_delay": "Close the valve only after a window has been open this long. Short airing doesn't matter to a floor.",
           "presence": "People or trackers. When nobody is home for the away delay, the room drops to the away temperature.",
           "savings": "How much the planner weighs energy against being exactly on target, and how far it lets the room cool outside comfort time.",
@@ -145,6 +143,65 @@
       },
       "model_error": {
         "name": "Model error (6 h ahead)"
+      }
+    },
+    "select": {
+      "schedule": {
+        "name": "Comfort schedule",
+        "state": {
+          "none": "None (always comfort)"
+        }
+      },
+      "presence": {
+        "name": "Presence",
+        "state": {
+          "on": "Away when nobody is home",
+          "off": "Ignore"
+        }
+      },
+      "combine": {
+        "name": "Calendar and presence",
+        "state": {
+          "either": "Either one",
+          "both": "Only when both say away"
+        }
+      },
+      "office_days": {
+        "name": "Out of office on",
+        "state": {
+          "off": "Never",
+          "mon_fri": "Mon–Fri",
+          "mon_sat": "Mon–Sat",
+          "every_day": "Every day"
+        }
+      },
+      "office_target": {
+        "name": "Out of office means",
+        "state": {
+          "eco": "Eco",
+          "away": "Away"
+        }
+      },
+      "calendar_target": {
+        "name": "{calendar}: during events",
+        "state": {
+          "off": "Ignore calendar",
+          "eco": "Eco",
+          "away": "Away"
+        }
+      }
+    },
+    "text": {
+      "calendar_words": {
+        "name": "{calendar}: event names"
+      }
+    },
+    "time": {
+      "office_leave": {
+        "name": "Out of office from"
+      },
+      "office_back": {
+        "name": "Back home at"
       }
     }
   }

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 import logging
 import math
+import re
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -54,6 +55,13 @@ from .const import (
     PRESET_COMFORT,
     PRESET_ECO,
     PRESET_SCHEDULE,
+    CALENDAR_OFF,
+    OFFICE_DAYS,
+    OFFICE_DEFAULT,
+    COMBINE_BOTH,
+    COMBINE_EITHER,
+    PRESENCE_OFF,
+    PRESENCE_ON,
     RETENTION_DROP_K,
     RETENTION_HORIZON_H,
     SAVE_DELAY_S,
@@ -99,6 +107,14 @@ class RoomController:
         self.model = RoomModel()
         self.preset = PRESET_SCHEDULE
         self.hvac_on = True
+        # Time control, editable from the dashboard (select / text entities).
+        self.rules: dict[str, Any] = {
+            "schedule": self.conf.get(CONF_SCHEDULE),
+            "presence": PRESENCE_ON if self.conf.get(CONF_PRESENCE) else PRESENCE_OFF,
+            "combine": COMBINE_EITHER,
+            "calendars": {},  # calendar entity -> {"words": str, "target": str}
+            "office": dict(OFFICE_DEFAULT),
+        }
         self.targets = {
             TARGET_COMFORT: float(self.conf.get(CONF_COMFORT_TEMP, DEFAULT_COMFORT_TEMP)),
             TARGET_ECO: float(self.conf.get(CONF_ECO_TEMP, DEFAULT_ECO_TEMP)),
@@ -138,6 +154,8 @@ class RoomController:
         self._forecast: list[tuple[datetime, float | None, float | None]] = []
         self._forecast_at: datetime | None = None
         self._schedule: dict | None = None
+        # Matching calendar events in the horizon: (start, end, target, summary)
+        self._events: list[tuple[datetime, datetime, str, str]] = []
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
         self._replanning = False
@@ -150,6 +168,9 @@ class RoomController:
         self.preset = stored.get("preset", PRESET_SCHEDULE)
         self.hvac_on = stored.get("hvac_on", True)
         self.targets.update(stored.get("targets", {}))
+        if "rules" in stored:
+            self.rules.update(stored["rules"])
+            self.rules["office"] = {**OFFICE_DEFAULT, **self.rules.get("office", {})}
 
         now = dt_util.now()
         self._sample(now)
@@ -169,6 +190,7 @@ class RoomController:
             "preset": self.preset,
             "hvac_on": self.hvac_on,
             "targets": self.targets,
+            "rules": self.rules,
         }
 
     def _save(self) -> None:
@@ -201,6 +223,37 @@ class RoomController:
     async def async_set_preset(self, preset: str) -> None:
         self.preset = preset
         await self._changed()
+
+    def calendar_rule(self, calendar: str) -> dict[str, str]:
+        return self.rules["calendars"].get(calendar) or {"words": "", "target": CALENDAR_OFF}
+
+    async def async_set_rule(self, key: str, value: Any) -> None:
+        self.rules[key] = value
+        await self._changed()
+
+    async def async_set_office(self, **changes: str) -> None:
+        self.rules["office"] = {**self.rules["office"], **changes}
+        await self._changed()
+
+    async def async_set_calendar_rule(self, calendar: str, **changes: str) -> None:
+        rule = dict(self.calendar_rule(calendar))
+        rule.update(changes)
+        self.rules["calendars"][calendar] = rule
+        await self._changed()
+
+    @property
+    def active_event(self) -> str | None:
+        now = dt_util.now()
+        for start, end, _, summary in self._events:
+            if start <= now < end:
+                return summary
+        return None
+
+    @property
+    def next_event(self) -> tuple[datetime, str] | None:
+        now = dt_util.now()
+        upcoming = [(start, summary) for start, _, _, summary in self._events if start > now]
+        return min(upcoming) if upcoming else None
 
     async def async_set_hvac_on(self, on: bool) -> None:
         self.hvac_on = on
@@ -253,7 +306,7 @@ class RoomController:
 
         # Presence
         presence = self.conf.get(CONF_PRESENCE, [])
-        if presence:
+        if presence and self.rules["presence"] == PRESENCE_ON:
             home = any(_is_home(self._state(e)) for e in presence)
             if home:
                 self._away_since = None
@@ -382,11 +435,33 @@ class RoomController:
             return TARGET_COMFORT
         if self.preset == PRESET_ECO:
             return TARGET_ECO
-        if self.preset == PRESET_AWAY or self.away:
+        if self.preset == PRESET_AWAY:
             return TARGET_AWAY
-        if not self.conf.get(CONF_SCHEDULE):
+        event = self._event_target(when)
+        presence_on = self.rules["presence"] == PRESENCE_ON
+        if self.rules["combine"] == COMBINE_BOTH and presence_on:
+            # Calendar counts only while nobody is home. Ahead of time, assume
+            # the calendar is right.
+            near_now = when <= dt_util.now() + timedelta(minutes=STEP_MIN)
+            if event and (self.away or not near_now):
+                return event
+        else:
+            if presence_on and self.away:
+                return TARGET_AWAY
+            if event:
+                return event
+        if not self.rules["schedule"]:
             return TARGET_COMFORT
         return TARGET_COMFORT if self._schedule_on(when) else TARGET_ECO
+
+    def _event_target(self, when: datetime) -> str | None:
+        """Target from calendar events at that time; away wins over eco."""
+        hits = {target for start, end, target, _ in self._events if start <= when < end}
+        if (office := self._office_target(when)) is not None:
+            hits.add(office)
+        if TARGET_AWAY in hits:
+            return TARGET_AWAY
+        return TARGET_ECO if TARGET_ECO in hits else None
 
     def _schedule_on(self, when: datetime) -> bool:
         local = dt_util.as_local(when)
@@ -397,7 +472,7 @@ class RoomController:
                     return True
             return False
         # Fallback: the entity's state until its next change, then the opposite.
-        state = self._state(self.conf.get(CONF_SCHEDULE))
+        state = self._state(self.rules["schedule"])
         if state is None:
             return True
         on = state.state == "on"
@@ -409,8 +484,10 @@ class RoomController:
         return on
 
     async def _refresh_inputs(self, now: datetime) -> None:
-        schedule = self.conf.get(CONF_SCHEDULE)
-        if schedule:
+        schedule = self.rules["schedule"]
+        if not schedule:
+            self._schedule = None
+        else:
             try:
                 resp = await self.hass.services.async_call(
                     "schedule",
@@ -423,6 +500,8 @@ class RoomController:
             except (HomeAssistantError, ValueError) as err:
                 _LOGGER.debug("No schedule from %s: %s", schedule, err)
                 self._schedule = None
+
+        await self._refresh_events(now)
 
         weather = self.conf.get(CONF_WEATHER)
         if weather and (
@@ -448,6 +527,51 @@ class RoomController:
                 self._forecast_at = now
             except (HomeAssistantError, ValueError) as err:
                 _LOGGER.debug("No forecast from %s: %s", weather, err)
+
+    def _office_target(self, when: datetime) -> str | None:
+        """The fixed out-of-office times: days, leave, back."""
+        office = self.rules["office"]
+        days = OFFICE_DAYS.get(office.get("days", "off"), ())
+        local = dt_util.as_local(when)
+        if local.weekday() not in days:
+            return None
+        leave, back = _as_time(office.get("leave")), _as_time(office.get("back"))
+        if leave is None or back is None or not leave <= local.time() < back:
+            return None
+        return office.get("target", TARGET_ECO)
+
+    async def _refresh_events(self, now: datetime) -> None:
+        events = []
+        end = now + timedelta(hours=RETENTION_HORIZON_H)
+        for calendar, rule in self.rules["calendars"].items():
+            if rule.get("target", CALENDAR_OFF) == CALENDAR_OFF:
+                continue
+            if self._state(calendar) is None:
+                continue
+            words = [w.strip().lower() for w in rule.get("words", "").split(",") if w.strip()]
+            try:
+                resp = await self.hass.services.async_call(
+                    "calendar",
+                    "get_events",
+                    {
+                        "entity_id": calendar,
+                        "start_date_time": (now - timedelta(days=1)).isoformat(),
+                        "end_date_time": end.isoformat(),
+                    },
+                    blocking=True,
+                    return_response=True,
+                )
+            except (HomeAssistantError, ValueError) as err:
+                _LOGGER.debug("No events from %s: %s", calendar, err)
+                continue
+            for event in ((resp or {}).get(calendar) or {}).get("events", []):
+                summary = str(event.get("summary") or "")
+                if not _matches(summary, words):
+                    continue
+                start, stop = _event_time(event.get("start")), _event_time(event.get("end"))
+                if start is not None and stop is not None and stop > now:
+                    events.append((start, stop, rule["target"], summary))
+        self._events = sorted(events)
 
     def _forecast_at_time(self, when: datetime) -> tuple[float | None, float | None]:
         if not self._forecast:
@@ -606,6 +730,26 @@ def _is_home(state: State | None) -> bool:
     if state.domain == "zone":
         return (_float(state.state) or 0) > 0
     return state.state in HOME_STATES
+
+
+def _matches(summary: str, words: list[str]) -> bool:
+    """Empty word list: every event. Otherwise a whole-word match, any case."""
+    if not words:
+        return True
+    text = summary.lower()
+    return any(re.search(rf"(?<!\w){re.escape(w)}(?!\w)", text) for w in words)
+
+
+def _event_time(value: Any) -> datetime | None:
+    """Calendar start/end: a datetime, or a date for all-day events."""
+    if isinstance(value, datetime):
+        return dt_util.as_local(value)
+    text = str(value or "")
+    if "T" in text or " " in text:
+        parsed = dt_util.parse_datetime(text)
+        return dt_util.as_local(parsed) if parsed else None
+    day = dt_util.parse_date(text)
+    return dt_util.start_of_local_day(day) if day else None
 
 
 def _as_time(value: Any) -> time | None:
