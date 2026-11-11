@@ -10,7 +10,7 @@ from homeassistant.components.climate import (
     HVACAction,
     HVACMode,
 )
-from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -32,14 +32,14 @@ class RoomClimate(RoomEntity, ClimateEntity):
     _attr_translation_key = "room"
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
     _attr_preset_modes = PRESETS
+    # No TARGET_TEMPERATURE: the target comes from the schedule, calendars and
+    # presence, and is set with the room's number entities, not from a card.
     _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE
-        | ClimateEntityFeature.PRESET_MODE
+        ClimateEntityFeature.PRESET_MODE
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.TURN_OFF
     )
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_target_temperature_step = 0.5
     _attr_min_temp = TEMP_MIN
     _attr_max_temp = TEMP_MAX
 
@@ -49,10 +49,6 @@ class RoomClimate(RoomEntity, ClimateEntity):
     @property
     def current_temperature(self) -> float | None:
         return self.controller.room_temp
-
-    @property
-    def target_temperature(self) -> float | None:
-        return self.controller.target_temp
 
     @property
     def hvac_mode(self) -> HVACMode:
@@ -73,6 +69,7 @@ class RoomClimate(RoomEntity, ClimateEntity):
         c = self.controller
         return {
             "target": c.active_target,
+            "target_temperature": c.target_temp,
             "window_open": c.window_open,
             "window_holds_valve": c.window_holds_valve,
             "away": c.away,
@@ -81,10 +78,6 @@ class RoomClimate(RoomEntity, ClimateEntity):
             "next_calendar_event": c.next_event[1] if c.next_event else None,
             "next_calendar_event_start": c.next_event[0].isoformat() if c.next_event else None,
         }
-
-    async def async_set_temperature(self, **kwargs: Any) -> None:
-        if (value := kwargs.get(ATTR_TEMPERATURE)) is not None:
-            await self.controller.async_set_target(self.controller.active_target, float(value))
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         await self.controller.async_set_hvac_on(hvac_mode != HVACMode.OFF)

@@ -42,7 +42,7 @@
       "missing_entities": "Pick at least one valve and one room sensor."
     },
     "abort": {
-      "already_configured": "A room with this name already exists."
+      "already_configured": "This already exists."
     }
   },
   "options": {
@@ -120,6 +120,12 @@
       },
       "away_temp": {
         "name": "Away temperature"
+      },
+      "long_away_temp": {
+        "name": "Long away temperature"
+      },
+      "long_away_hours": {
+        "name": "Long away after"
       }
     },
     "sensor": {
@@ -143,6 +149,9 @@
       },
       "model_error": {
         "name": "Model error (6 h ahead)"
+      },
+      "target_temperature": {
+        "name": "Target temperature"
       }
     },
     "select": {
@@ -202,6 +211,11 @@
       },
       "office_back": {
         "name": "Back home at"
+      }
+    },
+    "switch": {
+      "follow_calendars": {
+        "name": "Follow calendars"
       }
     }
   }

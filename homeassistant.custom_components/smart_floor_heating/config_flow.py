@@ -12,6 +12,9 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_AWAY_DELAY,
+    CONF_KIND,
+    KIND_SHARED,
+    SHARED_TITLE,
     CONF_AWAY_TEMP,
     CONF_CLOSED_SETPOINT,
     CONF_COMFORT_TEMP,
@@ -183,10 +186,21 @@ class SmartFloorHeatingConfigFlow(ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
+    async def async_step_import(self, data: dict[str, Any]) -> ConfigFlowResult:
+        """The shared calendar entry, created by the integration itself."""
+        await self.async_set_unique_id(KIND_SHARED)
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(title=SHARED_TITLE, data={CONF_KIND: KIND_SHARED})
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
         return SmartFloorHeatingOptionsFlow()
+
+    @classmethod
+    @callback
+    def async_supports_options_flow(cls, config_entry: ConfigEntry) -> bool:
+        return config_entry.data.get(CONF_KIND) != KIND_SHARED
 
 
 class SmartFloorHeatingOptionsFlow(OptionsFlow):

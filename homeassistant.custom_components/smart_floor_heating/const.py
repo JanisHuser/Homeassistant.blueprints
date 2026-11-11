@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 DOMAIN = "smart_floor_heating"
-PLATFORMS = ["climate", "number", "select", "sensor", "text", "time"]
+PLATFORMS = ["climate", "number", "select", "sensor", "switch", "time"]
+SHARED_PLATFORMS = ["select", "text"]
 STORAGE_VERSION = 1
 
 CONF_NAME = "name"
+CONF_KIND = "kind"
+KIND_SHARED = "shared"
+SHARED_TITLE = "Kalender"
 CONF_VALVES = "valves"
 CONF_ROOM_SENSORS = "room_sensors"
 CONF_WEATHER = "weather"
@@ -29,6 +33,8 @@ DEFAULT_AWAY_DELAY_MIN = 60
 DEFAULT_COMFORT_TEMP = 21.5
 DEFAULT_ECO_TEMP = 20.5
 DEFAULT_AWAY_TEMP = 19.5
+DEFAULT_LONG_AWAY_TEMP = 17.0
+DEFAULT_LONG_AWAY_H = 24
 DEFAULT_CYCLE_MIN = 60
 CYCLE_CHOICES_MIN = (30, 60, 90, 120)
 DEFAULT_SAVINGS = "balanced"
@@ -80,6 +86,7 @@ OFFICE_DEFAULT = {"days": "off", "leave": "07:30:00", "back": "17:30:00", "targe
 TARGET_COMFORT = "comfort"
 TARGET_ECO = "eco"
 TARGET_AWAY = "away"
+TARGET_LONG_AWAY = "long_away"
 
 HOME_STATES = {"home", "on"}
 

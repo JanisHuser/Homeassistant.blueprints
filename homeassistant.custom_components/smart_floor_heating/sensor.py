@@ -47,6 +47,16 @@ def _model_attrs(c: RoomController) -> dict[str, Any]:
 
 SENSORS: tuple[RoomSensorDescription, ...] = (
     RoomSensorDescription(
+        key="target_temperature",
+        translation_key="target_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        value=lambda c: c.target_temp,
+        attrs=lambda c: {"target": c.active_target, "calendar_event": c.active_event},
+    ),
+    RoomSensorDescription(
         key="heat_retention",
         translation_key="heat_retention",
         native_unit_of_measurement=UnitOfTime.HOURS,

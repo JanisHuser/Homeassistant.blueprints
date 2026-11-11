@@ -21,6 +21,7 @@ from .const import (
 )
 from .controller import RoomController
 from .entity import RoomEntity
+from .shared import SharedSettings
 
 
 def calendars(hass: HomeAssistant) -> list[tuple[str, str]]:
@@ -41,6 +42,9 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     c = entry.runtime_data
+    if isinstance(c, SharedSettings):
+        async_add_entities(CalendarTargetSelect(c, cal, name) for cal, name in calendars(hass))
+        return
     entities: list[SelectEntity] = [
         ScheduleSelect(c),
         RuleSelect(c, "presence", [PRESENCE_ON, PRESENCE_OFF]),
@@ -48,7 +52,6 @@ async def async_setup_entry(
         OfficeSelect(c, "days", list(OFFICE_DAYS)),
         OfficeSelect(c, "target", OFFICE_TARGETS),
     ]
-    entities += [CalendarTargetSelect(c, cal, name) for cal, name in calendars(hass)]
     async_add_entities(entities)
 
 
@@ -113,8 +116,9 @@ class CalendarTargetSelect(_Base):
     """What a calendar's matching events do: nothing, eco or away."""
 
     _attr_translation_key = "calendar_target"
+    _attr_entity_category = None  # shown on the shared device's main page
 
-    def __init__(self, controller: RoomController, calendar: str, name: str) -> None:
+    def __init__(self, controller: SharedSettings, calendar: str, name: str) -> None:
         super().__init__(controller, f"calendar_{calendar}_target")
         self.calendar = calendar
         self._attr_translation_placeholders = {"calendar": name}

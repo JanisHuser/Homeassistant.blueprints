@@ -69,16 +69,21 @@ from .const import (
     STORAGE_VERSION,
     SUN_CLOUD_DAMPING,
     TARGET_AWAY,
+    TARGET_LONG_AWAY,
+    DEFAULT_LONG_AWAY_H,
+    DEFAULT_LONG_AWAY_TEMP,
     TARGET_COMFORT,
     TARGET_ECO,
 )
 from .model import STEP_H, Plan, RoomModel, StepInput
+from .shared import get_shared
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_MIN = int(STEP_H * 60)
 WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 RECOMMAND_AFTER = timedelta(minutes=15)
+STRENGTH = [TARGET_LONG_AWAY, TARGET_AWAY, TARGET_ECO, TARGET_COMFORT]  # strongest first
 UNUSABLE = {STATE_UNAVAILABLE, STATE_UNKNOWN, None, ""}
 
 
@@ -112,13 +117,15 @@ class RoomController:
             "schedule": self.conf.get(CONF_SCHEDULE),
             "presence": PRESENCE_ON if self.conf.get(CONF_PRESENCE) else PRESENCE_OFF,
             "combine": COMBINE_EITHER,
-            "calendars": {},  # calendar entity -> {"words": str, "target": str}
+            "follow_calendars": True,  # the rules themselves are shared, see shared.py
             "office": dict(OFFICE_DEFAULT),
+            "long_away_h": DEFAULT_LONG_AWAY_H,
         }
         self.targets = {
             TARGET_COMFORT: float(self.conf.get(CONF_COMFORT_TEMP, DEFAULT_COMFORT_TEMP)),
             TARGET_ECO: float(self.conf.get(CONF_ECO_TEMP, DEFAULT_ECO_TEMP)),
             TARGET_AWAY: float(self.conf.get(CONF_AWAY_TEMP, DEFAULT_AWAY_TEMP)),
+            TARGET_LONG_AWAY: DEFAULT_LONG_AWAY_TEMP,
         }
 
         self.cycle_min = int(self.conf.get(CONF_CYCLE, DEFAULT_CYCLE_MIN))
@@ -138,6 +145,7 @@ class RoomController:
 
         # Plan and its products
         self.plan: Plan | None = None
+        self.plan_targets: list[float] = []
         self.plan_start: datetime | None = None
         self.duty = 0.0
         self.open_minutes = 0
@@ -170,6 +178,7 @@ class RoomController:
         self.targets.update(stored.get("targets", {}))
         if "rules" in stored:
             self.rules.update(stored["rules"])
+            self.rules.pop("calendars", None)  # moved to the shared entry
             self.rules["office"] = {**OFFICE_DEFAULT, **self.rules.get("office", {})}
 
         now = dt_util.now()
@@ -224,9 +233,6 @@ class RoomController:
         self.preset = preset
         await self._changed()
 
-    def calendar_rule(self, calendar: str) -> dict[str, str]:
-        return self.rules["calendars"].get(calendar) or {"words": "", "target": CALENDAR_OFF}
-
     async def async_set_rule(self, key: str, value: Any) -> None:
         self.rules[key] = value
         await self._changed()
@@ -235,11 +241,10 @@ class RoomController:
         self.rules["office"] = {**self.rules["office"], **changes}
         await self._changed()
 
-    async def async_set_calendar_rule(self, calendar: str, **changes: str) -> None:
-        rule = dict(self.calendar_rule(calendar))
-        rule.update(changes)
-        self.rules["calendars"][calendar] = rule
-        await self._changed()
+    async def async_shared_changed(self) -> None:
+        """The shared calendar rules changed."""
+        if self.rules["follow_calendars"]:
+            await self._changed()
 
     @property
     def active_event(self) -> str | None:
@@ -385,6 +390,7 @@ class RoomController:
                 self.w_setback,
             )
             self.plan, self.plan_start = plan, start
+            self.plan_targets = [step.target for step in steps]
             self.duty = sum(plan.duties[: self.steps_per_cycle]) / self.steps_per_cycle
             self.open_minutes = _open_minutes(self.duty, self.cycle_min)
             self.next_heating = self._next_heating(now, start, plan)
@@ -446,19 +452,33 @@ class RoomController:
             if event and (self.away or not near_now):
                 return event
         else:
+            found = [event] if event else []
             if presence_on and self.away:
-                return TARGET_AWAY
-            if event:
-                return event
+                found.append(TARGET_LONG_AWAY if self._long_absence() else TARGET_AWAY)
+            if found:
+                return min(found, key=STRENGTH.index)
         if not self.rules["schedule"]:
             return TARGET_COMFORT
         return TARGET_COMFORT if self._schedule_on(when) else TARGET_ECO
 
+    def _long_absence(self) -> bool:
+        """Nobody home for at least the long-away hours."""
+        return self._away_since is not None and dt_util.now() - self._away_since >= timedelta(
+            hours=float(self.rules["long_away_h"])
+        )
+
     def _event_target(self, when: datetime) -> str | None:
-        """Target from calendar events at that time; away wins over eco."""
-        hits = {target for start, end, target, _ in self._events if start <= when < end}
+        """Target from calendar events at that time: long away, away, eco."""
+        long_away = timedelta(hours=float(self.rules["long_away_h"]))
+        hits = set()
+        for start, end, target, _ in self._events:
+            if start <= when < end:
+                long = target == TARGET_AWAY and end - start >= long_away
+                hits.add(TARGET_LONG_AWAY if long else target)
         if (office := self._office_target(when)) is not None:
             hits.add(office)
+        if TARGET_LONG_AWAY in hits:
+            return TARGET_LONG_AWAY
         if TARGET_AWAY in hits:
             return TARGET_AWAY
         return TARGET_ECO if TARGET_ECO in hits else None
@@ -543,7 +563,11 @@ class RoomController:
     async def _refresh_events(self, now: datetime) -> None:
         events = []
         end = now + timedelta(hours=RETENTION_HORIZON_H)
-        for calendar, rule in self.rules["calendars"].items():
+        shared = get_shared(self.hass)
+        if shared is None or not self.rules["follow_calendars"]:
+            self._events = []
+            return
+        for calendar, rule in shared.rules["calendars"].items():
             if rule.get("target", CALENDAR_OFF) == CALENDAR_OFF:
                 continue
             if self._state(calendar) is None:
@@ -685,6 +709,7 @@ class RoomController:
                     "time": (self.plan_start + timedelta(minutes=STEP_MIN * (i + 1))).isoformat(),
                     "temperature": round(self.plan.temps[i], 2),
                     "valve": round(100 * sum(duties) / len(duties)),
+                    "target": self.plan_targets[i] if i < len(self.plan_targets) else None,
                 }
             )
         return rows

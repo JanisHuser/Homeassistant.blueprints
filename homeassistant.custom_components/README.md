@@ -61,9 +61,10 @@ The model and planner are in [`model.py`](smart_floor_heating/model.py) and have
 Everything here is a `select`, `text` or `time` entity of the room, so it can sit on a dashboard and be changed without opening the settings. What applies, from strongest to weakest:
 
 1. **Preset** on the thermostat: comfort, eco or away hold until you set it back to `schedule`.
-2. **Away**: nobody home (Presence = "Away when nobody is home"), or a calendar event / out-of-office time set to away.
-3. **Eco** from a calendar event or out-of-office time set to eco.
-4. **Comfort schedule**: on = comfort, off = eco. No schedule = comfort.
+2. **Long away**: a calendar event set to away that lasts at least "Long away after" hours (default 24 h, e.g. holidays), or nobody home for that long. Uses the long-away temperature (default 17 °C).
+3. **Away**: nobody home (Presence = "Away when nobody is home"), or a calendar event / out-of-office time set to away.
+4. **Eco** from a calendar event or out-of-office time set to eco.
+5. **Comfort schedule**: on = comfort, off = eco. No schedule = comfort.
 
 | Entity | Meaning |
 |---|---|
@@ -71,24 +72,45 @@ Everything here is a `select`, `text` or `time` entity of the room, so it can si
 | Presence | Away when nobody is home, or ignore presence. |
 | Calendar and presence | *Either one*: a calendar event or nobody home each lower the target. *Only when both say away*: calendar events and out-of-office times count only while nobody is home (ahead of time they are assumed right, so the planner can still pre-heat for your return). |
 | Out of office on / from / back home at / means | A fixed weekly time away: days (never, Mon–Fri, Mon–Sat, every day), leave and return time, eco or away. |
+| Follow calendars | Whether this room uses the shared calendar rules. |
+| Long away after / Long away temperature | When an away period counts as long, and the temperature for it. |
+
+The calendar rules are set once for the whole house, on the **Kalender** entry the integration creates by itself:
+
+| Entity | Meaning |
+|---|---|
 | *Calendar*: during events | One per calendar in Home Assistant: ignore it, eco or away during its events. |
 | *Calendar*: event names | Comma-separated names, whole words, any case, e.g. `FD, S1, GD`. Empty: every event of that calendar. |
 
-Calendar events and out-of-office times are known ahead of time, so the planner lets the room cool before you leave and heats it so it is warm when you are back. A new calendar shows up after reloading the integration.
+Calendar events and out-of-office times are known ahead of time, so the planner lets the room cool before you leave and heats it so it is warm when you are back. A new calendar shows up after reloading the Kalender entry.
 
 ## Entities per room
 
 | Entity | Meaning |
 |---|---|
-| `climate.<room>` | The room's thermostat. Current temperature from the room sensors. Setting the temperature changes the active target (comfort or eco). Presets: `schedule` (follow schedule and presence), `comfort`, `eco`, `away`. Off closes the valves. |
-| `number.<room>_comfort/eco/away_temperature` | The three targets. |
+| `climate.<room>` | The room's thermostat. Current temperature from the room sensors. It has no settable target, on purpose: the target comes from the schedule, calendars and presence. Presets: `schedule` (follow schedule and presence), `comfort`, `eco`, `away`. Off closes the valves. |
+| `sensor.<room>_target_temperature` | The target right now, with which one it is (comfort, eco, away, long away) and the calendar event, if any. |
+| `number.<room>_comfort/eco/away/long_away_temperature` | The targets. |
 | `sensor.<room>_heat_retention` | Hours until the room loses 1 K if the heating stops now, with the forecast weather. The "how long the heat stays" number. |
 | `sensor.<room>_cool_down_time_constant` | Hours for room and screed to lose 63 % of their heat above outdoor. Bigger = better insulated / more mass. |
 | `sensor.<room>_floor_lag` | How long the screed takes to pass heat on (learned). |
 | `sensor.<room>_valve_duty` | Share of the current cycle the valve is open. |
-| `sensor.<room>_temperature_in_3_h` | Predicted room temperature. The `forecast` attribute has the hourly plan for 24 h (temperature and valve %). |
+| `sensor.<room>_temperature_in_3_h` | Predicted room temperature. The `forecast` attribute has the hourly plan for 24 h (temperature, target and valve %). |
 | `sensor.<room>_next_heating` | When the valve opens next. |
 | `sensor.<room>_model_error_6_h_ahead` | How well the model predicts the room 6 h ahead, in K. Attributes: learning status, samples, and all learned values. Below about 0.2 K the model is good. |
+
+## Plan chart
+
+The integration brings its own dashboard card, loaded automatically:
+
+```yaml
+type: custom:smart-floor-heating-plan-card
+entity: sensor.wohnzimmer_temperature_in_3_h
+title: Plan      # optional
+hours: 24        # optional
+```
+
+It draws the predicted room temperature, the target and the planned valve opening for the next 24 h.
 
 ## The first days
 
