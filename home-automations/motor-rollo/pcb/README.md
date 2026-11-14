@@ -2,7 +2,7 @@
 
 One board for the motor Rollo, lying on the sled in [`../rollo.scad`](../rollo.scad). It has an ESP32-H2 chip with a chip antenna, the charger, battery protection, motor driver and a 3.3 V regulator. The goal is the lowest cost at JLCPCB: every part comes from their library, Basic wherever one exists. The cell's spring-plate tab solders straight to it; the motor has two short wires to solder pads, and the cell's far end a plus lead.
 
-**Status:** schematic in [`rollo_board.kicad_sch`](rollo_board.kicad_sch), layout in [`rollo_board.kicad_pcb`](rollo_board.kicad_pcb) with every part placed but **not routed yet** (no tracks; see the list at the end). ERC is clean; DRC has schematic parity and reports only the unrouted connections and the nine thermal vias under U1 that wait for them. **Don't order it yet.** Nothing built or tested on hardware. [`rollo_board.stl`](rollo_board.stl) is the board with its parts for the housings (see below).
+**Status:** schematic in [`rollo_board.kicad_sch`](rollo_board.kicad_sch), layout in [`rollo_board.kicad_pcb`](rollo_board.kicad_pcb), fully routed. ERC and DRC are clean, with schematic parity. **Don't order it yet:** see the list at the end. Nothing built or tested on hardware. [`rollo_board.stl`](rollo_board.stl) is the board with its parts for the housings (see below).
 
 ## Size and where it sits
 
@@ -13,6 +13,8 @@ The board is **48.7 × 17 × 0.8 mm**, the size `rollo.scad` sets with `pcb_l` a
 | 0–3.4 | Nose, outside the aluminium tube | USB-C 2 mm off-centre towards +y, sunk into a 9.24 × 6.7 mm notch in the board; antenna in the −y corner with no copper pour or vias around it |
 | 3.4–44 | Coupler and motor, 0.6 mm below the board | **Top only:** at most 1.3 mm tall within ±7.5 mm, 2 mm within ±6.5 mm (the tube is higher in the middle). The USB-C stands 1.56 mm above the board and 0.8 mm below it, to x = 7.8 |
 | 44–48.7 | Small bay behind the motor | Top as above. Bottom: only the motor's solder pads (J2) |
+
+West of the ESP32-H2, R5/R6 (the 22 Ω USB resistors) sit next to the USB-C at x = 10.3, and the crystal Y1 with L1, C1 and C2 sits south-west of the chip (x ≈ 10, y −1 to −4), between the 3V3 via of pins 30/31 and the antenna line. That order (USB pins north-west, crystal south-west, antenna south) is the only one in which the chip's west pins fan out on two layers without crossings.
 
 The status LED D2 sits on top at x = 36.2, y = +4.7 (2 × 2 mm, 0.84 mm tall), beside the red charge LED D1 at x = 34.1, y = +4.4, so one light window over that spot shows both.
 
@@ -74,9 +76,9 @@ The USB-C faces the wall through an opening in the sled's nose. When the blind i
 - **The XC6206 gives 200 mA.** That covers the H2 (its radio peaks well below that), but it is half what Espressif's generic guideline asks for. If the H2 browns out while transmitting, use a bigger LDO.
 - **Check the USB-C footprint** against the GT-USB-7014C drawing (pad row 6.7–7.8 mm from the edge, legs at ±5.62 mm, 2.1 and 6.1 mm from the edge, notch 9.24 × 6.7 mm). The notch's inner corners come out rounded from the router (about 0.5 mm); the body clears that.
 - **Check the pinouts against the datasheets** of the parts you get: TP4054 (1 CHRG, 2 GND, 3 BAT, 4 VCC, 5 PROG), HJ8205 (1 S1, 2 D, 3 S2, 4 G2, 5 D, 6 G1), AD116 (1 BOUT, 2 GND, 3 BIN, 4 AIN, 5 VCC, 6 AOUT), the crystal (pins 1 and 3 the crystal, 2 and 4 ground) and the antenna (pad 1 feed).
-- **Review the autorouted traces in KiCad,** especially the RF trace, the crystal and the USB pair.
+- **Review the routing in KiCad.** Hand-routed and locked: the USB-C fanout and D+/D− pair (D− crosses under D+ through two vias), CC1/CC2, VBUS, the west side of the ESP32-H2 with the crystal, the antenna line, and the motor outputs AO1/AO2, which run along the bottom and top edges on B.Cu so they don't cut the ground plane through the protection circuit. Freerouting 2.2.4 routed the rest; 12 extra vias stitch the top ground pour to the bottom plane. The bottom plane is still cut by several power traces, so check the ground return around U2/U3/Q1.
+- **The crystal is close to the antenna line.** XTAL_P runs about 0.9 mm from the ANT trace between U1 and C21. Check the RF match and the crystal's frequency on the first boards.
 - **Supply voltage:** the H2 wants 3.0–3.6 V. Below about 3.3 V on the cell the LDO's output drops under that, so the firmware should stop the motor and sleep before then.
 - **Firmware:** read the battery level on GPIO 1. The status LED stays on GPIO 8 as on the Super Mini.
-- **Route it.** The committed layout never had tracks. Freerouting 2.2.4 routes all but the USB-C D+ pair (A6/B6 to R6), VBUS at the doubled A4/B9 pad, XTAL_N and one 3V3 pin of U1, and its USB routing makes long detours: the 22 Ω resistors R5/R6 sit 16 mm from the connector. Move R5/R6 near J1, route the USB pair and the crystal by hand, then autoroute the rest. The F.Cu ground pour then needs stitching vias to the bottom plane. With any pre-routed tracks, Freerouting 2.2.4 hangs in pass 2 here.
 - **D2 at 3.3 V is at the bottom of its range.** The WS2812B-2020-V6 is rated from 3.3 V; the XC6206 gives 3.3 V ± 2 %, and less when the cell drops below about 3.4 V. Check it lights correctly at the lowest cell voltage the firmware allows.
 - **No production files yet.** Export the Gerbers, BOM and positions once the board is reviewed. Order it as 2 layers, 0.8 mm thick, smallest trace 0.15 mm, smallest hole 0.3 mm.
