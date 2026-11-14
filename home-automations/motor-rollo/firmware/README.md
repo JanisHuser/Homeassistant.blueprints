@@ -53,7 +53,7 @@ As for the [valve head](../../diy-valve-head/firmware/README.md#pair): Home Assi
 | 11 | DRV8833 board AIN2 |
 | 4 | DRV8833 board STBY |
 | 9 | BOOT button (on the Super Mini) |
-| 8 | WS2812 status LED (on the Super Mini) |
+| 8 | WS2812 status LED (on the Super Mini; D2 on the rollo board in `../pcb`) |
 
 If you wired it differently, change the pins in menuconfig.
 

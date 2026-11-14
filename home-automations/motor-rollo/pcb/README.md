@@ -2,7 +2,7 @@
 
 One board for the motor Rollo, lying on the sled in [`../rollo.scad`](../rollo.scad). It has an ESP32-H2 chip with a chip antenna, the charger, battery protection, motor driver and a 3.3 V regulator. The goal is the lowest cost at JLCPCB: every part comes from their library, Basic wherever one exists. The cell's spring-plate tab solders straight to it; the motor has two short wires to solder pads, and the cell's far end a plus lead.
 
-**Status:** schematic in [`rollo_board.kicad_sch`](rollo_board.kicad_sch), layout in [`rollo_board.kicad_pcb`](rollo_board.kicad_pcb), autorouted with Freerouting. ERC and DRC are clean, with schematic parity. **Don't order it yet:** see the list at the end. Nothing built or tested on hardware.
+**Status:** schematic in [`rollo_board.kicad_sch`](rollo_board.kicad_sch), layout in [`rollo_board.kicad_pcb`](rollo_board.kicad_pcb) with every part placed but **not routed yet** (no tracks; see the list at the end). ERC is clean; DRC has schematic parity and reports only the unrouted connections and the nine thermal vias under U1 that wait for them. **Don't order it yet.** Nothing built or tested on hardware. [`rollo_board.stl`](rollo_board.stl) is the board with its parts for the housings (see below).
 
 ## Size and where it sits
 
@@ -13,6 +13,8 @@ The board is **48.7 × 17 × 0.8 mm**, the size `rollo.scad` sets with `pcb_l` a
 | 0–3.4 | Nose, outside the aluminium tube | USB-C 2 mm off-centre towards +y, sunk into a 9.24 × 6.7 mm notch in the board; antenna in the −y corner with no copper pour or vias around it |
 | 3.4–44 | Coupler and motor, 0.6 mm below the board | **Top only:** at most 1.3 mm tall within ±7.5 mm, 2 mm within ±6.5 mm (the tube is higher in the middle). The USB-C stands 1.56 mm above the board and 0.8 mm below it, to x = 7.8 |
 | 44–48.7 | Small bay behind the motor | Top as above. Bottom: only the motor's solder pads (J2) |
+
+The status LED D2 sits on top at x = 36.2, y = +4.7 (2 × 2 mm, 0.84 mm tall), beside the red charge LED D1 at x = 34.1, y = +4.4, so one light window over that spot shows both.
 
 The motor's rear face sits at x = 42.2. Two short wires from its tabs come through the window in the sled wall behind it into the bay and are soldered to J2's pads (M1, M2) on the board's underside at x = 45; swapping them reverses the motor, as does `ROLLO_REVERSE` in the firmware. The spring-plate tab (cell minus) lies on J3's big pad at the rear edge; the plus lead from the button plate goes to J4 beside it.
 
@@ -32,14 +34,21 @@ All parts are JLCPCB/LCSC parts; the LCSC number is in each symbol's and footpri
 | Motor driver | AD116 (SOT-23-6) | C7463412 | E | 1.1 A, 1.8–6 V, standby under 10 µA. $0.05 instead of $2 for the DRV8833 |
 | USB-C | G-Switch GT-USB-7014C, mid-mount (sinks 1.6 mm) | C963373 | E | 5.1 kΩ on CC1/CC2, 22 Ω in D+/D−. Footprint drawn from the datasheet's recommended layout; the notch is part of the board outline |
 | Button | TS-1088-AR02016, 3.9 × 3 × 2 mm | C720477 | B | BOOT (GPIO 9) |
+| Status LED | Worldsemi WS2812B-2020-V6 (D2), 2 × 2 × 0.84 mm, 100 nF beside it (C20) | C52917434 | E | WS2812 protocol on GPIO 8, from 3V3. Rated 3.3–5.3 V, under 1 µA with the LEDs off, so it needs no supply switch. Its input leaves GPIO 8's pull-up working |
 | Passives | 0402 resistors and capacitors, 10 µF 0603 | C25744, C25741, C26083, C25882, C11702, C25076, C25905, C25092, C17168, C1525, C52923, C1576, C19702 | B (6.8 pF and 2.4 kΩ: P) | |
 | Not assembled | J2 motor pads (underside), J3/J4 cell pads | | | Bare copper, soldered by hand |
 
-**Silkscreen:** labels at everything soldered by hand: M1/M2 on the underside, BAT+/BAT−, and BOOT. Reference designators are on the fab layers only; the board is too small for them.
+**Silkscreen:** labels at everything soldered by hand: M1/M2 on the underside, BAT+/BAT−, and BOOT. Reference designators are on the fab layers only; the board is too small for them. D2 has no silkscreen outline (it would overlap D1 and R15); its footprint is a copy of KiCad's `LED_WS2812B-2020_PLCC4_2.0x2.0mm` in `rollo_board.pretty`, whose pads match the V6 datasheet.
 
-**3D models:** KiCad 10 ships no model for the ESP32-H2's QFN footprint, so the board uses the same-size QFN model. The antenna and the USB-C have simple block models in `rollo_board.3dshapes`.
+**3D models:** KiCad 10 ships no model for the ESP32-H2's QFN footprint, so the board uses the same-size QFN model. The antenna, the USB-C and D2 have simple block models in `rollo_board.3dshapes`: `.wrl` for the 3D viewer and `.step` boxes of the same shape for the STL export (written by hand, since KiCad's STL export only takes STEP).
 
-**Setup fees:** 8 Extended part types (ESP32-H2, crystal, antenna, two inductors, DW01A, AD116, USB-C). Every other part is Basic or Preferred.
+**STL:** `rollo_board.stl` is the board with all parts, in mm, origin at the USB-C edge on the centre line: x along the board, +y the side away from the antenna, z = 0 the board's underside (top at 0.8). The USB-C reaches z = −0.8 and 2.36. Re-export it after changing the layout:
+
+```bash
+/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb export stl --subst-models --user-origin 100x100mm -f -o rollo_board.stl rollo_board.kicad_pcb
+```
+
+**Setup fees:** 9 Extended part types (ESP32-H2, crystal, antenna, two inductors, DW01A, AD116, USB-C, status LED). Every other part is Basic or Preferred.
 
 ## Charging
 
@@ -52,7 +61,7 @@ The USB-C faces the wall through an opening in the sled's nose. When the blind i
 | 10, 11 | AD116 AIN, BIN | As AIN1/AIN2 in `firmware/main/board.h`. 100 kΩ pull-downs keep the motor off during boot. Both low: off, both high: brake |
 | 1 | Battery level | ADC1_CH0. The firmware doesn't read it yet |
 | 9 | BOOT button | Strapping pin, 10 kΩ pull-up |
-| 8 | Pull-up only | Strapping pin; high is needed for download mode. No status LED on this board |
+| 8 | Status LED D2 (WS2812) | Strapping pin with a 10 kΩ pull-up; high is needed for download mode. The LED's input draws under 1 µA, so the pull-up still wins |
 | 26, 27 | USB D−, D+ | |
 | 0, 4, 23, 24 | Free | The AD116 has no sleep or fault pin. The firmware's sleep pin (GPIO 4) now drives nothing, which is harmless |
 
@@ -67,5 +76,7 @@ The USB-C faces the wall through an opening in the sled's nose. When the blind i
 - **Check the pinouts against the datasheets** of the parts you get: TP4054 (1 CHRG, 2 GND, 3 BAT, 4 VCC, 5 PROG), HJ8205 (1 S1, 2 D, 3 S2, 4 G2, 5 D, 6 G1), AD116 (1 BOUT, 2 GND, 3 BIN, 4 AIN, 5 VCC, 6 AOUT), the crystal (pins 1 and 3 the crystal, 2 and 4 ground) and the antenna (pad 1 feed).
 - **Review the autorouted traces in KiCad,** especially the RF trace, the crystal and the USB pair.
 - **Supply voltage:** the H2 wants 3.0–3.6 V. Below about 3.3 V on the cell the LDO's output drops under that, so the firmware should stop the motor and sleep before then.
-- **Firmware:** read the battery level on GPIO 1, and drop the WS2812 status LED (this board has none).
+- **Firmware:** read the battery level on GPIO 1. The status LED stays on GPIO 8 as on the Super Mini.
+- **Route it.** The committed layout never had tracks. Freerouting 2.2.4 routes all but the USB-C D+ pair (A6/B6 to R6), VBUS at the doubled A4/B9 pad, XTAL_N and one 3V3 pin of U1, and its USB routing makes long detours: the 22 Ω resistors R5/R6 sit 16 mm from the connector. Move R5/R6 near J1, route the USB pair and the crystal by hand, then autoroute the rest. The F.Cu ground pour then needs stitching vias to the bottom plane. With any pre-routed tracks, Freerouting 2.2.4 hangs in pass 2 here.
+- **D2 at 3.3 V is at the bottom of its range.** The WS2812B-2020-V6 is rated from 3.3 V; the XC6206 gives 3.3 V ± 2 %, and less when the cell drops below about 3.4 V. Check it lights correctly at the lowest cell voltage the firmware allows.
 - **No production files yet.** Export the Gerbers, BOM and positions once the board is reviewed. Order it as 2 layers, 0.8 mm thick, smallest trace 0.15 mm, smallest hole 0.3 mm.

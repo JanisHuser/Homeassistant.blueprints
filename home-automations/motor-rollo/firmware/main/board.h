@@ -16,7 +16,7 @@
 #define PIN_MOTOR_IN1   static_cast<gpio_num_t>(CONFIG_ROLLO_PIN_IN1)    // -> DRV8833 AIN1
 #define PIN_MOTOR_IN2   static_cast<gpio_num_t>(CONFIG_ROLLO_PIN_IN2)    // -> DRV8833 AIN2
 #define PIN_MOTOR_SLEEP static_cast<gpio_num_t>(CONFIG_ROLLO_PIN_SLEEP)  // -> DRV8833 STBY (high = on)
-#define PIN_RGB_LED     GPIO_NUM_8   // WS2812 status LED of the Super Mini (main/led.cpp)
+#define PIN_RGB_LED     GPIO_NUM_8   // WS2812 status LED: the Super Mini's, or D2 on the rollo board (main/led.cpp)
 #define PIN_BUTTON      GPIO_NUM_9   // BOOT button
 
 constexpr uint32_t GPIO_LEVEL_LOW = 0;
