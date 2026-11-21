@@ -102,6 +102,9 @@ class _Bucket:
     ticks: int = 0
     open_ticks: int = 0
     learn_ok: bool = True
+    # Started mid-step (after a restart or reload): too short to learn from,
+    # but not a sensor problem either.
+    partial: bool = False
 
 
 class RoomController:
@@ -156,7 +159,7 @@ class RoomController:
 
         self.valve_open: bool | None = None
         self._last_command: datetime | None = None
-        self._bucket = _Bucket()
+        self._bucket = _Bucket(partial=True)
         self._window_since: datetime | None = None
         self._window_closed_at: datetime | None = None
         self._away_since: datetime | None = None
@@ -340,6 +343,10 @@ class RoomController:
             self.plan is None and self.hvac_on and self.room_temp is not None
         ):
             await self._replan(now)
+        elif self.plan is not None and self.plan_start is not None:
+            # Keep "next heating" current between replans: "now" while the
+            # valve's share of the cycle runs, the next cycle once it is over.
+            self.next_heating = self._next_heating(now, self.plan_start, self.plan)
         await self._apply_valve(now)
         if self.valve_open:
             self._bucket.open_ticks += 1
@@ -403,7 +410,8 @@ class RoomController:
         enough = b.ticks and b.room_n >= MIN_STEP_COVERAGE * STEP_MIN and b.out_n > 0
         if not enough:
             self.model.forget_last()
-            self.learning_status = "paused: missing sensor data"
+            if not b.partial:
+                self.learning_status = "paused: missing sensor data"
             return
         self.model.observe(
             room=b.room_sum / b.room_n,
@@ -474,8 +482,9 @@ class RoomController:
         spc = self.steps_per_cycle
         for idx in range(spc, len(plan.duties), spc):
             duty = sum(plan.duties[idx : idx + spc]) / spc
-            if _open_minutes(duty, self.cycle_min):
-                return start + timedelta(minutes=STEP_MIN * idx)
+            when = start + timedelta(minutes=STEP_MIN * idx)
+            if when > now and _open_minutes(duty, self.cycle_min):
+                return when
         return None
 
     def _horizon(self, start: datetime, hours: int) -> list[StepInput]:
