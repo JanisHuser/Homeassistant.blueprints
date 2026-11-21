@@ -1,1 +1,1 @@
-# Smart PCB (ESP32-H2), or an ESP32-H2 dev board wired the same way (pins in components/smart_pcb/board.h)
+# Smart PCB (ESP32-H2), or an ESP32-H2 dev board wired the same way (pins in common/include/board.h)

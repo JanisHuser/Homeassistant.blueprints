@@ -10,8 +10,8 @@ Runs on the smart PCB (ESP32-H2) in the Rollo, with an N20 motor **without encod
 - **Virtual fully down.** If the blind should never go all the way down, set `ROLLO_VIRTUAL_MAX_PERCENT` (e.g. 80). Close then stops at 80 % of the full height, and Home Assistant's 0–100 % spans only that range: 50 % is 40 % of the full height. The travel times stay those of the full height, and the saved position is of the full height too, so changing the setting doesn't lose it; a blind standing below the new fully down shows as closed and moves up from where it really is.
 - **Motor direction over Matter.** If open and close run the wrong way, set the MotorDirectionReversed bit (bit 0) of the Window Covering **Mode** attribute, for example with chip-tool: `chip-tool windowcovering write mode 1 <node-id> 1` (0 sets it back). It is kept across restarts, so no reflashing. The blind doesn't move: a running motor stops, and the position is mirrored, because whatever it thought was up so far was down. `ROLLO_REVERSE` in menuconfig does the same at build time; the two add up.
 - **Drift.** Timing errors add up over many moves. If the bottom bar stops against the head and the motor can stall there without harm, set `ROLLO_TOP_OVERRUN_MS` (e.g. 1000). Every "fully up" then runs that much longer into the stop and resets the position. With 0 (the default) nothing corrects the drift. If the blind gets out of step, jog it to the top and switch on set fully up.
-- **No battery level yet:** the smart PCB has the divider, but the Rollo doesn't report it (the valve head does, with `device_add_battery()`). The board's protection cuts the cell off when it is empty. Recharge when the blind gets slow.
 - **Identify** only blinks the LED. It doesn't move the blind, which would cost position accuracy.
+- **Endpoints 6 and 7: motor diagnostics** (forward / backward), shared by every product: see the [firmware README](../../README.md#what-every-product-does).
 
 ## Settings
 

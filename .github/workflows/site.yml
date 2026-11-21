@@ -26,7 +26,7 @@ jobs:
         run: |
           tags=$(gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName')
           # smart PCB products, and standalone home-automations/<project>/firmware projects
-          projects=$(ls home-automations/smart-pcb/firmware/products; for f in home-automations/*/firmware/CMakeLists.txt; do
+          projects=$(for f in home-automations/smart-pcb/firmware/products/*/product.cmake; do basename "$(dirname "$f")"; done; for f in home-automations/*/firmware/CMakeLists.txt; do
             p=$(basename "$(dirname "$(dirname "$f")")"); [ "$p" = smart-pcb ] || echo "$p"; done)
           for project in $projects; do
             tag=$(grep -m1 -E "^$project-[0-9]+\.[0-9]+\.[0-9]+$" <<<"$tags" || true)

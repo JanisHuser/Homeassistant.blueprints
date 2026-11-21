@@ -1,5 +1,7 @@
 # Matter-over-Thread firmware for every device on the smart PCB (ESP32-H2, DRV8833, 18650 charger).
-# One ESP-IDF project, one image per product: pick it with -DPRODUCT=<folder in products/>, e.g.
+# One ESP-IDF project and one app_main (main/main.cpp), one image per product: -DPRODUCT=<folder in
+# products/> takes that product's sdkconfig.defaults, which sets CONFIG_PRODUCT_* and so
+# picks its Product implementation (the code in the same folder). For example:
 #   idf.py -DPRODUCT=diy-valve-head -DIDF_TARGET=esp32h2 -B build/diy-valve-head-esp32h2 build
 # Build inside the esp-matter container, see README.md.
 cmake_minimum_required(VERSION 3.5)
@@ -11,7 +13,8 @@ endif()
 set(PRODUCT "" CACHE STRING "Product to build: a folder in products/")
 set(PRODUCT_DIR "${CMAKE_CURRENT_LIST_DIR}/products/${PRODUCT}")
 if(PRODUCT STREQUAL "" OR NOT EXISTS "${PRODUCT_DIR}/product.cmake")
-    file(GLOB products RELATIVE "${CMAKE_CURRENT_LIST_DIR}/products" "${CMAKE_CURRENT_LIST_DIR}/products/*")
+    file(GLOB products RELATIVE "${CMAKE_CURRENT_LIST_DIR}/products" "${CMAKE_CURRENT_LIST_DIR}/products/*/product.cmake")
+    list(TRANSFORM products REPLACE "/product.cmake$" "")
     message(FATAL_ERROR "Set -DPRODUCT to one of: ${products}")
 endif()
 # PROJECT_NAME_OF_PRODUCT, PROJECT_VER and PROJECT_VER_NUMBER of this product
@@ -27,11 +30,12 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # Not examples/common: its app_reset needs the button driver from device_hal, which this
 # board doesn't use. The components take only the header-only utils from there.
-# The product folder is itself a component (its app_main and endpoints); components/smart_pcb is shared.
+# common/ (the same for every product) and products/ (one folder per product) are components too.
 set(EXTRA_COMPONENT_DIRS
     "${MATTER_SDK_PATH}/config/esp32/components"
     "${ESP_MATTER_PATH}/components"
-    "${PRODUCT_DIR}")
+    "${CMAKE_CURRENT_LIST_DIR}/common"
+    "${CMAKE_CURRENT_LIST_DIR}/products")
 
 project(${PROJECT_NAME_OF_PRODUCT})
 

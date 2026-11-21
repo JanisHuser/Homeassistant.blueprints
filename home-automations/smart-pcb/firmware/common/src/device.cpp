@@ -16,6 +16,7 @@
 #include <platform/ESP32/OpenthreadLauncher.h>
 #include <app/server/Server.h>
 #include <app/icd/server/ICDNotifier.h>
+#include <app-common/zap-generated/attributes/Accessors.h>
 
 #include <button_gpio.h>
 #include <iot_button.h>
@@ -36,7 +37,7 @@ void device_schedule(void (*fn)(intptr_t), intptr_t arg)
     chip::DeviceLayer::PlatformMgr().ScheduleWork(fn, arg);
 }
 
-/* ---- Battery (Power Source cluster) ---- */
+/* ---- Battery (Power Source cluster on the root endpoint: it powers the whole device) ---- */
 
 /** 3.3 V is empty under the motor's load, 4.15 V is full. Matter reports in half percent. */
 static constexpr int BATTERY_EMPTY_MV = 3300_mV;
@@ -72,7 +73,7 @@ static void report_battery(intptr_t mv)
     attribute::update(battery_endpoint_id, PowerSource::Id, PowerSource::Attributes::BatChargeLevel::Id, &v);
 }
 
-void device_report_battery()
+static void read_battery()
 {
     if (battery_endpoint_id != NO_ENDPOINT) {
         device_schedule(report_battery, board_battery_mv());
@@ -81,22 +82,30 @@ void device_report_battery()
 
 static void battery_timer_cb(void *)
 {
-    device_report_battery();
+    read_battery();
 }
 
-void device_add_battery(endpoint_t *endpoint, const char *description)
+static constexpr uint16_t ROOT_ENDPOINT_ID = 0;
+static constexpr const char *BATTERY_DESCRIPTION = "18650";
+
+static void battery_create(node_t *node)
 {
+    endpoint_t *ep = endpoint::get(node, ROOT_ENDPOINT_ID);
+    ABORT_APP_ON_FAILURE(ep != nullptr, ESP_LOGE(TAG, "No root endpoint"));
+    const char *description = BATTERY_DESCRIPTION;
     cluster::power_source::config_t ps_config;
     ps_config.status = chip::to_underlying(PowerSource::PowerSourceStatusEnum::kActive);
     strlcpy(ps_config.description, description, sizeof(ps_config.description));
     ps_config.feature_flags = cluster::power_source::feature::battery::get_id() | cluster::power_source::feature::rechargeable::get_id();
-    cluster_t *ps = cluster::power_source::create(endpoint, &ps_config, CLUSTER_FLAG_SERVER);
+    cluster_t *ps = cluster::power_source::create(ep, &ps_config, CLUSTER_FLAG_SERVER);
     ABORT_APP_ON_FAILURE(ps != nullptr, ESP_LOGE(TAG, "Failed to create power source cluster"));
     cluster::power_source::attribute::create_bat_voltage(ps, nullable<uint32_t>(), nullable<uint32_t>(static_cast<uint32_t>(BATTERY_MIN_MV)),
                                                          nullable<uint32_t>(static_cast<uint32_t>(BATTERY_MAX_MV)));
     cluster::power_source::attribute::create_bat_percent_remaining(ps, nullable<uint8_t>(), nullable<uint8_t>(BATTERY_EMPTY_HALF_PCT),
                                                                    nullable<uint8_t>(BATTERY_FULL_HALF_PCT));
-    battery_endpoint_id = endpoint::get_id(endpoint);
+    battery_endpoint_id = endpoint::get_id(ep);
+    // A reading after every move: the cell has just been under the motor's load, the honest moment.
+    board_on_motor_stopped(read_battery);
 }
 
 /* ---- Pairing state: status LED and sleep (on the Matter thread) ---- */
@@ -350,6 +359,99 @@ static void set_updating(bool on)
     updating = on;
 }
 
+/* ---- Diagnostics: run the motor by hand (on the Matter thread) ---- */
+
+#if CONFIG_SMART_PCB_DIAGNOSTICS
+static constexpr auto DIAGNOSTICS_MAX_RUN = std::chrono::milliseconds(CONFIG_SMART_PCB_DIAGNOSTICS_MAX_RUN_MS);
+
+static uint16_t diag_forward_id = NO_ENDPOINT;
+static uint16_t diag_backward_id = NO_ENDPOINT;
+/** The switch whose direction the motor runs in, or NO_ENDPOINT. */
+static uint16_t diag_running = NO_ENDPOINT;
+static esp_timer_handle_t diag_timer;
+
+static void diag_stop()
+{
+    if (diag_running == NO_ENDPOINT) {
+        return;
+    }
+    const uint16_t id = diag_running;
+    diag_running = NO_ENDPOINT;
+    esp_timer_stop(diag_timer);
+    board_motor_stop();
+    OnOff::Attributes::OnOff::Set(id, false);
+    ESP_LOGI(TAG, "Diagnostics: motor stopped");
+}
+
+static void diag_timed_out(intptr_t)
+{
+    ESP_LOGW(TAG, "Diagnostics: motor ran %d ms, stopping", static_cast<int>(DIAGNOSTICS_MAX_RUN.count()));
+    diag_stop();
+}
+
+static void diag_timer_cb(void *)
+{
+    device_schedule(diag_timed_out);
+}
+
+static void diag_create(node_t *node)
+{
+    const esp_timer_create_args_t args = {.callback = diag_timer_cb, .name = "diagnostics"};
+    esp_timer_create(&args, &diag_timer);
+    // Plain On/Off plug-ins: Home Assistant shows them as switches named after the endpoint; rename
+    // them "Motor forward" and "Motor backward" there.
+    for (uint16_t *id : {&diag_forward_id, &diag_backward_id}) {
+        endpoint::on_off_plug_in_unit::config_t config;
+        endpoint_t *ep = endpoint::on_off_plug_in_unit::create(node, &config, ENDPOINT_FLAG_NONE, nullptr);
+        ABORT_APP_ON_FAILURE(ep != nullptr, ESP_LOGE(TAG, "Failed to create diagnostics endpoint"));
+        *id = endpoint::get_id(ep);
+    }
+    ESP_LOGI(TAG, "Diagnostics: motor forward on endpoint %u, backward on %u", diag_forward_id, diag_backward_id);
+}
+
+/** At start-up the motor stands, so the switches show off whatever was stored. */
+static void diag_reset()
+{
+    for (uint16_t id : {diag_forward_id, diag_backward_id}) {
+        OnOff::Attributes::OnOff::Set(id, false);
+    }
+}
+
+bool device_attribute_updated(uint16_t endpoint_id, uint32_t cluster_id, uint32_t attribute_id, esp_matter_attr_val_t *val)
+{
+    if ((endpoint_id != diag_forward_id && endpoint_id != diag_backward_id) || cluster_id != OnOff::Id ||
+        attribute_id != OnOff::Attributes::OnOff::Id) {
+        return false;
+    }
+    if (!val->val.b) {
+        if (endpoint_id == diag_running) {
+            diag_stop();
+        }
+        return true;
+    }
+    if (diag_running != NO_ENDPOINT && diag_running != endpoint_id) {
+        const uint16_t other = diag_running;
+        diag_running = NO_ENDPOINT;  // so the other switch going off doesn't stop the new run
+        OnOff::Attributes::OnOff::Set(other, false);
+    }
+    const bool forward = endpoint_id == diag_forward_id;
+    diag_running = endpoint_id;
+    ESP_LOGI(TAG, "Diagnostics: motor %s", forward ? "forward" : "backward");
+    board_motor_start(forward ? motor_dir_t::forward : motor_dir_t::backward);
+    esp_timer_stop(diag_timer);
+    esp_timer_start_once(diag_timer, to_us(DIAGNOSTICS_MAX_RUN));
+    return true;
+}
+#else
+static void diag_create(node_t *) {}
+static void diag_reset() {}
+
+bool device_attribute_updated(uint16_t, uint32_t, uint32_t, esp_matter_attr_val_t *)
+{
+    return false;
+}
+#endif
+
 /* ---- Matter events ---- */
 
 static void (*product_server_ready)();
@@ -395,6 +497,7 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
         if (esp_ota_mark_app_valid_cancel_rollback() != ESP_OK) {
             ESP_LOGW(TAG, "Could not mark this firmware as good");
         }
+        diag_reset();
         if (product_server_ready) {
             product_server_ready();
         }
@@ -434,17 +537,22 @@ void device_init()
     button_init();
 }
 
+static node_t *matter_node;
+
 node_t *device_create_node(attribute::callback_t attribute_cb, identification::callback_t identification_cb)
 {
     node::config_t node_config;
-    node_t *node = node::create(&node_config, attribute_cb, identification_cb);
-    ABORT_APP_ON_FAILURE(node != nullptr, ESP_LOGE(TAG, "Failed to create Matter node"));
-    return node;
+    matter_node = node::create(&node_config, attribute_cb, identification_cb);
+    ABORT_APP_ON_FAILURE(matter_node != nullptr, ESP_LOGE(TAG, "Failed to create Matter node"));
+    return matter_node;
 }
 
 void device_start(void (*server_ready)())
 {
     product_server_ready = server_ready;
+    battery_create(matter_node);
+    // After the product's endpoints, so theirs keep their numbers.
+    diag_create(matter_node);
 
     esp_openthread_platform_config_t ot_config = {
         .radio_config = {.radio_mode = RADIO_MODE_NATIVE},
@@ -456,12 +564,11 @@ void device_start(void (*server_ready)())
     esp_err_t err = esp_matter::start(app_event_cb);
     ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to start Matter, err:%d", err));
 
-    if (battery_endpoint_id != NO_ENDPOINT) {
-        const esp_timer_create_args_t battery_args = {.callback = battery_timer_cb, .name = "battery"};
-        esp_timer_handle_t battery;
-        esp_timer_create(&battery_args, &battery);
-        esp_timer_start_periodic(battery, to_us(std::chrono::minutes(CONFIG_SMART_PCB_BATTERY_INTERVAL_MIN)));
-    }
+    const esp_timer_create_args_t battery_args = {.callback = battery_timer_cb, .name = "battery"};
+    esp_timer_handle_t battery;
+    esp_timer_create(&battery_args, &battery);
+    esp_timer_start_periodic(battery, to_us(std::chrono::minutes(CONFIG_SMART_PCB_BATTERY_INTERVAL_MIN)));
+    read_battery();
 
     const esp_timer_create_args_t recovery_args = {.callback = recovery_tick, .name = "recovery"};
     esp_timer_handle_t recovery;

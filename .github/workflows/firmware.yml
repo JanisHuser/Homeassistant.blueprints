@@ -30,7 +30,7 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          products=$(ls home-automations/smart-pcb/firmware/products)
+          products=$(for f in home-automations/smart-pcb/firmware/products/*/product.cmake; do basename "$(dirname "$f")"; done)
           standalone=$(for f in home-automations/*/firmware/CMakeLists.txt; do
             p=$(basename "$(dirname "$(dirname "$f")")"); [ "$p" = smart-pcb ] || echo "$p"; done)
           all="$products $standalone"
@@ -45,7 +45,7 @@ jobs:
               {
                 # a smart PCB product, or the shared code of all of them
                 sed -n 's#^home-automations/smart-pcb/firmware/products/\([^/]*\)/.*#\1#p' <<<"$changed"
-                if grep '^home-automations/smart-pcb/firmware/' <<<"$changed" | grep -v '^home-automations/smart-pcb/firmware/products/' | grep -q .; then
+                if grep '^home-automations/smart-pcb/firmware/' <<<"$changed" | grep -vE '^home-automations/smart-pcb/firmware/products/[^/]+/' | grep -q .; then
                   echo "$products"
                 fi
                 sed -n 's#^home-automations/\([^/]*\)/firmware/.*#\1#p' <<<"$changed" | grep -vx smart-pcb

@@ -1,0 +1,33 @@
+menu "Smart PCB"
+
+    config SMART_PCB_LIGHT_SLEEP
+        bool "Light-sleep between Thread polls"
+        default y
+        help
+            Saves the battery. Turn it off to rule out sleep problems: the device then stays
+            awake (still a sleepy Thread device that polls its parent).
+
+    config SMART_PCB_BATTERY_INTERVAL_MIN
+        int "Battery reading interval (minutes)"
+        default 60
+        help
+            Besides a reading after every motor stop.
+
+    config SMART_PCB_DIAGNOSTICS
+        bool "Diagnostics switches: run the motor by hand"
+        default y
+        help
+            Two more On/Off endpoints on every product, "Motor forward" and "Motor backward"
+            (named after their endpoint in Home Assistant). While one is on, the motor runs that
+            way: forward drives DRV8833 IN1 high, backward IN2. Switching it off, or the other
+            one on, stops it; so does SMART_PCB_DIAGNOSTICS_MAX_RUN_MS. It bypasses the product,
+            whose position is then off until its next full move (valve head) or until it is set
+            again (Rollo: jog and set fully up / down).
+
+    config SMART_PCB_DIAGNOSTICS_MAX_RUN_MS
+        int "Longest a diagnostics switch runs the motor (ms)"
+        depends on SMART_PCB_DIAGNOSTICS
+        range 100 120000
+        default 10000
+
+endmenu

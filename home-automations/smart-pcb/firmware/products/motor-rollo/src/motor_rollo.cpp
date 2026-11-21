@@ -15,7 +15,9 @@
  * moving). Each turns itself off once done.
  * The motor direction can be swapped over Matter: the MotorDirectionReversed bit of the Mode attribute.
  *
- * Pairing, BOOT button, status LED, sleep and firmware updates: components/smart_pcb/device.h.
+ * This is the Rollo's Product (product.h); main/main.cpp runs it when CONFIG_PRODUCT_MOTOR_ROLLO is set.
+ * Identify only blinks the LED (the default): moving the blind would cost position accuracy.
+ * Pairing, BOOT button, status LED, sleep and firmware updates: common/include/device.h.
  */
 
 #include <algorithm>
@@ -35,6 +37,8 @@
 #include <app-common/zap-generated/attributes/Accessors.h>
 #include <app/clusters/window-covering-server/window-covering-delegate.h>
 #include <app/clusters/window-covering-server/window-covering-server.h>
+
+#include "motor_rollo.h"
 
 #include "device.h"
 
@@ -423,58 +427,13 @@ public:
 
 static CoveringDelegate covering_delegate;
 
-/* ---- Matter callbacks ---- */
-
-/** The Mode attribute is kept by Matter: take over the saved motor direction (Matter thread, once started). */
-static void server_ready()
-{
-    // ModeSet also brings ConfigStatus (LiftMovementReversed) in line with it.
-    chip::BitMask<WindowCovering::Mode> mode = WindowCovering::ModeGet(covering_endpoint_id);
-    WindowCovering::ModeSet(covering_endpoint_id, mode);
-    update_reverse(mode.Raw(), true);
-}
-
-static esp_err_t app_identification_cb(identification::callback_type_t type, uint16_t endpoint_id, uint8_t effect_id,
-                                       uint8_t effect_variant, void *priv_data)
-{
-    // Only the LED: moving the blind to show which one it is would cost position accuracy.
-    if (type == identification::START) {
-        led_override(LED_IDENTIFY);
-    } else if (type == identification::STOP) {
-        led_override_clear();
-    }
-    return ESP_OK;
-}
-
-static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16_t endpoint_id, uint32_t cluster_id,
-                                         uint32_t attribute_id, esp_matter_attr_val_t *val, void *priv_data)
-{
-    if (type == attribute::POST_UPDATE && endpoint_id == covering_endpoint_id && cluster_id == WindowCovering::Id &&
-        attribute_id == WindowCovering::Attributes::Mode::Id) {
-        update_reverse(val->val.u8, false);
-    }
-    // The button endpoints act when switched on; off is only them going back (release_buttons).
-    if (type == attribute::POST_UPDATE && cluster_id == OnOff::Id && attribute_id == OnOff::Attributes::OnOff::Id && val->val.b) {
-        if (endpoint_id == jog_up_endpoint_id) {
-            send_command(CMD_JOG_UP);
-        } else if (endpoint_id == jog_down_endpoint_id) {
-            send_command(CMD_JOG_DOWN);
-        } else if (endpoint_id == set_open_endpoint_id) {
-            send_command(CMD_SET_OPEN);
-        } else if (endpoint_id == set_closed_endpoint_id) {
-            send_command(CMD_SET_CLOSED);
-        }
-    }
-    return ESP_OK;
-}
+/* ---- Product ---- */
 
 static constexpr uint32_t MOTOR_TASK_STACK = 3072;
 static constexpr UBaseType_t MOTOR_TASK_PRIORITY = 5;
 
-extern "C" void app_main()
+void MotorRollo::init()
 {
-    device_init();  // first: NVS, which the saved position comes from
-
     // Without a sensor the position after a restart is the one saved after the last move. A blind
     // that was never moved is taken to be fully up.
     uint32_t lift = LIFT_OPEN;
@@ -488,9 +447,11 @@ extern "C" void app_main()
 
     cmd_queue = xQueueCreate(CMD_QUEUE_LENGTH, sizeof(uint16_t));
     xTaskCreate(motor_task, "motor", MOTOR_TASK_STACK, nullptr, MOTOR_TASK_PRIORITY, nullptr);
+}
 
-    node_t *node = device_create_node(app_attribute_update_cb, app_identification_cb);
-
+void MotorRollo::create_endpoints(node_t *node)
+{
+    const uint16_t lift = matter_lift(position);
     window_covering::config_t covering_config(chip::to_underlying(WindowCovering::EndProductType::kRollerShade));
     auto &wc = covering_config.window_covering;
     wc.type = chip::to_underlying(WindowCovering::Type::kRollerShade);
@@ -498,8 +459,8 @@ extern "C" void app_main()
                        chip::to_underlying(WindowCovering::ConfigStatus::kLiftPositionAware);
     wc.feature_flags = cluster::window_covering::feature::lift::get_id() |
                        cluster::window_covering::feature::position_aware_lift::get_id();
-    wc.features.position_aware_lift.current_position_lift_percent_100ths = nullable<uint16_t>(matter_lift(lift));
-    wc.features.position_aware_lift.target_position_lift_percent_100ths = nullable<uint16_t>(matter_lift(lift));
+    wc.features.position_aware_lift.current_position_lift_percent_100ths = nullable<uint16_t>(lift);
+    wc.features.position_aware_lift.target_position_lift_percent_100ths = nullable<uint16_t>(lift);
     wc.delegate = &covering_delegate;
     endpoint_t *covering = window_covering::create(node, &covering_config, ENDPOINT_FLAG_NONE, nullptr);
     ABORT_APP_ON_FAILURE(covering != nullptr, ESP_LOGE(TAG, "Failed to create window covering endpoint"));
@@ -513,6 +474,32 @@ extern "C" void app_main()
         ABORT_APP_ON_FAILURE(button != nullptr, ESP_LOGE(TAG, "Failed to create button endpoint"));
         *id = endpoint::get_id(button);
     }
+}
 
-    device_start(server_ready);
+void MotorRollo::server_ready()
+{
+    // The Mode attribute is kept by Matter: take over the saved motor direction. ModeSet also brings
+    // ConfigStatus (LiftMovementReversed) in line with it.
+    chip::BitMask<WindowCovering::Mode> mode = WindowCovering::ModeGet(covering_endpoint_id);
+    WindowCovering::ModeSet(covering_endpoint_id, mode);
+    update_reverse(mode.Raw(), true);
+}
+
+void MotorRollo::attribute_updated(uint16_t endpoint_id, uint32_t cluster_id, uint32_t attribute_id, esp_matter_attr_val_t *val)
+{
+    if (endpoint_id == covering_endpoint_id && cluster_id == WindowCovering::Id && attribute_id == WindowCovering::Attributes::Mode::Id) {
+        update_reverse(val->val.u8, false);
+    }
+    // The button endpoints act when switched on; off is only them going back (release_buttons).
+    if (cluster_id == OnOff::Id && attribute_id == OnOff::Attributes::OnOff::Id && val->val.b) {
+        if (endpoint_id == jog_up_endpoint_id) {
+            send_command(CMD_JOG_UP);
+        } else if (endpoint_id == jog_down_endpoint_id) {
+            send_command(CMD_JOG_DOWN);
+        } else if (endpoint_id == set_open_endpoint_id) {
+            send_command(CMD_SET_OPEN);
+        } else if (endpoint_id == set_closed_endpoint_id) {
+            send_command(CMD_SET_CLOSED);
+        }
+    }
 }

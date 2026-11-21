@@ -1,8 +1,2 @@
-# Motor Rollo, on top of ../../sdkconfig.defaults
-
-# Vendor and product name the controllers show
-CONFIG_CHIP_PROJECT_CONFIG="products/motor-rollo/CHIPProjectConfig.h"
-
-# Root, window covering, and the four button switches (jog up / down, set fully up / down).
-# Too low and creating an endpoint fails at boot, which aborts the app in a restart loop.
-CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT=6
+# Motor Rollo, on top of ../../sdkconfig.defaults: main/main.cpp runs products/motor_rollo.cpp
+CONFIG_PRODUCT_MOTOR_ROLLO=y

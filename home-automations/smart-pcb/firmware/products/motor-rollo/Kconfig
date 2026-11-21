@@ -1,4 +1,6 @@
+# Rollo settings (products/Kconfig sources this file)
 menu "Rollo"
+    depends on PRODUCT_MOTOR_ROLLO
 
     config ROLLO_TRAVEL_UP_MS
         int "Run time from fully down to fully up (ms)"

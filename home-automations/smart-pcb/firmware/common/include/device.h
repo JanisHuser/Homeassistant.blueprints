@@ -11,9 +11,13 @@
  * - Recovery restarts: once after pairing, and after 5 min without a Thread parent.
  * - Firmware updates: awake and polling fast while one downloads; a new image that restarts
  *   before Matter is up is rolled back to the previous one by the bootloader.
- * - Battery reporting (device_add_battery()) on products that want it.
+ * - Battery: Power Source cluster on the root endpoint (BatVoltage, BatPercentRemaining,
+ *   BatChargeLevel), read after every motor stop and every SMART_PCB_BATTERY_INTERVAL_MIN.
+ * - Diagnostics (SMART_PCB_DIAGNOSTICS): two On/Off endpoints after the product's, "motor
+ *   forward" and "motor backward", that run the motor by hand while on (at most
+ *   SMART_PCB_DIAGNOSTICS_MAX_RUN_MS). Only use them while the product's motor stands.
  *
- * A product's app_main: device_init(), device_create_node(), its endpoints, device_start().
+ * main/main.cpp: device_init(), device_create_node(), the product's endpoints, device_start().
  */
 #pragma once
 
@@ -34,19 +38,16 @@ esp_matter::node_t *device_create_node(esp_matter::attribute::callback_t attribu
                                        esp_matter::identification::callback_t identification_cb);
 
 /**
- * Adds a Power Source cluster for the cell to the endpoint and reports its level every
- * SMART_PCB_BATTERY_INTERVAL_MIN minutes from device_start() on.
- */
-void device_add_battery(esp_matter::endpoint_t *endpoint, const char *description);
-
-/** Reads the battery now and reports it (from any task), e.g. right after the motor ran. */
-void device_report_battery();
-
-/**
  * Starts Thread and Matter. server_ready (may be null) runs on the Matter thread once the stored
  * attributes are loaded and the server is up.
  */
 void device_start(void (*server_ready)());
+
+/**
+ * An attribute changed (POST_UPDATE, Matter thread): true when it was one of the device's own
+ * (diagnostics), false when it belongs to the product.
+ */
+bool device_attribute_updated(uint16_t endpoint_id, uint32_t cluster_id, uint32_t attribute_id, esp_matter_attr_val_t *val);
 
 /** Runs fn(arg) on the Matter thread, where Matter attributes may be changed. */
 void device_schedule(void (*fn)(intptr_t), intptr_t arg = 0);

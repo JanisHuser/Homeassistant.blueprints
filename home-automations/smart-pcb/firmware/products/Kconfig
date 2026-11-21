@@ -1,0 +1,16 @@
+# Which product this image is, and each product's settings (<product>/Kconfig). Its
+# <product>/sdkconfig.defaults picks it; main/main.cpp then runs its Product implementation.
+choice PRODUCT
+    prompt "Product"
+    default PRODUCT_DIY_VALVE_HEAD
+
+    config PRODUCT_DIY_VALVE_HEAD
+        bool "DIY valve head (diy-valve-head/)"
+
+    config PRODUCT_MOTOR_ROLLO
+        bool "Motor Rollo (motor-rollo/)"
+
+endchoice
+
+rsource "diy-valve-head/Kconfig"
+rsource "motor-rollo/Kconfig"

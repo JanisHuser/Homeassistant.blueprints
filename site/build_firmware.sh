@@ -22,7 +22,7 @@ smart="$root/home-automations/smart-pcb/firmware"
 
 # Every project: smart PCB products, then standalone projects
 all=()
-for dir in "$smart"/products/*/; do all+=("$(basename "$dir")"); done
+for file in "$smart"/products/*/product.cmake; do all+=("$(basename "$(dirname "$file")")"); done
 for file in "$root"/home-automations/*/firmware/CMakeLists.txt; do
     dir=$(dirname "$file")
     [ "$dir" = "$smart" ] || all+=("$(basename "$(dirname "$dir")")")

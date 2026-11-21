@@ -1,12 +1,12 @@
 /*
- * DIY valve head: Matter-over-Thread water valve on the smart PCB (ESP32-H2) or a XIAO ESP32-C6.
+ * DIY valve head: Matter-over-Thread water valve on the smart PCB (ESP32-H2).
  *
- * Endpoint 1 is a Matter Water Valve (open/closed, with levels) with a Power Source cluster for
- * the 18650. Endpoint 2 is an on/off switch, "Reverse direction": on swaps which way the motor
+ * Endpoint 1 is a Matter Water Valve (open/closed, with levels). Endpoint 2 is an on/off switch, "Reverse direction": on swaps which way the motor
  * turns, like swapping its wires; it is stored, so it survives restarts. The motor driver wakes
- * only to move, and the battery is read after each move and once an hour.
+ * only to move.
  *
- * Pairing, BOOT button, status LED, sleep and firmware updates: components/smart_pcb/device.h.
+ * This is the valve head's Product (product.h); main/main.cpp runs it when CONFIG_PRODUCT_DIY_VALVE_HEAD
+ * is set. Pairing, BOOT button, status LED, sleep and firmware updates: common/include/device.h.
  */
 
 #include <atomic>
@@ -24,6 +24,8 @@
 #include <app-common/zap-generated/attributes/Accessors.h>
 #include <app/clusters/valve-configuration-and-control-server/valve-configuration-and-control-cluster.h>
 #include <app/clusters/valve-configuration-and-control-server/valve-configuration-and-control-delegate.h>
+
+#include "valve_head.h"
 
 #include "device.h"
 
@@ -120,8 +122,6 @@ static void motor_task(void *)
         }
         move_to(target);
         device_schedule(report_valve_level, target);
-        // Right after the move the cell is still under load, which is the honest reading.
-        device_report_battery();
     }
 }
 
@@ -156,20 +156,7 @@ public:
 
 static ValveDelegate valve_delegate;
 
-/* ---- Matter callbacks ---- */
-
-static esp_err_t app_identification_cb(identification::callback_type_t type, uint16_t endpoint_id, uint8_t effect_id,
-                                       uint8_t effect_variant, void *priv_data)
-{
-    // "Identify" drives the head open, so you can hear which one it is, and blinks the LED if there is one.
-    if (type == identification::START) {
-        led_override(LED_IDENTIFY);
-        request_level(LEVEL_OPEN);
-    } else if (type == identification::STOP) {
-        led_override_clear();
-    }
-    return ESP_OK;
-}
+/* ---- "Reverse direction" switch ---- */
 
 static void set_reversed(bool reversed)
 {
@@ -182,27 +169,19 @@ static void set_reversed(bool reversed)
     request_level(LEVEL_OPEN);
 }
 
-static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16_t endpoint_id, uint32_t cluster_id,
-                                         uint32_t attribute_id, esp_matter_attr_val_t *val, void *priv_data)
-{
-    if (type == attribute::POST_UPDATE && endpoint_id == reverse_endpoint_id && cluster_id == OnOff::Id &&
-        attribute_id == OnOff::Attributes::OnOff::Id) {
-        set_reversed(val->val.b);
-    }
-    return ESP_OK;
-}
+/* ---- Product ---- */
 
 static constexpr uint32_t MOTOR_TASK_STACK = 3072;
 static constexpr UBaseType_t MOTOR_TASK_PRIORITY = 5;
 
-extern "C" void app_main()
+void ValveHead::init()
 {
-    device_init();
     move_queue = xQueueCreate(MOVE_QUEUE_LENGTH, sizeof(uint8_t));
     xTaskCreate(motor_task, "motor", MOTOR_TASK_STACK, nullptr, MOTOR_TASK_PRIORITY, nullptr);
+}
 
-    node_t *node = device_create_node(app_attribute_update_cb, app_identification_cb);
-
+void ValveHead::create_endpoints(node_t *node)
+{
     water_valve::config_t valve_config;
     valve_config.valve_configuration_and_control.delegate = &valve_delegate;
     endpoint_t *valve = water_valve::create(node, &valve_config, ENDPOINT_FLAG_NONE, nullptr);
@@ -212,7 +191,6 @@ extern "C" void app_main()
     cluster_t *valve_cluster = cluster::get(valve, ValveConfigurationAndControl::Id);
     cluster::valve_configuration_and_control::feature::level::config_t level_config;
     cluster::valve_configuration_and_control::feature::level::add(valve_cluster, &level_config);
-    device_add_battery(valve, "18650");
 
     // Shows up in Home Assistant as a switch on the same device; rename it "Reverse direction" there.
     on_off_plug_in_unit::config_t reverse_config;
@@ -228,9 +206,26 @@ extern "C" void app_main()
     attribute::get_val(attribute::get(reverse_endpoint_id, OnOff::Id, OnOff::Attributes::OnOff::Id), &reversed);
     motor_reversed = reversed.val.b;
     ESP_LOGI(TAG, "Motor direction %s", motor_reversed ? "reversed" : "normal");
+}
 
-    device_start(nullptr);
-
+void ValveHead::started()
+{
     // The position is unknown after a reset: drive to "open", the safe state for heating.
     request_level(LEVEL_OPEN);
+}
+
+void ValveHead::attribute_updated(uint16_t endpoint_id, uint32_t cluster_id, uint32_t attribute_id, esp_matter_attr_val_t *val)
+{
+    if (endpoint_id == reverse_endpoint_id && cluster_id == OnOff::Id && attribute_id == OnOff::Attributes::OnOff::Id) {
+        set_reversed(val->val.b);
+    }
+}
+
+void ValveHead::identify(bool start)
+{
+    // Drives the head open, so you can hear which one it is, and blinks the LED.
+    Product::identify(start);
+    if (start) {
+        request_level(LEVEL_OPEN);
+    }
 }

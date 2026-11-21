@@ -32,12 +32,6 @@ static constexpr bridge_t BRIDGE_FORWARD{GPIO_LEVEL_HIGH, GPIO_LEVEL_LOW};
 static constexpr bridge_t BRIDGE_BACKWARD{GPIO_LEVEL_LOW, GPIO_LEVEL_HIGH};
 static constexpr bridge_t BRIDGE_BRAKE{GPIO_LEVEL_HIGH, GPIO_LEVEL_HIGH};
 
-#ifdef PIN_RF_SWITCH
-/* XIAO RF switch: low powers it, low selects the on-board antenna (high = U.FL). */
-static constexpr uint32_t RF_SWITCH_POWERED = GPIO_LEVEL_LOW;
-static constexpr uint32_t RF_ANTENNA_ONBOARD = GPIO_LEVEL_LOW;
-#endif
-
 static void set_bridge(bridge_t state)
 {
     gpio_set_level(PIN_MOTOR_IN1, state.in1);
@@ -54,6 +48,7 @@ static adc_cali_handle_t cali;
 static adc_channel_t battery_channel;
 static esp_pm_lock_handle_t motor_lock;
 static bool running;
+static void (*motor_stopped)();
 
 void board_init()
 {
@@ -66,15 +61,6 @@ void board_init()
     set_bridge(BRIDGE_COAST);
     // No gpio_hold_en() here: holding a pad through light sleep stops the ESP32-H2 from hearing its
     // Thread parent. The DRV8833's internal pull-downs on nSLEEP and IN1/IN2 keep it asleep instead.
-#ifdef PIN_RF_SWITCH
-    // XIAO RF switch: powered, on-board antenna.
-    const gpio_config_t rf = {.pin_bit_mask = (1ULL << PIN_RF_SWITCH) | (1ULL << PIN_RF_ANTENNA), .mode = GPIO_MODE_OUTPUT};
-    gpio_config(&rf);
-    gpio_set_level(PIN_RF_SWITCH, RF_SWITCH_POWERED);
-    gpio_set_level(PIN_RF_ANTENNA, RF_ANTENNA_ONBOARD);
-    gpio_hold_en(PIN_RF_SWITCH);
-    gpio_hold_en(PIN_RF_ANTENNA);
-#endif
 
     // No light sleep while the motor runs: the driver pins must stay driven.
     esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, PM_LOCK_NO_ARG, "motor", &motor_lock);
@@ -115,6 +101,14 @@ void board_motor_stop()
     gpio_set_level(PIN_MOTOR_SLEEP, DRV8833_ASLEEP);
     esp_pm_lock_release(motor_lock);
     running = false;
+    if (motor_stopped) {
+        motor_stopped();
+    }
+}
+
+void board_on_motor_stopped(void (*callback)())
+{
+    motor_stopped = callback;
 }
 
 void board_motor_run(motor_dir_t dir, std::chrono::milliseconds run)

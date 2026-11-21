@@ -5,7 +5,7 @@ One board and one firmware for every battery-powered Matter-over-Thread device h
 | Folder | What |
 |---|---|
 | [`pcb/`](pcb) | KiCad design and the production files for JLCPCB ([README](pcb/README.md)) |
-| [`firmware/`](firmware) | One ESP-IDF project: shared code in `components/smart_pcb`, one folder per product in `products/` ([README](firmware/README.md)) |
+| [`firmware/`](firmware) | One ESP-IDF project: one `main.cpp`, shared code in `common/`, one folder per product in `products/` ([README](firmware/README.md)) |
 
 ## Products
 
@@ -14,4 +14,4 @@ One board and one firmware for every battery-powered Matter-over-Thread device h
 | DIY valve head: floor-heating valve | [`../diy-valve-head`](../diy-valve-head) | [`firmware/products/diy-valve-head`](firmware/products/diy-valve-head) |
 | Motor Rollo: roller blind | [`../motor-rollo`](../motor-rollo) | [`firmware/products/motor-rollo`](firmware/products/motor-rollo) |
 
-What all of them do the same way (pairing, BOOT button, status LED, sleep, firmware updates) lives in one place, `firmware/components/smart_pcb`, so a fix there reaches every product with its next build.
+What all of them do the same way (pairing, BOOT button, status LED, sleep, firmware updates) lives in one place, `firmware/common`, so a fix there reaches every product with its next build.

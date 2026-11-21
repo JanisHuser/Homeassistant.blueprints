@@ -36,7 +36,7 @@ CONFIG_USE_MINIMAL_MDNS=n
 CONFIG_MBEDTLS_SSL_PROTO_DTLS=y
 
 CONFIG_ENABLE_OTA_REQUESTOR=y
-# A new image that restarts before it has started Matter (components/smart_pcb/device.cpp marks it good then)
+# A new image that restarts before it has started Matter (common/device.cpp marks it good then)
 # is rolled back to the previous one by the bootloader. Only takes effect once flashed over USB.
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 # Matter update image (<project>-<version>-<target>.ota) for Home Assistant's Matter Server
@@ -64,3 +64,11 @@ CONFIG_ICD_ACTIVE_MODE_INTERVAL_MS=1000
 # Stay in fast polling 5 s after the last message, so multi-step exchanges (pairing, the
 # controller reading the device in) don't fall back to slow polling between steps.
 CONFIG_ICD_ACTIVE_MODE_THRESHOLD_MS=5000
+
+# Vendor and product name the controllers show (picked by CONFIG_PRODUCT_*)
+CONFIG_CHIP_PROJECT_CONFIG="main/CHIPProjectConfig.h"
+
+# Endpoints a product may create: root node, the product's own (valve head 2, Rollo 5) and the
+# two diagnostics switches. Too low and creating an endpoint fails at start-up, which aborts the
+# app in a restart loop (log: "Dynamic endpoint count cannot be greater than ...").
+CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT=10

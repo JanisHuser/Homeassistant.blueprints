@@ -1,30 +1,40 @@
 # Smart PCB firmware (Matter over Thread)
 
-One ESP-IDF project for every product on the [smart PCB](../pcb). Each product gets its own image, built from the shared code plus its own folder:
+One ESP-IDF project and one `app_main` for every product on the [smart PCB](../pcb). The board is the same everywhere, so a product only says how it drives the motor and which Matter endpoints it has: it is a `Product` (the strategy, `common/include/product.h`), and `main/main.cpp` picks the implementation at build time from `CONFIG_PRODUCT_*`.
 
 ```
 firmware/
-  CMakeLists.txt         picks the product: -DPRODUCT=<folder in products/>
+  CMakeLists.txt         -DPRODUCT=<folder in products/> takes that product's sdkconfig.defaults
   sdkconfig.defaults     settings every product shares
   partitions.csv
-  components/smart_pcb/  shared by all products
-    board.*              pins, DRV8833 motor driver, battery ADC
-    led.*                status LED
-    device.*             the Matter device: sleep, BOOT button, pairing, LED states, restarts, updates, battery
-  products/<product>/
-    product.cmake        name and version (PROJECT_VER, PROJECT_VER_NUMBER)
-    main.cpp             app_main and the product's Matter endpoints
-    Kconfig              the product's settings (menuconfig)
-    sdkconfig.defaults   the product's settings on top of the shared ones
-    sdkconfig.defaults.<chip>  one file per chip the product is built for
-    CHIPProjectConfig.h  the name controllers show
-    README.md            what the product does
+  main/
+    main.cpp             the one app_main: runs the selected Product
+    CHIPProjectConfig.h  vendor and product name controllers show
+  common/                the same for every product
+    include/             board.h, led.h, device.h, product.h, units.h
+    src/                 board.cpp, led.cpp, device.cpp, product.cpp
+                         board: pins, DRV8833 motor driver, battery ADC; led: status LED;
+                         device: sleep, BOOT button, pairing, LED states, restarts, updates,
+                         battery, diagnostics; product.h: the Product interface
+  products/              one folder per product; only the selected one is compiled
+    Kconfig              the product choice (CONFIG_PRODUCT_*)
+    diy-valve-head/
+      include/valve_head.h  class ValveHead : public Product
+      src/valve_head.cpp    its motor moves and endpoints
+      Kconfig            its settings
+      product.cmake      name and version (PROJECT_VER, PROJECT_VER_NUMBER)
+      sdkconfig.defaults CONFIG_PRODUCT_DIY_VALVE_HEAD=y
+      sdkconfig.defaults.esp32h2
+      README.md          what it does
+    motor-rollo/         the same for the Rollo (include/motor_rollo.h, src/motor_rollo.cpp)
 ```
+
+`main/main.cpp` calls the product in this order: `init()` (state from NVS, motor task), `create_endpoints(node)`, Matter starts, `server_ready()` on the Matter thread, `started()`; `attribute_updated()` and `identify()` whenever Matter brings them.
 
 | Product | Chips | |
 |---|---|---|
-| [`diy-valve-head`](products/diy-valve-head) | ESP32-H2 (smart PCB), ESP32-C6 (XIAO) | water valve with level, battery, reverse switch |
-| [`motor-rollo`](products/motor-rollo) | ESP32-H2 (smart PCB) | roller shade, jog / set buttons |
+| [`diy-valve-head`](products/diy-valve-head) | ESP32-H2 | water valve with level, battery, reverse switch |
+| [`motor-rollo`](products/motor-rollo) | ESP32-H2 | roller shade, jog / set buttons |
 
 ## Build
 
@@ -75,32 +85,42 @@ The code comes from the test certificates in esp-matter. Home Assistant accepts 
 
 - **Sleep:** sleepy Thread end device (ICD). It polls its parent every 5 s, so a command takes up to ~5 s to arrive, and light-sleeps in between. It stays awake while a pairing window is open, so pairing over Bluetooth doesn't stall, and after a pairing, so the controller can read it in; it then restarts once, 3 minutes after the last pairing step, because shutting down Bluetooth after pairing leaves the ESP32-H2's Thread reception broken in light sleep. Without a Thread parent for 5 minutes it restarts to recover.
 - **BOOT button:** a short press opens a pairing window for 15 minutes, so a second controller can add the device ("already in use by another ecosystem", code 3497-011-2332). Holding it for 10 seconds clears every pairing and restarts, ready to pair again.
-- **Status LED** (WS2812 on GPIO 8; the XIAO has none): blue blinking = waiting to be paired, blue/white alternating = pairing, green for 2 s = paired, cyan blinking = firmware update running, orange blinking = Thread network lost, white blinking = identify, red = BOOT held (blinking: pairings are being cleared). Off in normal operation, to save the battery. No LED at all after power-on, not even with BOOT held: the firmware isn't starting; read the serial log over USB.
+- **Status LED** (WS2812 on GPIO 8): blue blinking = waiting to be paired, blue/white alternating = pairing, green for 2 s = paired, cyan blinking = firmware update running, orange blinking = Thread network lost, white blinking = identify, red = BOOT held (blinking: pairings are being cleared). Off in normal operation, to save the battery. No LED at all after power-on, not even with BOOT held: the firmware isn't starting; read the serial log over USB.
+- **Battery:** BatVoltage, BatPercentRemaining (3.3 V = 0 %, 4.15 V = 100 %) and BatChargeLevel on the root endpoint, read after every motor stop and once an hour (`SMART_PCB_BATTERY_INTERVAL_MIN`). The board's protection cuts the cell off when it is empty.
 - **Firmware updates and rollback:** see [Update over Matter](#update-over-matter).
+- **Diagnostics:** two more On/Off endpoints after the product's own, which Home Assistant shows as switches named after the endpoint (rename them "Motor forward" and "Motor backward"): while one is on, the motor runs that way, forward driving DRV8833 IN1 high and backward IN2. Switching it off, or the other one on, stops it, and so does `SMART_PCB_DIAGNOSTICS_MAX_RUN_MS` (10 s). They drive the board directly, past the product: use them only while the product's motor stands, and expect its position to be off afterwards (the valve head corrects it with its next move to 0 % or 100 %, the Rollo with jog and set fully up / down). The log names their endpoint numbers at start-up.
 
 ## Pins
 
-| ESP32-H2 (smart PCB) | XIAO ESP32-C6 | Connected to |
-|---|---|---|
-| GPIO 1 | GPIO 1 (D1 / A1) | battery divider (OUT+ through 2× 1 MΩ) |
-| GPIO 10 | GPIO 2 (D2) | DRV8833 IN1 |
-| GPIO 11 | GPIO 21 (D3) | DRV8833 IN2 |
-| GPIO 4 | GPIO 22 (D4) | DRV8833 nSLEEP / STBY (not connected on the smart PCB) |
-| GPIO 8 | — | WS2812 status LED (D2) |
-| GPIO 9 | GPIO 9 | BOOT button |
-| — | GPIO 3, 14 | RF switch on, on-board antenna |
+Every product runs on the smart PCB's ESP32-H2 (an ESP32-H2 dev board wired the same way works too):
 
-The pins live in `components/smart_pcb/board.h`; the build target picks the set.
+| GPIO | Connected to |
+|---|---|
+| 1 | battery divider (OUT+ through 2× 1 MΩ) |
+| 10 | DRV8833 IN1 |
+| 11 | DRV8833 IN2 |
+| 4 | DRV8833 nSLEEP / STBY (not connected on the smart PCB) |
+| 8 | WS2812 status LED (D2) |
+| 9 | BOOT button (SW1) |
+
+The pins live in `common/include/board.h`.
 
 ## Settings
 
-`idf.py menuconfig` → **Smart PCB** (shared), plus the product's own menu (see its README):
+`idf.py menuconfig` → **Component config → Smart PCB** (shared), plus the product's own menu there (see its README):
 
 | Setting | Default | |
 |---|---|---|
 | `SMART_PCB_LIGHT_SLEEP` | on | light-sleep between Thread polls; turn off to rule out sleep problems |
-| `SMART_PCB_BATTERY_INTERVAL_MIN` | 60 | battery reading interval, for products that report the battery |
+| `SMART_PCB_BATTERY_INTERVAL_MIN` | 60 | battery reading interval (besides after every motor stop) |
+| `SMART_PCB_DIAGNOSTICS` | on | the two motor diagnostics switches |
+| `SMART_PCB_DIAGNOSTICS_MAX_RUN_MS` | 10000 | longest a diagnostics switch runs the motor |
 
 ## Adding a product
 
-Copy a folder in `products/`, rename it after the project folder in `home-automations/` (that name becomes the release tag and the `_firmware/` folder), give it its own `PROJECT_NAME_OF_PRODUCT` and version in `product.cmake`, and set `CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT` in its `sdkconfig.defaults` to the root node plus every endpoint it creates: too low, and creating an endpoint fails at start-up, which aborts the app in a restart loop. In `main.cpp`: `device_init()`, `device_create_node()`, the endpoints (`device_add_battery()` for a battery level), `device_start()`.
+1. `products/<name>/include/<name>.h` and `src/<name>.cpp`: a class `: public Product` with how it drives the motor (`board_motor_start()` / `board_motor_stop()` / `board_motor_run()` with `motor_dir_t::forward` or `backward`) and its endpoints in `create_endpoints()`.
+2. `products/Kconfig`: a `PRODUCT_<NAME>` option in the choice and a menu for its settings (`depends on PRODUCT_<NAME>`); `products/CMakeLists.txt`: its source under `if(CONFIG_PRODUCT_<NAME>)`.
+3. `main/main.cpp` and `main/CHIPProjectConfig.h`: an `#elif CONFIG_PRODUCT_<NAME>` with its class and its name.
+4. `products/<name>/`, named after the project folder in `home-automations/` (that becomes the release tag and the `_firmware/` folder): `product.cmake` with its own `PROJECT_NAME_OF_PRODUCT` and version, `sdkconfig.defaults` with `CONFIG_PRODUCT_<NAME>=y`, one `sdkconfig.defaults.<chip>` per chip, and a README.
+
+`CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT` (10, in `sdkconfig.defaults`) has to cover the root node, the product's endpoints and the two diagnostics switches: too low, and creating an endpoint fails at start-up, which aborts the app in a restart loop.

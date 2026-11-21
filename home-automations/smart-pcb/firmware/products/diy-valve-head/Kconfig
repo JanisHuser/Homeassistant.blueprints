@@ -1,4 +1,6 @@
+# Valve head settings (products/Kconfig sources this file)
 menu "Valve head"
+    depends on PRODUCT_DIY_VALVE_HEAD
 
     config VALVE_TRAVEL_MS
         int "Motor run time for a full stroke (ms)"
