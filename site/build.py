@@ -331,17 +331,28 @@ def kicad(folder, out):
     return sorted(items, key=lambda x: (x["kind"] != "sch", x["file"]))
 
 
+# The smart PCB's firmware: one ESP-IDF project, one product (and project page) per products/<project>/.
+SMART_PCB_FIRMWARE = ROOT / "home-automations" / "smart-pcb" / "firmware"
+
+
 def firmware(folder, out, title):
-    """The project's firmware/ (an ESP-IDF project): source link, and a browser installer if it was built."""
+    """The project's firmware (its smart PCB product, or its own firmware/ ESP-IDF project): source link, and a
+    browser installer if it was built."""
     src = folder / "firmware"
-    if not (src / "CMakeLists.txt").exists():
+    version_file = src / "CMakeLists.txt"
+    if src == SMART_PCB_FIRMWARE:
+        return None  # its products show on their own project pages
+    if (SMART_PCB_FIRMWARE / "products" / folder.name / "product.cmake").exists():
+        src = SMART_PCB_FIRMWARE / "products" / folder.name
+        version_file = src / "product.cmake"
+    elif not version_file.exists():
         return None
     rel = src.relative_to(ROOT).as_posix()
     _, note, _ = doc_summary(src)
     # One build per sdkconfig.defaults.<target> (esp32c6, esp32h2, ...).
     targets = sorted(f.suffix[1:] for f in src.glob("sdkconfig.defaults.*"))
     family = lambda t: t.upper().replace("ESP32", "ESP32-").rstrip("-")
-    version = re.search(r'set\(PROJECT_VER "([^"]+)"\)', (src / "CMakeLists.txt").read_text())
+    version = re.search(r'set\(PROJECT_VER "([^"]+)"\)', version_file.read_text())
     info = {"source": f"https://github.com/{REPO}/tree/{BRANCH}/{rel}", "chip": " / ".join(map(family, targets)) or "ESP32",
             "version": version[1] if version else None, "note": strip_md(note or ""), "manifest": None}
     # site.yml puts the latest release's images here as <target>.bin, as site/build_firmware.sh does

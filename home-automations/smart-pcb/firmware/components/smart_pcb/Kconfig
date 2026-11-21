@@ -1,0 +1,16 @@
+menu "Smart PCB"
+
+    config SMART_PCB_LIGHT_SLEEP
+        bool "Light-sleep between Thread polls"
+        default y
+        help
+            Saves the battery. Turn it off to rule out sleep problems: the device then stays
+            awake (still a sleepy Thread device that polls its parent).
+
+    config SMART_PCB_BATTERY_INTERVAL_MIN
+        int "Battery reading interval (minutes)"
+        default 60
+        help
+            For products that report the battery (device_add_battery()).
+
+endmenu

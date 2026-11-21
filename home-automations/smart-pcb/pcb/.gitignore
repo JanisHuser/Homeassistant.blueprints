@@ -1,0 +1,7 @@
+production/*
+*.step
+*.wrl
+*.step
+
+!production/*.py
+!production/README.md

@@ -1,0 +1,8 @@
+# DIY valve head, on top of ../../sdkconfig.defaults
+
+# Vendor and product name the controllers show
+CONFIG_CHIP_PROJECT_CONFIG="products/diy-valve-head/CHIPProjectConfig.h"
+
+# Root node, valve, "Reverse direction" switch. Too low and creating an endpoint fails at boot,
+# which aborts the app in a restart loop.
+CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT=3

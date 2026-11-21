@@ -2,15 +2,15 @@
 
 A slim, battery-powered valve head for M30×1.5 floor-heating manifold valves. It is for manifolds where off-the-shelf heads (≈80–100 mm) stick out too far.
 
-Layout along the body: **drive | battery**, with the [rollo board](../motor-rollo/pcb) over the battery.
+Layout along the body: **drive | battery**, with the [rollo board](../smart-pcb/pcb) over the battery.
 
 - **Drive:** an N20 lock motor stands upright at the valve end. Its lead screw points straight at the valve pin. The nut sits in a printed pusher that presses the pin directly. The drive column keeps the pusher from turning, and its round tip runs in the adapter's bore, so the adapter can turn around it. The lead screw holds its position, so the valve stays put with no power.
-- **Brain:** the ESP32-H2 on the [rollo board](../motor-rollo/pcb) (shared with the motor Rollo) as a sleepy **Matter-over-Thread** end device. It shows up in Home Assistant's Matter integration as a valve (open/closed) with a battery level, and Home Assistant sets each head based on a room sensor. Pairing is over Bluetooth with the Matter QR code, the same as any store-bought Matter device.
+- **Brain:** the ESP32-H2 on the [rollo board](../smart-pcb/pcb) (shared with the motor Rollo) as a sleepy **Matter-over-Thread** end device. It shows up in Home Assistant's Matter integration as a valve (open/closed) with a battery level, and Home Assistant sets each head based on a room sensor. Pairing is over Bluetooth with the Matter QR code, the same as any store-bought Matter device.
 - **Power:** one 18650, with USB-C charging through the board's own socket, in an opening in the back wall. The motor runs directly from the cell (3–4.2 V).
 - **Housing:** a one-piece **tray** (printed front-face-down, open towards the valve), a **lid** on the valve side that slides in from the back, an **adapter** that screws into the tray with a coarse left-hand thread (0.6 turn), a separate **ring nut** that turns freely around it and clamps it to the valve. The board presses into a pocket in the tray, and the battery keeps it there. No screws, no clips across a seam, no supports.
 - **Size (defaults):** 23.4 × 103.7 mm, **37.5 mm deep** from the valve's thread face.
 
-The model is [`valve_head_tray.scad`](valve_head_tray.scad), the firmware is in [`firmware/`](firmware) and can be flashed straight from the project page in the browser. The print-in-place version, with the nut and pusher printed in the tray, is [`valve_head_pip.scad`](valve_head_pip.scad); its print files are in [`stl/pip`](stl/pip).
+The model is [`valve_head_tray.scad`](valve_head_tray.scad), the firmware is in [`../smart-pcb/firmware/products/diy-valve-head`](../smart-pcb/firmware/products/diy-valve-head), part of the [smart PCB firmware](../smart-pcb/firmware) and can be flashed straight from the project page in the browser. The print-in-place version, with the nut and pusher printed in the tray, is [`valve_head_pip.scad`](valve_head_pip.scad); its print files are in [`stl/pip`](stl/pip).
 
 ![assembly](renders/assembly.png)
 
@@ -35,7 +35,7 @@ All values marked `MEASURE` in [`valve_head_tray.scad`](valve_head_tray.scad) ar
 | `pin_top` | pin tip above the thread face, not pressed (negative if recessed) |
 | `valve_stroke` | how far the pin goes in until it stops (press firmly) |
 | `gp_*`, `mot_*`, `scr_*`, `nut_*` | the lock motor: gear plate size, motor can size, motor-to-screw distance, screw length/diameter, nut size. The seller gives no drawing, so these are guesses from the photo. Motor can + gear plates are 24 of the 37.5 mm depth |
-| `brd_*`, `btn_*`, `led_*` | the [rollo board](../motor-rollo/pcb): size, room under it, and where BOOT (SW1) and the two LEDs (D1 charge, D2 status) sit, from its KiCad layout. Stops cover 1 × 0.5 mm at each corner, a pin hole sits over BOOT and a light window (0.4 mm skin, `led_skin`) over the LEDs. `board_stl` is the board's 3D export (`../motor-rollo/pcb/rollo_board.stl`, from branch `pcb-designs`); it is only used for `assembly` and `section` |
+| `brd_*`, `btn_*`, `led_*` | the [rollo board](../smart-pcb/pcb): size, room under it, and where BOOT (SW1) and the two LEDs (D1 charge, D2 status) sit, from its KiCad layout. Stops cover 1 × 0.5 mm at each corner, a pin hole sits over BOOT and a light window (0.4 mm skin, `led_skin`) over the LEDs. `board_stl` is the board's 3D export (`../smart-pcb/pcb/rollo_board.stl`, from branch `pcb-designs`); it is only used for `assembly` and `section` |
 | `cell_d`, `cell_len`, `cell_nub` | your 18650 (set to 18.4 × 65, 0.5 nub; a protected cell is up to 70 long) |
 | `con_dome` | height of the button plate's dome (set to 1). Plate 12 × 12 × 0.3 and a spring that is solid at 5 mm are measured |
 | `usb_*` | the board's USB-C: where it sits, the opening and the outside recess for the plug, and `usb_out`, how far the receptacle's face stands past the board's edge (MEASURE) |
@@ -80,7 +80,7 @@ Nothing crosses a seam, so nothing is loaded across the layer lines: the tray is
 
 **Charging and flashing:** plug a USB-C cable into the port in the back wall; the head can stay on the valve. The same port flashes the ESP32-H2 and gives its logs: the board has protection and a charger, so the battery can stay in. If the firmware ever turns USB off, hold BOOT while you connect the battery to get into download mode. The board has no reset button: to restart it, take the cell out.
 
-**Button and lights:** the pin hole in the front face (the outer face, away from the valve), about half way along the body, is over the board's BOOT button; the light window just behind it, towards the back wall, shows the status LED and the red charge LED. Press BOOT with a paper clip or SIM pin, with the head on the valve. A short press on BOOT opens a pairing window; holding it for 10 s clears every pairing (see the [firmware](firmware)).
+**Button and lights:** the pin hole in the front face (the outer face, away from the valve), about half way along the body, is over the board's BOOT button; the light window just behind it, towards the back wall, shows the status LED and the red charge LED. Press BOOT with a paper clip or SIM pin, with the head on the valve. A short press on BOOT opens a pairing window; holding it for 10 s clears every pairing (see the [firmware](../smart-pcb/firmware/README.md#what-every-product-does)).
 
 ## Bill of materials
 
@@ -91,7 +91,7 @@ AliExpress prices are from October 2026 and change daily. Wires and the resistor
 | # | Part | Qty | Source | ~CHF |
 |---|---|---|---|---|
 | 1 | N20 lock motor with lead screw + nut, 3–4.2 V, 130 rpm | 1 | [AliExpress](https://de.aliexpress.com/item/1005007468668750.html) | 1–2 |
-| 2 | [Rollo board](../motor-rollo/pcb), assembled at JLCPCB (ESP32-H2, charger, protection, driver, USB-C, status LED; not routed, ordered or built yet) | 1 | order from the KiCad files | ? |
+| 2 | [Rollo board](../smart-pcb/pcb), assembled at JLCPCB (ESP32-H2, charger, protection, driver, USB-C, status LED; not routed, ordered or built yet) | 1 | order from the KiCad files | ? |
 | 3 | Battery contact plates, 12 × 12 mm, spring + button | 1 of each | AliExpress | to add |
 | 4 | 18650 cell, Samsung 35E / LG MJ1 / Molicel | 1 | Galaxus or a Swiss battery shop, **not AliExpress** | 6–8 |
 | 5 | Silicone wire 26–28 AWG, red + black | ~40 cm | any | — |
@@ -119,7 +119,7 @@ The board's cost isn't known yet, so there's no total per head.
 
 ## Wiring
 
-Pairing and flashing are in [`firmware/README.md`](firmware/README.md).
+Pairing and flashing are in [`../smart-pcb/firmware/README.md`](../smart-pcb/firmware/README.md) and [the valve head's part](../smart-pcb/firmware/products/diy-valve-head/README.md).
 
 The board's wire pads, all at its end towards the drive column:
 
@@ -129,7 +129,7 @@ The board's wire pads, all at its end towards the drive column:
 | J3 (BAT−) | Spring contact plate (cell minus) |
 | J4 (BAT+) | Button contact plate (cell plus) |
 
-Everything else is on the board, see [its README](../motor-rollo/pcb). The firmware's ESP32-H2 pins already match it: motor on GPIO 10/11, status LED on 8, BOOT on 9, battery level on 1 (2 × 1 MΩ). GPIO 4 (driver sleep) drives nothing on this board, which is harmless.
+Everything else is on the board, see [its README](../smart-pcb/pcb). The firmware's ESP32-H2 pins already match it: motor on GPIO 10/11, status LED on 8, BOOT on 9, battery level on 1 (2 × 1 MΩ). GPIO 4 (driver sleep) drives nothing on this board, which is harmless.
 
 **Charging:** through the board's USB-C in the back wall, which is also the flashing port.
 
@@ -137,7 +137,7 @@ Everything else is on the board, see [its README](../motor-rollo/pcb). The firmw
 
 Both ends of the travel are **hard stops**: the nut against the gear plates for "open", the pusher's chamfered shoulder in the countersink of the adapter for "closed", so the closing force goes straight into the valve.
 
-This is what the [firmware](firmware) does:
+This is what the [firmware](../smart-pcb/firmware/products/diy-valve-head) does:
 
 - **Close / open:** wake the DRV8833, drive the motor in the wanted direction for a fixed time (travel time + ~0.5 s), then sleep. At the end the motor stalls briefly against the stop, which lock motors are made for.
 - Measure the travel time once (7.1 mm in the print-in-place version `valve_head_pip.scad`, 5.4 mm in the tray; depends on the screw pitch) and set the timeout from it.
@@ -148,4 +148,4 @@ This is what the [firmware](firmware) does:
 
 - Geometry checked in OpenSCAD: all parts render as valid solids. Checked: nothing collides when assembled, open or closed; the drive unit, the boards (pressed straight in), and the lid (slide in) all go in without hitting anything; the adapter's left-hand thread fits the tray's and catches when pulled, its shoulder stops it on the tray, and the nut turns freely around the flange and catches it.
 - **Not printed or tested yet.** The motor dimensions and force are unknown until it arrives.
-- Firmware: [`firmware/`](firmware), Matter over Thread with esp-matter: a Water Valve endpoint with a Power Source cluster for the battery, sleepy end device polling every 5 s. **Not run on hardware yet**; the motor travel time and battery life are not measured yet.
+- Firmware: [`../smart-pcb/firmware/products/diy-valve-head`](../smart-pcb/firmware/products/diy-valve-head), part of the [smart PCB firmware](../smart-pcb/firmware), Matter over Thread with esp-matter: a Water Valve endpoint with a Power Source cluster for the battery, sleepy end device polling every 5 s. **Not run on hardware yet**; the motor travel time and battery life are not measured yet.

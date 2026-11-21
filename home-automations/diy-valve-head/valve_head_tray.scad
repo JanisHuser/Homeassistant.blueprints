@@ -1,7 +1,7 @@
 // DIY battery valve head for floor-heating manifolds (M30x1.5) - tray version
 // N20 lock motor standing upright, lead screw on the valve axis, nut + pusher press the pin.
 //
-// Layout along the body:  [ drive | battery ], with the rollo board (../motor-rollo/pcb) over the battery
+// Layout along the body:  [ drive | battery ], with the rollo board (../smart-pcb/pcb) over the battery
 //
 // Coordinates:
 //   Z = valve axis, Z=0 is the valve's thread face (top of the M30 stub), +Z points at you
@@ -78,7 +78,7 @@ mark_l   = 6;    // polarity marks in the tray's side walls: bar length
 mark_t   = 1.4;  // bar width
 mark_d   = 0.6;  // cut depth
 mark_z   = 4.5;  // centre, above the lid's inside face
-// Rollo board (../motor-rollo/pcb, branch pcb-designs): ESP32-H2 chip, charger, protection, motor driver and its own
+// Rollo board (../smart-pcb/pcb, branch pcb-designs): ESP32-H2 chip, charger, protection, motor driver and its own
 // USB-C on one board. It lies flat over the battery, parts up, its USB-C edge against the back wall: the USB-C is the
 // charging port, and the chip antenna in the same end sits in plastic. Positions below are from its KiCad layout:
 // u = from the USB-C edge towards the drive, x = across the body (+X), seen from the front face.
@@ -93,7 +93,7 @@ led_u    = 35.15; // light window over the charge LED (D1, u 34.1) and the statu
 led_x    = 4.55;
 led_win  = [2.6, 4.6];  // window size, X x Y
 led_skin = 0.4;  // front face left over the window: the LEDs shine through it; 0 = open hole
-board_stl = "../motor-rollo/pcb/rollo_board.stl";  // exported from KiCad (branch pcb-designs): origin USB-C edge, centre line, underside
+board_stl = "../smart-pcb/pcb/rollo_board.stl";  // exported from KiCad (branch pcb-designs): origin USB-C edge, centre line, underside
 // its USB-C (GT-USB-7014C, mid-mount)
 usb_x    = 2;    // centre, off the board's centre line
 usb_dn   = 0.8;  // below the board's underside

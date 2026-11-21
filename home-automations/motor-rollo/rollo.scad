@@ -8,7 +8,7 @@
 //   [Halter]─[Schlüssel]─[Nase]═ Schlitten: Kupplung │ N20 │ Fach │ Schott │ 18650 ═[608]─[Achse]─[Halter]
 //                         └── Platine liegt flach über Kupplung, Motor und Fach, von der Nase bis zum Schott
 //
-//  Die Platine (ESP32-H2 als Chip, Laderegler, Schutz, DRV8833; KiCad-Projekt in pcb/) liegt in einer Tasche oben im Schlitten,
+//  Die Platine (ESP32-H2 als Chip, Laderegler, Schutz, DRV8833; KiCad-Projekt in ../smart-pcb/pcb/) liegt in einer Tasche oben im Schlitten,
 //  das Rohr deckt sie ab. Ihr vorderes Ende mit der Chip-Antenne liegt in der Nase ausserhalb des Alu-Rohrs.
 //  Alle Bauteile sitzen oben (am Rand flach, top_w × top_h, in der Mitte bis mid_h); unten im Fach hinter dem
 //  Motor sind nur die Lötpunkte für die Motordrähte.

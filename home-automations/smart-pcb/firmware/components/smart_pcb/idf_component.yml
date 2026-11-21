@@ -1,0 +1,10 @@
+dependencies:
+  # WS2812 status LED (D2) of the smart PCB and the ESP32-H2 dev boards (led.cpp); the XIAO ESP32-C6 has none.
+  espressif/led_strip:
+    version: "~2.5.5"
+    rules:
+      - if: "target == esp32h2"
+  # BOOT button, with the light-sleep wake-up handled the way Espressif's ICD example does it.
+  espressif/button:
+    version: "^4"
+    public: true
