@@ -70,7 +70,8 @@ def scad_parts(text):
     default = re.search(r'^part\s*=\s*"([^"]+)"', text, re.M)
     seen = [default.group(1)] if default and default.group(1) in VIEWS else []
     for name in re.findall(r'part\s*==\s*"([^"]+)"', text):
-        if name not in seen:
+        # *_outline parts are flat 2D shapes for a DXF export (e.g. a board outline for KiCad), not printable parts.
+        if name not in seen and not name.endswith("_outline"):
             seen.append(name)
     return seen
 
