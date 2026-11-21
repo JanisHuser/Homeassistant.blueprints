@@ -1,7 +1,7 @@
 // DIY battery valve head for floor-heating manifolds (M30x1.5) - tray version
 // N20 lock motor standing upright, lead screw on the valve axis, nut + pusher press the pin.
 //
-// Layout along the body:  [ drive | battery ], with the motor board (../motor-board) over the battery
+// Layout along the body:  [ drive | battery ], with the rollo board (../motor-rollo/pcb) over the battery
 //
 // Coordinates:
 //   Z = valve axis, Z=0 is the valve's thread face (top of the M30 stub), +Z points at you
@@ -15,13 +15,15 @@
 //   bottom of the side walls; a spring tab at its back end clicks into the back wall. Only a cover: the motor's
 //   push goes from the gear plates into the tray's front face, through the walls into the adapter's thread.
 // - adapter: screws into the tray with a left-hand thread, up to its shoulder on the tray's bottom face. Its flange
-//   sits on the valve's thread face.
+//   sits on the valve's thread face. The pin pushes the tray off the valve, which loads the thread so it backs off;
+//   so once it is seated, a key on the lid's front edge drops into a notch in its thread and locks it against turning
+//   (screw the adapter in first, then slide the lid on; the lid won't go on unless the adapter is home).
 // - ring nut: a separate part that turns freely around the adapter: threads onto the valve and clamps the flange. Its
 //   drag on the flange can only tighten the left-hand thread.
 // - pusher: holds the screw's nut and presses the pin. The drive column keeps its body from turning. Its tip runs in
 //   the adapter's round bore, so the adapter can turn around it with the pusher at any height.
 // The drive unit (gear plates + motor + screw + pusher) goes in from below as one piece, into a column as wide as
-// the gear plates (the widest part). Stops: "open" = nut against the gear plates, "closed" = the pusher's
+// the gear plates (the widest part). Stops: "open" = the nut (flush with the pusher's top) against the gear plates, "closed" = the pusher's
 // chamfered shoulder in the adapter's countersink.
 //
 // Everything marked MEASURE is a placeholder - replace it with your caliper values.
@@ -33,8 +35,8 @@ part = "tray"; // assembly | exploded | section | tray | lid | adapter | pusher 
 valve_spacing  = 50;   // MEASURE centre-to-centre distance of the valves
 depth_avail    = 45;   // MEASURE free space from thread face to door/wall
 thread_len     = 9;    // MEASURE length of the external M30 thread on the valve
-pin_top        = 3.0;  // MEASURE pin tip above thread face, not pressed (negative = recessed)
-valve_stroke   = 3.5;  // MEASURE how far the pin goes in until it stops
+pin_top        = 12.2; // pin tip above thread face, not pressed (user, 2026-11-14)
+valve_stroke   = 5;    // how far the pin goes in until it stops (user, 2026-11-14)
 
 /* ---------------- N20 lock motor with lead screw (MEASURE all on arrival) ---------------- */
 // AliExpress 1005007468668750 (Kinmore KM-1020FN20): screw parallel to the motor
@@ -51,8 +53,11 @@ mot_h      = 10;   // motor can, narrow side (along Y)
 mot_len    = 18;   // motor can + end cap + terminals below the gear plates
 scr_d      = 3;    // lead screw diameter
 scr_len    = 19;   // screw length below the gear plates
-nut_af     = 6;    // nut across flats (hex)
-nut_len    = 7;    // nut length along the screw
+nut_af     = 6;    // nut across flats (hex; 7 across the corners), measured 2026-11-14
+nut_len    = 2;    // nut's hex length along the screw, measured 2026-11-14
+nut_boss_d = 6;    // round boss on one face of the nut, measured 2026-11-14; it points down into the pusher
+nut_boss_h = 4;
+nut_clr    = 0.4;  // nut pocket clearance per side (printed hex holes come out small)
 
 /* ---------------- other bought parts ---------------- */
 cell_d   = 18.4; // 18650 diameter (MEASURE)
@@ -63,7 +68,7 @@ batt_h   = cell_d + 2 * batt_fit;
 // bare contact plates, pressed into seats from the valve side; their side catches bite into the seats
 con_w    = 12;   // plate, square
 con_t    = 0.3;  // plate thickness
-con_tab  = 4.5;  // solder tab, snipped from 7 mm: longer hits the board and the USB-C socket
+con_tab  = 4.5;  // solder tab, snipped from 7 mm: longer hits the board and its USB-C
 con_spring = 5.5; // spring plate: its front to the cell's - end. The spring is solid at 5, so it keeps some travel
 con_dome = 1;    // button plate: height of its dome (MEASURE)
 con_slot = 0.5;  // seat: slot for the plate
@@ -73,23 +78,32 @@ mark_l   = 6;    // polarity marks in the tray's side walls: bar length
 mark_t   = 1.4;  // bar width
 mark_d   = 0.6;  // cut depth
 mark_z   = 4.5;  // centre, above the lid's inside face
-// Motor board (../motor-board): Super Mini on top, the other parts on its underside. It lies flat over the battery,
-// Super Mini towards the front face, wire pads towards the drive, Super Mini's antenna towards the back wall.
-brd_l    = 27.6; // along the body (Y)
-brd_w    = 21;   // across the body (X)
+// Rollo board (../motor-rollo/pcb, branch pcb-designs): ESP32-H2 chip, charger, protection, motor driver and its own
+// USB-C on one board. It lies flat over the battery, parts up, its USB-C edge against the back wall: the USB-C is the
+// charging port, and the chip antenna in the same end sits in plastic. Positions below are from its KiCad layout:
+// u = from the USB-C edge towards the drive, x = across the body (+X), seen from the front face.
+brd_l    = 48.7; // along the body (Y)
+brd_w    = 17;   // across the body (X)
 brd_t    = 0.8;  // PCB thickness
-brd_under = 1.7; // tallest part on its underside
-esp_w    = 18.4; // Super Mini, across the body (MEASURE)
-esp_over = 3.03; // Super Mini's antenna end past the board's end
-esp_stack = 4.6; // board's top to the top of the Super Mini's USB-C: 0.1 solder + 1.2 PCB + 3.3 USB-C (MEASURE)
-esp_usb_y = 6.63; // Super Mini's PCB USB-C end, from the board's wire pad end
-btn_x    = 4.3;  // BOOT and RESET button centres, sideways from the board's centre (scaled from the seller's photo)
-btn_y    = 8.6;  // button centres from the Super Mini's PCB USB-C end (scaled from the seller's photo)
-// USB-C snap socket for charging, wired to the board's J1 (MEASURE)
+brd_top  = 2;    // tallest part on top (the BOOT button); parts are on top only
+brd_under = 2.5; // room under it: the USB-C's 0.8 mm, the motor pads' (J2) solder joints and the wires to them
+btn_u    = 40.8; // BOOT button (SW1)
+btn_x    = 5;
+led_u    = 35.15; // light window over the charge LED (D1, u 34.1) and the status LED (D2, u 36.2)
+led_x    = 4.55;
+led_win  = [2.6, 4.6];  // window size, X x Y
+led_skin = 0.4;  // front face left over the window: the LEDs shine through it; 0 = open hole
+board_stl = "../motor-rollo/pcb/rollo_board.stl";  // exported from KiCad (branch pcb-designs): origin USB-C edge, centre line, underside
+// its USB-C (GT-USB-7014C, mid-mount)
+usb_x    = 2;    // centre, off the board's centre line
+usb_dn   = 0.8;  // below the board's underside
+usb_up   = 1.56; // above the board's top
+usb_len  = 7.8;  // how far it reaches into the board from its edge
+usb_out  = 0;    // receptacle's face past the board's edge (MEASURE)
 usb_w    = 9.3;  // opening in the back wall, width
 usb_h    = 3.6;  // opening in the back wall, height
-usb_wall = 1.6;  // back wall around the opening, for the socket's snaps
-usb_body = 8;    // socket behind the wall
+usb_wall = 0.8;  // back wall left in front of the receptacle, so the plug's overmold reaches it
+usb_rec  = [13, 7.5];  // recess outside for the plug's overmold
 
 /* ---------------- design ---------------- */
 wall     = 2;
@@ -100,15 +114,22 @@ wire_gap = 0.2;    // between the battery and the board's underside parts: they 
 board_clip = 1;    // board: stops cover this much at its corners
 pad_stop = 0.5;    // board: stops reach this far along its long edges, so the pads next to them stay free
 board_fit = 0.05;  // board: press fit between the side walls of its pocket, gap per side (too tight or loose: change it, reprint the tray)
-pin_d    = 1.6;    // pin holes in the front face over the BOOT and RESET buttons
-drv_wire = 1.5;    // in front of the board and the battery, against the drive column wall: the motor wires go up there
+pin_d    = 1.6;    // pin hole in the front face over the BOOT button
+drv_wire = 1.5;    // between the drive column wall and the spring plate: room for the plate's tab and wire
+// wire channel: motor, board and contact plates are soldered together outside, then the harness is laid in from the
+// valve side. The motor wires leave the drive column through a slot open towards the valve, go up the gap beside the
+// column and along the top corner of the battery bay (beside the cell, under the board) to the board's pad end.
+wire_side = -1;    // which side the channel runs on: -1 = -X (the board's BAT+ pad side), +1 = +X
+wire_d   = 1.6;    // the bundle it must pass (two 26-28 AWG silicone wires)
+wire_slot = 4;     // motor exit slot through the column's side wall, along Y
+wire_y   = 11;     // its centre, beside the motor's end cap
 stop_t   = 1.2;    // board: end stops, along the body
 clr      = 0.25;   // general print clearance
 corner_r = 3;
 
 stroke_margin = 0.1;           // stop just before the pin bottoms out
-travel      = valve_stroke - stroke_margin;
-pin_preload = 0.3;             // pusher presses the pin this much when "open"
+mount_gap   = 0.5;             // at the top stop ("open") the tip stays this far above the unpressed pin: the head goes on with no force
+travel      = mount_gap + valve_stroke - stroke_margin;   // the bottom stop ("closed") presses the pin valve_stroke - stroke_margin, never more
 pusher_trim = 0;               // fine tune pusher tip length in steps of 0.2
 
 pu_x   = 5;                    // pusher half width (X)
@@ -118,6 +139,9 @@ tip_d  = 6;                    // round tip through the adapter: the adapter tur
 tip_sh = 1.2;                  // shoulder ledge around the tip, a 45 deg chamfer (cut off by the pusher's +Y face)
 scr_bore = scr_d + 0.6;        // bore for the screw in the pusher
 tip_r  = 1.5;                  // pusher body corner radius
+pu_rd  = tip_d + 2 * tip_sh;   // round collar above the shoulder: fits the adapter's round recess, so no corner meets the adapter
+pu_rh  = 1;                    // collar height: the square body stays this far above the adapter when closed
+pu_loft = 2.2;                 // 45 deg loft from the collar out to the square body (prints tip down without overhang)
 
 nut_od    = 36;
 lip_t     = 2.5;
@@ -139,6 +163,13 @@ slot_d    = 1.5;   // its depth
 slot_r    = 11.5;  // it ends here, inside the neck, so the flange's rim stays whole under the nut's clamp
 ear_up    = 1.25;  // ears stand this far above the lid: cover over the thread
 ear_y1    = 8;     // ears end here (towards the motor); the lid starts behind them
+// anti-turn key: tongue on the lid's front edge into a notch in the adapter's thread (at +Y, inside the drive column,
+// where the tray has no ridges anyway; a second notch at -Y for the other thread start)
+key_w     = 3;     // tongue width
+key_play  = 0.5;   // notch wider than the tongue, per side (~3 deg of turn, 0.07 mm of axial slack)
+key_r     = 7.85;  // tongue tip, from the valve axis (the adapter's root is at bt_d/2 - bt_h - bt_gap)
+key_ch    = 0.6;   // chamfers on the tongue's tip corners: it finds the notch even if the adapter stops a bit short
+key_deep  = 0.45;  // notch goes this far past the tongue tip (the lid can slide on until it meets the ears)
 // lid
 lid_tg   = 0.9;    // tongue on the lid's long edges, into the wall grooves (flat faces: no wedging)
 lid_tg_h = 1.0;    // tongue thickness
@@ -152,7 +183,10 @@ $fn = 64;
 
 /* ---------------- derived ---------------- */
 lip_ch    = (flange_d + 0.8 - lip_id) / 2;     // 45 deg cone under the nut's lip (prints either way up)
-z_body0   = flange_h + lip_t + 0.5;            // body sits just above the nut, on the adapter's shoulder
+scr_clear = 2.5;                               // pusher material between the screw's end and the tip, open
+// body sits on the adapter's shoulder: just above the nut, or higher where the pin sticks out far,
+// so the unpressed pin stays clear of the screw's end (the motor can stands on the adapter, so the screw moves with it)
+z_body0   = max(flange_h + lip_t + 0.5, pin_top + mount_gap - pusher_trim + scr_clear - base_t - mot_len + scr_len);
 z_floor   = z_body0 + base_t;                  // adapter's top
 z_cover   = z_body0 + cover_t;                 // inside face of the lid
 z_mot0    = z_floor;                           // motor can stands on the adapter; the drive column keeps it from tilting
@@ -160,16 +194,17 @@ z_gp0     = z_mot0 + mot_len;                  // gear plates, bottom face
 z_gp1     = z_gp0 + gp_t;
 z_col_top = z_gp1 + 0.2;                       // top of the drive column: the gear plates push on it
 z_pcb0    = z_cover + batt_h + brd_under + wire_gap;   // board's underside, its parts just over the battery
-z_top     = max(z_col_top, z_pcb0 + brd_t + esp_stack + clr);   // inside face of the front face; the Super Mini's USB-C sets it
+z_top     = max(z_col_top, z_pcb0 + brd_t + brd_top + clr);   // inside face of the front face
 depth_total = z_top + lid_t;
 
 z_scr_tip = z_gp0 - scr_len;
-z_nut1    = z_gp0 - 0.5;                       // nut top, open
-z_nut0    = z_nut1 - nut_len;                  // nut bottom, open
+z_nut1    = z_gp0 - 0.5;                       // nut's hex top = the pusher's top, open: stops against the gear plates
+z_nut0    = z_nut1 - nut_len;                  // nut's hex bottom, open
+z_boss0   = z_nut0 - nut_boss_h;               // bottom of the nut's boss, inside the pusher
 z_shoulder = z_floor + travel;                 // pusher shoulder, open (in the adapter's countersink when closed)
-z_tip     = pin_top - pin_preload - pusher_trim;  // pusher tip, open
+z_tip     = pin_top + mount_gap - pusher_trim;    // pusher tip, open
 
-body_w    = brd_w + 2 * wall + 1;
+body_w    = 2 * (max(batt_h / 2 + 0.3, brd_w / 2 + board_clip + 0.2) + wall);   // the battery sets it
 in_half   = body_w / 2 - wall;
 gp_y0     = -gp_scr;                           // gear plates, Y range
 gp_y1     = gp_y0 + gp_len;
@@ -190,12 +225,12 @@ y_batt1   = y_cell1 + con_dome + con_t;        // button plate, rear face: the b
 y_max     = y_batt1 + wall;
 z_batt    = z_cover + batt_h / 2;              // cell's axis
 body_len  = y_max - y_min;
-y_brd0    = tw_y1 + drv_wire + clr;            // board's wire pad end
-y_brd1    = y_brd0 + brd_l;                    // board's other end; the Super Mini's antenna hangs past it
+y_brd1    = y_max - wall - usb_out;            // board's USB-C edge, against the back wall
+y_brd0    = y_brd1 - brd_l;                    // board's other end: motor and cell pads
 z_brd1    = z_pcb0 + brd_t;
-y_esp_usb = y_brd0 + esp_usb_y;                // Super Mini's PCB USB-C end
-y_esp_end = y_brd1 + esp_over;                 // Super Mini's antenna end
-z_usb     = (z_cover + batt_h + z_top) / 2;    // USB-C socket, centred over the battery
+z_usb     = z_pcb0 + (brd_t + usb_up - usb_dn) / 2;   // its USB-C's centre
+wire_ch   = in_half - tw_x;                    // the channel's width: the gap between the column wall and the side wall
+wire_z    = z_pcb0 - 0.4 - wire_ch / 2;        // the channel's centre in the top corner, just under the board
 
 echo(str("total depth from thread face: ", depth_total, " mm (available ", depth_avail, ")"));
 echo(str("body: ", body_w, " x ", body_len, " mm (X x Y)"));
@@ -206,27 +241,38 @@ assert(lid_tg_z + lid_tg_h <= cover_t, "lid too thin for its tongues");
 assert(depth_total <= depth_avail, "head is deeper than the available space");
 assert(body_w <= valve_spacing - 2, "head is wider than the valve spacing");
 assert(tw_x <= in_half + 0.01, "gear plates wider than the body");
-assert(z_scr_tip < z_nut0 - travel, "screw too short: the nut would run off its end when closed");
+assert(z_nut1 - (z_shoulder + pu_rh + pu_loft) >= 5, "pusher's square part (up to its top, around the nut) too short to keep it from turning");
+assert(z_boss0 - nut_clr - (z_shoulder + pu_rh + pu_loft) >= 2, "pusher too thin between its loft and the nut's boss");
+assert(z_tip - travel >= pin_top - valve_stroke + stroke_margin - 0.001, "closed stop presses the pin past its stroke");
+assert(z_scr_tip < z_boss0 - travel, "screw too short: the nut would run off its end when closed");
 assert(z_scr_tip > z_tip + 2, "screw too long: it would hit the bottom of the pusher");
 assert(z_scr_tip - 1 > z_tip + 1.2, "screw too long: the pusher tip end gets too thin");
 assert(tip_d / 2 - scr_bore / 2 >= 1, "tip wall too thin around the screw bore");
 assert(tip_d / 2 <= pu_y1, "round tip sticks out of the pusher towards the motor");
 assert(scr_bore >= scr_d + 0.4, "screw bore too tight");
 assert(nut_af / 2 <= pu_y1 + 0.01, "nut sticks out of the pusher towards the motor");
+assert(pu_rd < tip_d + 2 * clr + 2 * tip_sh, "pusher's round collar wider than the adapter's recess");
 assert(pu_x <= col_x && pu_y0 >= col_y0, "pusher wider than the drive column");
-assert(z_tip < z_body0 - 1, "pusher tip does not reach the pin - pin is too far down");
+assert(z_tip < z_floor - 1, "pusher tip does not reach down into the adapter - pin sticks out too far");
 assert(lip_ch <= lip_t - 0.6, "lip too thin for its 45 deg cone: raise lip_t or lip_id");
 assert(neck_d / 2 >= bt_d / 2 + clr + 1, "adapter's shoulder too narrow to seat on the tray");
 assert(slot_r <= neck_d / 2, "adapter's tool slot runs out under the nut's clamp");
 assert(bt_d / 2 - bt_h - bt_gap - (tip_d / 2 + clr + tip_sh) >= 1.5, "adapter wall too thin between its countersink and its thread");
 assert(bt_crest > 0, "thread ridges too tall for their pitch");
+assert(key_r - key_deep - (tip_d / 2 + clr) >= 3, "adapter wall too thin behind the key's notch");
+assert(key_r < bt_d / 2 - bt_h - bt_gap - 0.1, "lid key doesn't reach past the adapter's thread root");
+assert(key_deep > clr, "lid key bottoms in the notch before the lid meets the ears");
+assert(key_w / 2 + key_play < tw_x - 1, "key's notch wider than the drive column");
 assert(bt_d / 2 - bt_h > sqrt(col_x * col_x + col_y0 * col_y0) - 0.5, "drive column cuts too much off the tray's ridges");
 assert(brd_w / 2 + board_fit <= in_half, "board wider than the body");
-assert(esp_w / 2 + 0.2 <= brd_w / 2 - board_clip, "Super Mini hits the board's stops");
-assert(y_esp_end + 2 <= y_max - wall - usb_body, "Super Mini's antenna end hits the USB-C socket");
-assert(z_usb - usb_h / 2 >= z_cover + batt_h, "USB-C socket hits the battery");
-assert(z_batt + con_w / 2 + con_tab < z_pcb0, "contact tab hits the board");
-assert(z_batt + con_w / 2 + con_tab < z_usb - usb_h / 2, "contact tab hits the USB-C socket");
+assert(y_brd0 - clr - stop_t >= y_batt0 + 2, "board too long: it reaches the drive column");
+assert(z_pcb0 - usb_dn >= z_cover + batt_h + wire_gap, "board's USB-C hits the battery");
+assert(z_usb + usb_rec[1] / 2 <= depth_total - 1, "USB-C recess runs into the front face's edge");
+assert(z_batt + con_w / 2 + con_tab < z_pcb0 - usb_dn, "contact tab hits the board's USB-C");
+assert(body_w / 2 - (bt_d / 2 + clr) >= 1.2, "side walls too thin around the body thread");
+assert(wire_ch >= wire_d + 0.4, "wire channel beside the drive column too narrow");
+assert(norm([in_half - wire_ch, wire_z - wire_ch / 2 - z_batt]) >= batt_h / 2 + 0.2, "wire channel in the corner pinches against the cell");
+assert(in_half - wire_ch >= con_w / 2 + 1.5 + 0.1, "wire channel runs into the contact plates' seats");
 assert(cell_nub + con_dome >= con_slot + con_lip, "cell hits the seat's lips before it reaches the button");
 
 /* ---------------- helpers ---------------- */
@@ -327,6 +373,9 @@ module adapter() {
         translate([0, 0, -1]) cylinder(d = tip_d + 2 * clr, h = z_floor + 2);
         // tool slot, reached from the valve side through the nut's thread
         translate([-slot_r, -slot_w / 2, -1]) cube([2 * slot_r, slot_w, slot_d + 1]);
+        // notches for the lid's key, one per thread start
+        for (a = [0, 180]) rotate(a) translate([-key_w / 2 - key_play, key_r - key_deep, z_body0 - 0.01])
+            cube([key_w + 2 * key_play, bt_d, z_cover + clr - z_body0 + 0.01]);
         // countersink for the pusher's chamfer = the "closed" stop, so it pushes straight on the valve;
         // raised by clr so the clearance doesn't let the pusher sink deeper on the 45 deg seat;
         // round all the way, because it ends up at any angle under the pusher
@@ -339,19 +388,33 @@ module pusher(s = 0) {
     // in place; s = travel (0 = open)
     translate([0, 0, -s]) difference() {
         union() {
-            // body
-            translate([0, 0, z_shoulder]) linear_extrude(z_nut1 - z_shoulder) body_shape();
+            // body: round collar at the bottom, lofting out to the square that keeps it from turning in the column
+            intersection() {
+                translate([0, 0, z_shoulder]) linear_extrude(z_nut1 - z_shoulder) body_shape();
+                union() {
+                    translate([0, 0, z_shoulder]) cylinder(d = pu_rd, h = pu_rh + 0.01);
+                    hull() {
+                        translate([0, 0, z_shoulder + pu_rh]) cylinder(d = pu_rd, h = 0.01);
+                        translate([0, 0, z_shoulder + pu_rh + pu_loft]) linear_extrude(z_nut1 - z_shoulder - pu_rh - pu_loft) body_shape(2);
+                    }
+                }
+            }
             // round tip through the adapter onto the pin, 45 deg chamfer up to the shoulder
             tip_with_chamfer(z_shoulder, z_shoulder - z_tip);
         }
-        // hex pocket for the nut, open at the top and towards the motor
-        translate([0, 0, z_nut0 - clr]) hex(nut_af + 2 * clr, nut_len + 2 * clr + 1);
+        // nut pocket, open at the top and towards the motor: hex flush with the pusher's top, its boss in a round hole below
+        translate([0, 0, z_nut0 - nut_clr]) hex(nut_af + 2 * nut_clr, nut_len + 2 * nut_clr + 1);
+        translate([0, 0, z_boss0 - nut_clr]) cylinder(d = nut_boss_d + 2 * nut_clr, h = nut_boss_h + 0.01);
+        translate([-nut_boss_d / 2 - nut_clr, 0, z_boss0 - nut_clr]) cube([nut_boss_d + 2 * nut_clr, 10, nut_boss_h + 0.01]);
+        // corner reliefs: printed hex corners round off and would grip the nut's corners (not at -Y: wall too thin there)
+        for (a = [30, 150, 210, 330]) rotate(a) translate([(nut_af / 2 + nut_clr) / cos(30), 0, z_nut0 - nut_clr])
+            cylinder(d = 1, h = nut_len + 2 * nut_clr + 1, $fn = 12);
         // lead-in so the nut finds the pocket when you push the pusher up the screw
         hull() {
-            translate([0, 0, z_nut1 - 0.8]) hex(nut_af + 2 * clr, 0.01);
-            translate([0, 0, z_nut1]) hex(nut_af + 2 * clr + 1.6, 0.01);
+            translate([0, 0, z_nut1 - 0.4]) hex(nut_af + 2 * nut_clr, 0.01);
+            translate([0, 0, z_nut1]) hex(nut_af + 2 * nut_clr + 0.8, 0.01);
         }
-        translate([-(nut_af / cos(30)) / 2 - clr, 0, z_nut0 - clr]) cube([nut_af / cos(30) + 2 * clr, 10, nut_len + 2 * clr + 1]);
+        translate([-(nut_af / cos(30)) / 2 - nut_clr, 0, z_nut0 - nut_clr]) cube([nut_af / cos(30) + 2 * nut_clr, 10, nut_len + 2 * nut_clr + 1]);
         // bore for the screw below the nut
         translate([0, 0, z_scr_tip - 1]) cylinder(d = scr_bore, h = 50, $fn = 24);
     }
@@ -385,6 +448,10 @@ module lid() {
         for (m = [[y_cell0 + 4, "-"], [y_cell1 - 16, "+"]]) translate([0, m[0], z_cover - 0.4]) linear_extrude(1)
             text(m[1], size = 8, halign = "center", valign = "center", font = "Liberation Sans:style=Bold");
     }
+    // key on the front edge: into the adapter's notch, so the adapter can't back off
+    translate([0, 0, z_body0]) linear_extrude(cover_t) polygon([
+        [-key_w / 2, bt_d / 2 + clr + 1], [-key_w / 2, key_r + key_ch], [-key_w / 2 + key_ch, key_r],
+        [key_w / 2 - key_ch, key_r], [key_w / 2, key_r + key_ch], [key_w / 2, bt_d / 2 + clr + 1]]);
     // the tab's catch: square towards the back (holds the lid), ramp towards the front (slides in)
     translate([0, y_max - wall + 0.3, z_cover - 0.01]) rotate([90, 0, 90]) linear_extrude(tab_w - 1, center = true)
         polygon([[0, 0], [1.2, 0], [1.2, tab_bump], [0.6, tab_bump]]);
@@ -424,6 +491,8 @@ module batt_ribs() {
         for (sx = [0, 1]) mirror([sx, 0])
             polygon([[in_half + 0.01, z_batt], [in_half + 0.01, z_r], [in_half - (z_r - z_batt), z_batt]]);
         translate([0, z_batt]) circle(d = batt_h);
+        // notch for the wire channel in the top corner
+        translate([wire_side * (in_half - wire_ch / 2), wire_z]) square([wire_ch + 0.02, wire_ch], center = true);
     }
 }
 
@@ -459,18 +528,24 @@ module tray() {
         // The chamfered corner stays solid at the plates' level, so the drive unit only fits one way round.
         translate([0, 0, z_body0 - 1]) linear_extrude(z_col_top - z_body0 + 1) offset(delta = clr) gp_outline();
         translate([-col_x, col_y0, z_body0 - 1]) cube([2 * col_x, col_y1 - col_y0, z_gp0 - z_body0 + 1]);
-        // motor wires to the board
-        translate([-2, col_y1 - 1, z_mot0]) cube([4, tw_y1 - col_y1 + 2, 4]);
+        // the board's slot runs into the back wall's rounded inside corners: it goes in tilted, USB-C end first over the
+        // button plate's seat, slides against the back wall and swings up under the stops
+        translate([-brd_w / 2 - board_fit, y_brd0 - clr, z_pcb0 - usb_dn - 0.5]) cube([brd_w + 2 * board_fit, brd_l + 2 * clr, z_brd1 - z_pcb0 + usb_dn + 0.5]);
+        // motor exit slot: through the column's side wall into the gap beside it, open towards the valve so the
+        // drive unit goes in with its wires already soldered
+        translate([wire_side > 0 ? 0 : -in_half - 0.01, wire_y - wire_slot / 2, z_body0 - 1])
+            cube([in_half + 0.01, wire_slot, z_mot0 + 4 - z_body0 + 1]);
         // the lid and its grooves, open at the back end
         lid_solid(clr);
         translate([-body_w, y_max - wall - 1, z_body0 - 1]) cube([2 * body_w, wall + 2, cover_t + 1 + clr]);
         // the lid tab's catch: notch in the back wall's underside
         translate([-tab_w / 2, y_max - wall + 0.1, z_cover - 0.01]) cube([tab_w, 1.4, tab_bump + 0.2]);
-        // pin holes over the Super Mini's BOOT and RESET buttons, countersunk outside so the pin finds them
-        for (sx = [-1, 1]) translate([sx * btn_x, y_esp_usb + btn_y, z_top - 0.01]) {
+        // pin hole over the BOOT button, countersunk outside so the pin finds it; plain window over the charge LED
+        translate([btn_x, y_brd1 - btn_u, z_top - 0.01]) {
             cylinder(d = pin_d, h = depth_total - z_top + 1, $fn = 24);
             translate([0, 0, depth_total - z_top - 0.79]) cylinder(d1 = pin_d, d2 = pin_d + 1.6, h = 0.81, $fn = 24);
         }
+        translate([led_x - led_win[0] / 2, y_brd1 - led_u - led_win[1] / 2, z_top - 0.01]) cube([led_win[0], led_win[1], lid_t - led_skin + 0.01 + (led_skin > 0 ? 0 : 1)]);
         // left-hand thread for the adapter, through the ears and the end wall
         body_thread(z_body0 - 1, base_t + 1 + clr, 0.01);
         translate([0, 0, z_body0 - 0.01]) cylinder(r1 = bt_d / 2 + 0.01, r2 = bt_d / 2 - bt_entry, h = bt_entry + 0.01);
@@ -479,9 +554,9 @@ module tray() {
             polarity_mark(y_cell0 + 5, false);
             polarity_mark(y_cell1 - 5, true);
         }
-        // the USB-C socket through the back wall, a recess outside so its wall suits the socket's snaps and the plug reaches it
-        translate([-usb_w / 2, y_max - wall - 0.5, z_usb - usb_h / 2]) cube([usb_w, wall + 1, usb_h]);
-        translate([-6.5, y_max - (wall - usb_wall), z_usb - 3.75]) cube([13, 2, 7.5]);
+        // the board's USB-C through the back wall, a recess outside so the plug's overmold reaches the receptacle
+        translate([usb_x - usb_w / 2, y_max - wall - 0.5, z_usb - usb_h / 2]) cube([usb_w, wall + 1, usb_h]);
+        translate([usb_x - usb_rec[0] / 2, y_max - (wall - usb_wall), z_usb - usb_rec[1] / 2]) cube([usb_rec[0], 2, usb_rec[1]]);
     }
 }
 
@@ -494,11 +569,16 @@ module gp_outline() {
 }
 
 /* ---------------- placeholders for bought parts ---------------- */
+// the rollo board with its parts, from its KiCad export, in place
+module rollo_board() {
+    translate([0, y_brd1 + usb_out, z_pcb0]) rotate([0, 0, -90]) import(board_stl, convexity = 6);
+}
+
 module motor(s = 0) {
     color("goldenrod") translate([0, 0, z_gp0]) linear_extrude(gp_t) gp_outline();
     color("silver") translate([-mot_w / 2, mot_offset - mot_h / 2, z_gp0 - mot_len]) cube([mot_w, mot_h, mot_len]);
     color("gray") translate([0, 0, z_scr_tip]) cylinder(d = scr_d, h = scr_len, $fn = 16);
-    color("red") translate([0, 0, z_nut0 - s]) hex(nut_af, nut_len);
+    color("red") translate([0, 0, -s]) { translate([0, 0, z_nut0]) hex(nut_af, nut_len); translate([0, 0, z_boss0]) cylinder(d = nut_boss_d, h = nut_boss_h); }
 }
 
 module cell() {
@@ -519,15 +599,10 @@ module ghost_parts(s = 0) {
     motor(s);
     color("royalblue", 0.4) cell();
     color("silver") contact_plates();
-    color("darkgreen") translate([-brd_w / 2, y_brd0, z_pcb0]) cube([brd_w, brd_l, brd_t]);                           // motor board
-    color("green") translate([-brd_w / 2 + 3, y_brd0 + 2, z_pcb0 - brd_under]) cube([brd_w - 6, brd_l - 4, brd_under]);  // its underside parts
-    color("royalblue") translate([-esp_w / 2, y_esp_usb, z_brd1 + 0.1]) cube([esp_w, y_esp_end - y_esp_usb, 1.2]);     // Super Mini
-    color("silver") translate([-4.5, y_esp_usb - 1.8, z_brd1 + 1.3]) cube([9, 7.5, 3.3]);                             // its USB-C
-    for (sx = [-1, 1]) color("black") translate([sx * btn_x, y_esp_usb + btn_y, z_brd1 + 1.3]) cylinder(d = 3, h = 1.5, $fn = 16);  // its buttons
-    color("silver") translate([-usb_w / 2, y_max - wall - usb_body, z_usb - usb_h / 2]) cube([usb_w, usb_body + wall - usb_wall, usb_h]);  // USB-C socket
+    color("darkgreen") rollo_board();
     // valve: threaded stub up to its thread face (z = 0), pin above it
     color("lightblue", 0.3) translate([0, 0, -thread_len]) cylinder(d = 30, h = thread_len);
-    color("lightblue", 0.6) cylinder(d = 3, h = pin_top - s - pin_preload - 0.01, $fn = 16);
+    color("lightblue", 0.6) cylinder(d = 3, h = pin_top - max(0, s - mount_gap) - 0.01, $fn = 16);
 }
 
 /* ---------------- output ---------------- */
