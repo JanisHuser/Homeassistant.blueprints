@@ -65,6 +65,9 @@ CONFIG_ICD_ACTIVE_MODE_INTERVAL_MS=1000
 # controller reading the device in) don't fall back to slow polling between steps.
 CONFIG_ICD_ACTIVE_MODE_THRESHOLD_MS=5000
 
+# Endpoint names (Fixed Label cluster) served from code: common/src/labels.cpp
+CONFIG_CUSTOM_DEVICE_INFO_PROVIDER=y
+
 # Vendor and product name the controllers show (picked by CONFIG_PRODUCT_*)
 CONFIG_CHIP_PROJECT_CONFIG="main/CHIPProjectConfig.h"
 

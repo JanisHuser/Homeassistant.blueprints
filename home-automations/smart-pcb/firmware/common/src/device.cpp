@@ -398,13 +398,13 @@ static void diag_create(node_t *node)
 {
     const esp_timer_create_args_t args = {.callback = diag_timer_cb, .name = "diagnostics"};
     esp_timer_create(&args, &diag_timer);
-    // Plain On/Off plug-ins: Home Assistant shows them as switches named after the endpoint; rename
-    // them "Motor forward" and "Motor backward" there.
+    // Plain On/Off plug-ins, which Home Assistant shows as switches, named by their labels.
     for (uint16_t *id : {&diag_forward_id, &diag_backward_id}) {
         endpoint::on_off_plug_in_unit::config_t config;
         endpoint_t *ep = endpoint::on_off_plug_in_unit::create(node, &config, ENDPOINT_FLAG_NONE, nullptr);
         ABORT_APP_ON_FAILURE(ep != nullptr, ESP_LOGE(TAG, "Failed to create diagnostics endpoint"));
         *id = endpoint::get_id(ep);
+        device_label_endpoint(ep, id == &diag_forward_id ? "Motor forward" : "Motor backward");
     }
     ESP_LOGI(TAG, "Diagnostics: motor forward on endpoint %u, backward on %u", diag_forward_id, diag_backward_id);
 }
@@ -560,6 +560,7 @@ void device_start(void (*server_ready)())
         .port_config = {.storage_partition_name = "nvs", .netif_queue_size = OPENTHREAD_QUEUE_SIZE, .task_queue_size = OPENTHREAD_QUEUE_SIZE},
     };
     set_openthread_platform_config(&ot_config);
+    labels_register();
 
     esp_err_t err = esp_matter::start(app_event_cb);
     ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to start Matter, err:%d", err));

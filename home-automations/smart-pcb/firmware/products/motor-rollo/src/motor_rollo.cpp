@@ -467,12 +467,18 @@ void MotorRollo::create_endpoints(node_t *node)
     covering_endpoint_id = endpoint::get_id(covering);
 
     // Endpoints 2-5: jog up, jog down, set fully up, set fully down. Plain On/Off plug-ins, which Home
-    // Assistant shows as switches; each turns itself off once done.
-    for (uint16_t *id : {&jog_up_endpoint_id, &jog_down_endpoint_id, &set_open_endpoint_id, &set_closed_endpoint_id}) {
+    // Assistant shows as switches named by their labels; each turns itself off once done.
+    struct button_t {
+        uint16_t *id;
+        const char *name;
+    };
+    for (const button_t &b : {button_t{&jog_up_endpoint_id, "Jog up"}, button_t{&jog_down_endpoint_id, "Jog down"},
+                              button_t{&set_open_endpoint_id, "Set fully up"}, button_t{&set_closed_endpoint_id, "Set fully down"}}) {
         on_off_plug_in_unit::config_t button_config;
         endpoint_t *button = on_off_plug_in_unit::create(node, &button_config, ENDPOINT_FLAG_NONE, nullptr);
         ABORT_APP_ON_FAILURE(button != nullptr, ESP_LOGE(TAG, "Failed to create button endpoint"));
-        *id = endpoint::get_id(button);
+        *b.id = endpoint::get_id(button);
+        device_label_endpoint(button, b.name);
     }
 }
 

@@ -192,7 +192,7 @@ void ValveHead::create_endpoints(node_t *node)
     cluster::valve_configuration_and_control::feature::level::config_t level_config;
     cluster::valve_configuration_and_control::feature::level::add(valve_cluster, &level_config);
 
-    // Shows up in Home Assistant as a switch on the same device; rename it "Reverse direction" there.
+    // Shows up in Home Assistant as a switch on the same device, named by its label.
     on_off_plug_in_unit::config_t reverse_config;
     reverse_config.on_off.on_off = MOTOR_REVERSED_DEFAULT;
     // StartUpOnOff null = keep the stored value at boot (its default, 0, would switch it off every restart).
@@ -200,6 +200,7 @@ void ValveHead::create_endpoints(node_t *node)
     endpoint_t *reverse = on_off_plug_in_unit::create(node, &reverse_config, ENDPOINT_FLAG_NONE, nullptr);
     ABORT_APP_ON_FAILURE(reverse != nullptr, ESP_LOGE(TAG, "Failed to create reverse switch endpoint"));
     reverse_endpoint_id = endpoint::get_id(reverse);
+    device_label_endpoint(reverse, "Motor reversed");
     // OnOff is non-volatile and loaded from flash when it is created: this is the stored switch
     // position, or the default on first boot. Read before Matter starts, so no write can race it.
     esp_matter_attr_val_t reversed = esp_matter_invalid(nullptr);

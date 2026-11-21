@@ -27,6 +27,7 @@
 #include <esp_matter.h>
 
 #include "board.h"
+#include "labels.h"
 #include "led.h"
 #include "units.h"
 
