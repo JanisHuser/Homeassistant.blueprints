@@ -23,6 +23,13 @@ blueprint:
     Each state has to hold for a few seconds before its scene is applied, so
     skipping or scrubbing (which briefly reports paused) does not flicker the
     lights.
+
+    Daytime (optional): give any state a daytime scene (e.g. moodlight instead
+    of everything off) and it is used inside the daytime window — sunrise to
+    sunset, moved by the offsets and the same virtual sun helpers as Room
+    Master. States without a daytime scene always use their normal one. With
+    "Follow the time" on, the lights switch over when the window starts or
+    ends while something is playing or paused.
   domain: automation
   source_url: https://github.com/JanisHuser/Homeassistant.blueprints/blob/main/homeassistant.blueprints/apple-tv-media-scenes.yaml
   author: Janis
@@ -69,6 +76,102 @@ blueprint:
         entity:
           filter:
             domain: scene
+
+    daytime:
+      name: Daytime
+      icon: mdi:weather-sunny
+      collapsed: true
+      input:
+        scene_playing_day:
+          name: Playing scene — daytime (optional)
+          description: Used instead of the playing scene during the day.
+          default: []
+          selector:
+            entity:
+              filter:
+                domain: scene
+
+        scene_paused_day:
+          name: Paused scene — daytime (optional)
+          description: Used instead of the paused scene during the day.
+          default: []
+          selector:
+            entity:
+              filter:
+                domain: scene
+
+        scene_stopped_day:
+          name: Stopped scene — daytime (optional)
+          description: Used instead of the stopped scene during the day.
+          default: []
+          selector:
+            entity:
+              filter:
+                domain: scene
+
+        sun_entity:
+          name: Sun entity
+          default: sun.sun
+          selector:
+            entity:
+              filter:
+                domain: sun
+
+        day_before_sunrise:
+          name: Day starts before sunrise
+          description: Hours. Positive = before sunrise, negative = after.
+          default: 0
+          selector:
+            number:
+              min: -6
+              max: 6
+              step: 0.25
+              unit_of_measurement: h
+              mode: slider
+
+        day_after_sunset:
+          name: Day ends after sunset
+          description: Hours. Positive = after sunset, negative = before.
+          default: 0
+          selector:
+            number:
+              min: -6
+              max: 6
+              step: 0.25
+              unit_of_measurement: h
+              mode: slider
+
+        virtual_sunrise:
+          name: Virtual sun — sunrise shift (optional)
+          description: >
+            The same input_number (hours) as Room Master. Positive = the
+            virtual sunrise comes later, negative = earlier.
+          default: []
+          selector:
+            entity:
+              filter:
+                domain: input_number
+
+        virtual_sunset:
+          name: Virtual sun — sunset shift (optional)
+          description: >
+            The same input_number (hours) as Room Master. Positive = the
+            virtual sunset comes later, negative = earlier.
+          default: []
+          selector:
+            entity:
+              filter:
+                domain: input_number
+
+        follow_time:
+          name: Follow the time while watching
+          description: >
+            When the daytime window starts or ends while the Apple TV is
+            playing or paused, switch to that state's scene for the new time.
+            Checked once a minute.
+          default: true
+          selector:
+            boolean: {}
 
     playing_delay:
       name: Playing delay
@@ -143,6 +246,71 @@ trigger_variables:
 variables:
   transition: !input transition
   max_paused: !input max_paused
+  scene_playing: !input scene_playing
+  scene_paused: !input scene_paused
+  scene_stopped: !input scene_stopped
+  scene_playing_day: !input scene_playing_day
+  scene_paused_day: !input scene_paused_day
+  scene_stopped_day: !input scene_stopped_day
+  sun_entity: !input sun_entity
+  day_before_sunrise: !input day_before_sunrise
+  day_after_sunset: !input day_after_sunset
+  virtual_sunrise: !input virtual_sunrise
+  virtual_sunset: !input virtual_sunset
+  follow_time: !input follow_time
+  sunrise_shift: >
+    {{ states(virtual_sunrise) | float(0)
+       if virtual_sunrise is string and virtual_sunrise | length > 0 else 0 }}
+  sunset_shift: >
+    {{ states(virtual_sunset) | float(0)
+       if virtual_sunset is string and virtual_sunset | length > 0 else 0 }}
+  # Same sunrise / sunset reconstruction as Room Master: sun.sun only knows
+  # the *next* rising and setting, so today's are derived from those.
+  # "now|one minute ago", so the minute tick can spot a window boundary.
+  day_flags: >
+    {% set n = now().timestamp() %}
+    {% set nr = as_timestamp(state_attr(sun_entity, 'next_rising'), 0) %}
+    {% set ns = as_timestamp(state_attr(sun_entity, 'next_setting'), 0) %}
+    {% set lc = as_timestamp(states[sun_entity].last_changed, 0)
+       if states[sun_entity] is not none else 0 %}
+    {% if is_state(sun_entity, 'above_horizon') %}
+      {% set rise = lc if (lc - (nr - 86400)) | abs < 600 else nr - 86400 %}
+      {% set set_ = ns %}
+    {% elif nr | timestamp_custom('%Y-%m-%d') == now().strftime('%Y-%m-%d') %}
+      {% set rise = nr %}
+      {% set set_ = ns %}
+    {% else %}
+      {% set rise = nr - 86400 %}
+      {% set set_ = lc if (lc - (ns - 86400)) | abs < 600 else ns - 86400 %}
+    {% endif %}
+    {% set start = rise + (sunrise_shift | float(0)) * 3600
+                   - (day_before_sunrise | float(0)) * 3600 %}
+    {% set end = set_ + (sunset_shift | float(0)) * 3600
+                 + (day_after_sunset | float(0)) * 3600 %}
+    {{ start <= n <= end }}|{{ start <= n - 60 <= end }}
+  is_day: "{{ day_flags.split('|')[0] | trim == 'True' }}"
+  was_day: "{{ day_flags.split('|')[1] | trim == 'True' }}"
+  # Scene to use per state right now: the daytime one when it is day and
+  # one is set, otherwise the normal one.
+  pick: >
+    {% macro sel(day, normal) -%}
+      {{ day if is_day and day is string and day | length > 0 else normal }}
+    {%- endmacro %}
+    {{ {'playing': sel(scene_playing_day, scene_playing),
+        'paused': sel(scene_paused_day, scene_paused),
+        'stopped': sel(scene_stopped_day, scene_stopped)} }}
+  # Current status, same rule as the triggers.
+  status: >
+    {% set e = player %}
+    {% set raw = ignored_apps if ignored_apps is iterable
+                 and ignored_apps is not string else [ignored_apps] %}
+    {% set app = ((state_attr(e, 'app_name') or '') ~ ' '
+                  ~ (state_attr(e, 'app_id') or '')) | lower %}
+    {% set ignored = raw | map('lower') | map('trim')
+                     | reject('equalto', '') | select('in', app)
+                     | list | count > 0 %}
+    {% set st = states(e) %}
+    {{ st if st in ['playing', 'paused'] and not ignored else 'stopped' }}
 
 triggers:
   - trigger: template
@@ -196,18 +364,39 @@ triggers:
     for:
       seconds: !input stopped_delay
     id: stopped
+  - trigger: time_pattern
+    minutes: /1
+    id: time_tick
 
-conditions: []
+conditions:
+  # The minute tick only acts at a daytime window boundary, while watching,
+  # and only when that state has a daytime scene (otherwise nothing changes).
+  - condition: template
+    value_template: >
+      {% set d = {'playing': scene_playing_day,
+                  'paused': scene_paused_day}.get(status) %}
+      {{ trigger.id != 'time_tick'
+         or (follow_time and is_day != was_day
+             and d is string and d | length > 0) }}
 
 actions:
   - choose:
+      - conditions:
+          - condition: trigger
+            id: time_tick
+        sequence:
+          - action: scene.turn_on
+            target:
+              entity_id: "{{ pick[status] }}"
+            data:
+              transition: "{{ transition }}"
       - conditions:
           - condition: trigger
             id: playing
         sequence:
           - action: scene.turn_on
             target:
-              entity_id: !input scene_playing
+              entity_id: "{{ pick['playing'] }}"
             data:
               transition: "{{ transition }}"
       - conditions:
@@ -216,7 +405,7 @@ actions:
         sequence:
           - action: scene.turn_on
             target:
-              entity_id: !input scene_paused
+              entity_id: "{{ pick['paused'] }}"
             data:
               transition: "{{ transition }}"
       - conditions:
@@ -239,6 +428,6 @@ actions:
         sequence:
           - action: scene.turn_on
             target:
-              entity_id: !input scene_stopped
+              entity_id: "{{ pick['stopped'] }}"
             data:
               transition: "{{ transition }}"
