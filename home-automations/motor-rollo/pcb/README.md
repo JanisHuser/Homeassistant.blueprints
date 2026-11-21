@@ -40,7 +40,7 @@ All parts are JLCPCB/LCSC parts; the LCSC number is in each symbol's and footpri
 | Passives | 0402 resistors and capacitors, 10 µF 0603 | C25744, C25741, C26083, C25882, C11702, C25076, C25905, C25092, C17168, C1525, C52923, C1576, C19702 | B (6.8 pF and 2.4 kΩ: P) | |
 | Not assembled | J2 motor pads (underside), J3/J4 cell pads | | | Bare copper, soldered by hand |
 
-**Silkscreen:** labels at everything soldered by hand: M1/M2 on the underside, BAT+/BAT−, and BOOT. Reference designators are on the fab layers only; the board is too small for them. D2 has no silkscreen outline (it would overlap D1 and R15); its footprint is a copy of KiCad's `LED_WS2812B-2020_PLCC4_2.0x2.0mm` in `rollo_board.pretty`, whose pads match the V6 datasheet.
+**Silkscreen:** labels at everything soldered by hand: M1/M2 on the underside, BAT+/BAT−, and BOOT. Every part's reference designator is on the top silkscreen too, for soldering by hand: 0.8 mm text where it fits, 0.6–0.7 mm in the crowded spots (C2, C11, C16, C20, R12, R15, R18, U2, U3, Y1), all with 0.15 mm strokes, and D2's inside its own outline. `production/place_silk_refs.py` placed them (run it with KiCad's Python); the minimum silk text height in the board setup is 0.6 mm for that. D2 has no silkscreen outline (it would overlap D1 and R15); its footprint is a copy of KiCad's `LED_WS2812B-2020_PLCC4_2.0x2.0mm` in `rollo_board.pretty`, whose pads match the V6 datasheet.
 
 **3D models:** KiCad 10 ships no model for the ESP32-H2's QFN footprint, so the board uses the same-size QFN model. The antenna, the USB-C and D2 have simple block models in `rollo_board.3dshapes`: `.wrl` for the 3D viewer and `.step` boxes of the same shape for the STL export (written by hand, since KiCad's STL export only takes STEP).
 
@@ -81,4 +81,4 @@ The USB-C faces the wall through an opening in the sled's nose. When the blind i
 - **Supply voltage:** the H2 wants 3.0–3.6 V. Below about 3.3 V on the cell the LDO's output drops under that, so the firmware should stop the motor and sleep before then.
 - **Firmware:** read the battery level on GPIO 1. The status LED stays on GPIO 8 as on the Super Mini.
 - **D2 at 3.3 V is at the bottom of its range.** The WS2812B-2020-V6 is rated from 3.3 V; the XC6206 gives 3.3 V ± 2 %, and less when the cell drops below about 3.4 V. Check it lights correctly at the lowest cell voltage the firmware allows.
-- **No production files yet.** Export the Gerbers, BOM and positions once the board is reviewed. Order it as 2 layers, 0.8 mm thick, smallest trace 0.15 mm, smallest hole 0.3 mm.
+- **Production files** for ordering the board and building it by hand are in [`production/`](production): Gerbers with the stencil layer, an LCSC parts list and a placement plan. Order it as 2 layers, 0.8 mm thick, smallest trace 0.15 mm, smallest hole 0.3 mm.
