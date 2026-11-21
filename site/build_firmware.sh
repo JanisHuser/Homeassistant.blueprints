@@ -10,6 +10,9 @@
 # Pass project names (e.g. diy-valve-head) to build only those; with none it builds every project.
 # Runs inside the esp-matter container, in CI and locally:
 #   docker run --rm -v "$PWD":/repo espressif/esp-matter:release-v1.5_idf_v5.4.1 bash /repo/site/build_firmware.sh [project...]
+# On a Mac, site/build_firmware_local.sh runs it with the build folder and ccache in Docker volumes,
+# which is much faster than on the shared folder. BUILD_DIR moves the build folders (default
+# _firmware/build).
 set -euo pipefail
 
 if ! command -v idf.py >/dev/null; then
@@ -19,6 +22,7 @@ fi
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 smart="$root/home-automations/smart-pcb/firmware"
+build_root=${BUILD_DIR:-$root/_firmware/build}
 
 # Every project: smart PCB products, then standalone projects
 all=()
@@ -51,10 +55,18 @@ for name in "${names[@]}"; do
     mkdir -p "$out"
     for defaults in "$defaults_dir"/sdkconfig.defaults.*; do
         target=${defaults##*.}
-        build="$root/_firmware/build/$name-$target"
+        build="$build_root/$name-$target"
         echo "== $name ($target)"
-        # Always from sdkconfig.defaults*: a kept sdkconfig would ignore options added there since.
-        rm -f "$build/sdkconfig"
+        # A kept sdkconfig ignores options added to sdkconfig.defaults* or Kconfig since, so it is made
+        # anew whenever one of them changed (their hash, kept next to it). Otherwise it stays, and an
+        # unchanged configuration only rebuilds the sources that changed.
+        inputs=$( (find "$project" "$defaults_dir" -maxdepth 3 \( -name 'sdkconfig.defaults*' -o -name 'Kconfig*' \) \
+                   -not -path '*/managed_components/*' -not -path '*/build/*' | sort -u | xargs cat; echo "$target") | sha256sum)
+        mkdir -p "$build"
+        if [ "$(cat "$build/sdkconfig.inputs" 2>/dev/null)" != "$inputs" ]; then
+            rm -f "$build/sdkconfig"
+            echo "$inputs" > "$build/sdkconfig.inputs"
+        fi
         idf.py -C "$project" -B "$build" -DSDKCONFIG="$build/sdkconfig" -DIDF_TARGET="$target" "${product_arg[@]}" build
         (cd "$build" && esptool.py --chip "$target" merge_bin -o "$out/$target.bin" @flash_args)
         # Projects with CONFIG_CHIP_OTA_IMAGE_BUILD also get a Matter update image and its description for

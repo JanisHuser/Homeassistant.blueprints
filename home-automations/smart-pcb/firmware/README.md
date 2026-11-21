@@ -44,6 +44,14 @@ Needs Docker. From the repository root:
 docker run --rm -v "$PWD":/repo espressif/esp-matter:release-v1.5_idf_v5.4.1 bash /repo/site/build_firmware.sh
 ```
 
+On a Mac, use the wrapper instead: it runs the same build with the build folders and ccache in Docker volumes (Docker reads and writes the shared repository folder slowly), so a rebuild after a small change takes a minute or two:
+
+```bash
+site/build_firmware_local.sh diy-valve-head
+```
+
+Both keep each build's `sdkconfig` as long as no `sdkconfig.defaults*` or `Kconfig` file changed, and make it anew when one did. `docker volume rm firmware-build firmware-ccache` starts from scratch.
+
 That builds every product for each of its chips: `_firmware/<product>/<chip>.bin` (merged image, flashed at offset 0) plus the Matter update image `_firmware/<product>/<product>-<version>-<chip>.ota` and its `.json`. Name products to build only those, e.g. `.../build_firmware.sh diy-valve-head`. With ESP-IDF and esp-matter installed you can also build one directly in this folder:
 
 ```bash
