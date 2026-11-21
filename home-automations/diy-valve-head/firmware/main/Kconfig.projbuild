@@ -2,9 +2,9 @@ menu "Valve head"
 
     config VALVE_TRAVEL_MS
         int "Motor run time for a full stroke (ms)"
-        default 4000
+        default 3300
         help
-            Time the lock motor needs for the 3.4 mm stroke. Measure it once; the motor
+            Time the lock motor needs for the 7.1 mm stroke (scaled from 1600 ms for 3.4 mm). Measure it once; the motor
             runs this long plus VALVE_OVERRUN_MS and then stalls against the hard stop.
 
     config VALVE_OVERRUN_MS

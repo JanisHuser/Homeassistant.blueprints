@@ -64,7 +64,7 @@ The pins live in `main/board.h`; the build target picks the set.
 
 | Setting | Default | |
 |---|---|---|
-| `VALVE_TRAVEL_MS` | 4000 | time for the 3.4 mm stroke: measure it once |
+| `VALVE_TRAVEL_MS` | 3300 | time for the 7.1 mm stroke (scaled from 1600 ms for 3.4 mm): measure it once |
 | `VALVE_OVERRUN_MS` | 500 | extra time against the hard stop |
 | `VALVE_REVERSE` | off | swap the motor direction instead of the wires |
 | `VALVE_BATTERY_INTERVAL_MIN` | 60 | battery reading interval |
