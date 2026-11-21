@@ -69,7 +69,7 @@ Home Assistant's Matter Server sends updates over Thread:
 3. Once: in the Matter Server app's configuration, turn on **Enable test-net DCL usage** (the products use Matter's test vendor ID). If the server still ignores the folder, also add `OTA_PROVIDER_DIR=/config/updates` under **Matter Server environment variables**. Restart the app.
 4. Start the update in the Matter Server's web UI (the device's node → **Update**).
 
-While it downloads, the device stays awake and polls fast, and the LED blinks cyan: about 15 minutes. It keeps working meanwhile, then restarts into the new version; pairing and settings stay. If the new version restarts before Matter is up (a crash at start-up), the bootloader goes back to the previous version by itself. A device gives up and sleeps again if an update hasn't finished after an hour.
+While it downloads, the device stays awake, asks its Thread parent for the next block every 50 ms (`SMART_PCB_UPDATE_POLL_MS`) instead of every 5 s, and the LED blinks cyan: a few minutes. It keeps working meanwhile, then restarts into the new version; pairing and settings stay. If the new version restarts before Matter is up (a crash at start-up), the bootloader goes back to the previous version by itself. A device gives up and sleeps again if an update hasn't finished after an hour.
 
 All products currently share Matter's test vendor and product ID (`0xFFF1` / `0x8000`, from the test certificates the pairing code belongs to), and the Matter Server tells products apart only by those and the version. So only put one product's update into the folder at a time, or one with a version number the other products are already past.
 
@@ -114,6 +114,7 @@ The pins live in `common/include/board.h`.
 |---|---|---|
 | `SMART_PCB_LIGHT_SLEEP` | on | light-sleep between Thread polls; turn off to rule out sleep problems |
 | `SMART_PCB_BATTERY_INTERVAL_MIN` | 60 | battery reading interval (besides after every motor stop) |
+| `SMART_PCB_UPDATE_POLL_MS` | 50 | Thread poll interval while an update downloads |
 | `SMART_PCB_DIAGNOSTICS` | on | the two motor diagnostics switches |
 | `SMART_PCB_DIAGNOSTICS_MAX_RUN_MS` | 10000 | longest a diagnostics switch runs the motor |
 

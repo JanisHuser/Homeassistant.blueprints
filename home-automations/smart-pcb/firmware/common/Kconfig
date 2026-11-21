@@ -13,6 +13,15 @@ menu "Smart PCB"
         help
             Besides a reading after every motor stop.
 
+    config SMART_PCB_UPDATE_POLL_MS
+        int "Thread poll interval while a firmware update downloads (ms)"
+        range 10 500
+        default 50
+        help
+            A sleepy device gets each block of the update only when it asks its Thread parent
+            for it. While updating it is awake anyway, so it asks this often instead of every
+            CONFIG_ICD_FAST_POLL_INTERVAL_MS (500): a 1.5 MB image then takes minutes.
+
     config SMART_PCB_DIAGNOSTICS
         bool "Diagnostics switches: run the motor by hand"
         default y

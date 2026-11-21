@@ -115,15 +115,32 @@ static bool restart_after_pairing;  // paired since the last restart: restart on
 static bool updating;               // a firmware update is downloading or about to be applied
 
 /**
- * Stay in fast polling while updating: the SDK doesn't do it by itself, so a 1.5 MB image would
- * come in one block per slow poll and take hours. The ICD has no keep-active reason for updates;
- * the test-event one is otherwise unused here (no test event triggers are enabled).
+ * Stay active and poll fast while updating: the SDK doesn't do it by itself, so a 1.5 MB image
+ * would come in one block per slow poll and take hours. The ICD has no keep-active reason for
+ * updates; the test-event one is otherwise unused here (no test event triggers are enabled).
  */
+/**
+ * While updating, the device asks its Thread parent for the next block this often. It is awake
+ * anyway, so polling often costs little, and a block waiting at the parent is fetched almost at
+ * once: about 50 ms per block instead of the ICD's 500 ms fast polling.
+ */
+static constexpr auto UPDATE_POLL_INTERVAL = std::chrono::milliseconds(CONFIG_SMART_PCB_UPDATE_POLL_MS);
+
 static void keep_icd_active(bool on)
 {
 #if CHIP_CONFIG_ENABLE_ICD_SERVER
     using Flag = chip::app::ICDListener::KeepActiveFlag;
     chip::app::ICDNotifier::GetInstance().BroadcastActiveRequest(Flag::kTestEventTriggerActiveMode, on);
+    if (on) {
+        // Entering active mode just set the ICD's fast polling interval; it only sets it again on the
+        // next switch from idle to active, which can't happen while the request above holds it active.
+        // Withdrawing the request goes back to idle, which sets the slow interval again.
+        const CHIP_ERROR err = chip::DeviceLayer::ConnectivityMgr().SetPollingInterval(
+            chip::System::Clock::Milliseconds32(UPDATE_POLL_INTERVAL.count()));
+        if (err != CHIP_NO_ERROR) {
+            ESP_LOGW(TAG, "Fast update polling not set: %" CHIP_ERROR_FORMAT, err.Format());
+        }
+    }
 #endif
 }
 
@@ -322,8 +339,9 @@ static void recovery_tick(void *)
 /* ---- Firmware update: awake until it is applied, failed, or this long has passed ---- */
 
 /**
- * Longest a firmware update keeps the device awake. Fast polling brings a full image in within
- * about 15 min; a provider that goes quiet without aborting must not keep the battery draining.
+ * Longest a firmware update keeps the device awake. Polling every UPDATE_POLL_INTERVAL brings a
+ * full image in within minutes; a provider that goes quiet without aborting must not keep the
+ * battery draining.
  */
 static constexpr auto UPDATE_MAX_AWAKE = 1h;
 
