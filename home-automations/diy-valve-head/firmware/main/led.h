@@ -11,6 +11,7 @@ constexpr uint32_t RGB_RED = 0xff0000;
 constexpr uint32_t RGB_GREEN = 0x00ff00;
 constexpr uint32_t RGB_BLUE = 0x0000ff;
 constexpr uint32_t RGB_ORANGE = 0xff6000;
+constexpr uint32_t RGB_CYAN = 0x00ffff;
 constexpr uint32_t RGB_WHITE = 0xffffff;
 
 constexpr std::chrono::milliseconds SOLID = 0ms;
@@ -26,6 +27,7 @@ constexpr led_look_t LED_PAIRING{RGB_BLUE, 500ms, RGB_OFF};       // waiting to 
 constexpr led_look_t LED_JOINING{RGB_BLUE, 250ms, RGB_WHITE};     // pairing in progress: blue / white
 constexpr led_look_t LED_PAIRED{RGB_GREEN, SOLID, RGB_OFF};       // shown for a moment after pairing
 constexpr led_look_t LED_NO_THREAD{RGB_ORANGE, 1s, RGB_OFF};      // paired, Thread network lost
+constexpr led_look_t LED_UPDATING{RGB_CYAN, 1s, RGB_OFF};         // firmware update downloading / applying
 constexpr led_look_t LED_IDENTIFY{RGB_WHITE, 150ms, RGB_OFF};
 constexpr led_look_t LED_RESETTING{RGB_RED, SOLID, RGB_OFF};      // BOOT held
 constexpr led_look_t LED_RESET{RGB_RED, 100ms, RGB_OFF};          // BOOT held long enough: clearing pairings

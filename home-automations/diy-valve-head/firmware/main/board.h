@@ -37,7 +37,16 @@ constexpr uint32_t BUTTON_PRESSED_LEVEL = GPIO_LEVEL_LOW;
 /* The argument esp_pm_lock_create() takes is unused for ESP_PM_NO_LIGHT_SLEEP. */
 constexpr int PM_LOCK_NO_ARG = 0;
 
+/* Motor direction until the "Reverse direction" switch has been set (Kconfig VALVE_REVERSE_DEFAULT). */
+#ifdef CONFIG_VALVE_REVERSE_DEFAULT
+constexpr bool MOTOR_REVERSED_DEFAULT = true;
+#else
+constexpr bool MOTOR_REVERSED_DEFAULT = false;
+#endif
+
 void board_init();
+/* Swaps which way the motor turns for open and closed, like swapping the two motor wires. */
+void board_set_reversed(bool reversed);
 /* Runs the motor towards open or closed for this long, then brakes and sleeps the driver. */
 void board_motor_run(bool open, std::chrono::milliseconds run);
 /* Battery voltage in mV (OUT+ of the TP4056). */

@@ -1,6 +1,6 @@
 # Valve head firmware (Matter over Thread)
 
-Runs on a XIAO ESP32-C6 or an ESP32-H2 board. Flash it over USB, then add it in Home Assistant with the Matter code 3497-011-2332. It shows up as a water valve with a battery level.
+Runs on a XIAO ESP32-C6 or an ESP32-H2 board. Flash it over USB, then add it in Home Assistant with the Matter code 3497-011-2332. It shows up as a water valve with a battery level, plus a "Reverse direction" switch.
 
 ## Flash
 
@@ -29,12 +29,13 @@ The code comes from the test certificates in esp-matter. Home Assistant accepts 
 ## What it does
 
 - **Endpoint 1, Water Valve with level (0–100 %):** Home Assistant shows a position slider. 100 % drives the motor towards "open" until the nut stops at the gear plates, 0 % drives it until the pusher sits in the adapter; both run for `VALVE_TRAVEL_MS` + `VALVE_OVERRUN_MS` into the hard stop, which recalibrates the position. Levels in between are reached by time: from 100 % to 40 % the motor runs 60 % of `VALVE_TRAVEL_MS`. There is no position sensor, so the level reported is where the moves should have taken it; a move to 0 % or 100 % corrects any drift.
+- **Endpoint 2, "Reverse direction" switch (On/Off):** shows up in Home Assistant as a switch on the same device (rename it there). On swaps which way the motor turns, like swapping its two wires. The setting is stored on the head, so it survives restarts and battery changes; its factory default is `VALVE_REVERSE_DEFAULT`. Flipping it drives the valve to open again, since the position the firmware remembers is then the wrong end.
 - **After a reset** it drives to **open** (heating on), the safe state.
 - **Battery:** BatVoltage, BatPercentRemaining (3.3 V = 0 %, 4.15 V = 100 %) and BatChargeLevel, read after every move and once an hour.
 - **Sleep:** sleepy Thread end device (ICD). It polls its parent every 5 s, so a command takes up to ~5 s to arrive, and light-sleeps in between. While a pairing window is open it stays awake, so pairing over Bluetooth doesn't stall. After a pairing it stays awake, so the controller can read it in, and restarts once 3 minutes after the last pairing step, because shutting down Bluetooth after pairing leaves the ESP32-H2's Thread reception broken in light sleep; and if it has no Thread parent for 5 minutes, it restarts to recover.
 - **Identify** (from Home Assistant) drives the valve open, so you can hear which head it is.
 - **BOOT button:** a short press opens a pairing window for 15 minutes, so a second controller can add the head ("already in use by another ecosystem", code 3497-011-2332). Holding it for 10 seconds clears every pairing and restarts, ready to pair again.
-- **Status LED** (ESP32-H2 board, WS2812 on GPIO8; the XIAO has none): blue blinking = waiting to be paired, blue/white alternating = pairing, green for 2 s = paired, orange blinking = Thread network lost, white blinking = identify, red = BOOT held (blinking: pairings are being cleared). Off in normal operation, to save the battery.
+- **Status LED** (ESP32-H2 board, WS2812 on GPIO8; the XIAO has none): blue blinking = waiting to be paired, blue/white alternating = pairing, green for 2 s = paired, orange blinking = Thread network lost, cyan blinking = firmware update running (the head stays awake and polls fast until it restarts into the new version, at most 1 h), white blinking = identify, red = BOOT held (blinking: pairings are being cleared). Off in normal operation, to save the battery.
 - **Name:** reports itself as "Valve head" by "DIY" (`main/CHIPProjectConfig.h`), so Home Assistant and Apple Home name it that way. Rename each head in the app.
 
 ## Pins (XIAO ESP32-C6)
@@ -66,5 +67,5 @@ The pins live in `main/board.h`; the build target picks the set.
 |---|---|---|
 | `VALVE_TRAVEL_MS` | 3300 | time for the 7.1 mm stroke (scaled from 1600 ms for 3.4 mm): measure it once |
 | `VALVE_OVERRUN_MS` | 500 | extra time against the hard stop |
-| `VALVE_REVERSE` | off | swap the motor direction instead of the wires |
+| `VALVE_REVERSE_DEFAULT` | off | factory default of the "Reverse direction" switch |
 | `VALVE_BATTERY_INTERVAL_MIN` | 60 | battery reading interval |

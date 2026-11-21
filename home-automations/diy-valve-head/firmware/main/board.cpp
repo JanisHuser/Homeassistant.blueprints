@@ -1,5 +1,7 @@
 #include "board.h"
 
+#include <atomic>
+
 #include <driver/gpio.h>
 #include <esp_adc/adc_cali.h>
 #include <esp_adc/adc_cali_scheme.h>
@@ -28,9 +30,13 @@ struct bridge_t {
     uint32_t in1, in2;
 };
 static constexpr bridge_t BRIDGE_COAST{GPIO_LEVEL_LOW, GPIO_LEVEL_LOW};
-static constexpr bridge_t BRIDGE_FORWARD{GPIO_LEVEL_HIGH, GPIO_LEVEL_LOW};
-static constexpr bridge_t BRIDGE_REVERSE{GPIO_LEVEL_LOW, GPIO_LEVEL_HIGH};
+/* With the motor on M1/M2 as built, IN1 high / IN2 low drives the pusher in (closes the valve). */
+static constexpr bridge_t BRIDGE_CLOSE{GPIO_LEVEL_HIGH, GPIO_LEVEL_LOW};
+static constexpr bridge_t BRIDGE_OPEN{GPIO_LEVEL_LOW, GPIO_LEVEL_HIGH};
 static constexpr bridge_t BRIDGE_BRAKE{GPIO_LEVEL_HIGH, GPIO_LEVEL_HIGH};
+
+/* Set from the Matter thread, read by the motor task. */
+static std::atomic<bool> motor_reversed{MOTOR_REVERSED_DEFAULT};
 
 #ifdef PIN_RF_SWITCH
 /* XIAO RF switch: low powers it, low selects the on-board antenna (high = U.FL). */
@@ -92,15 +98,20 @@ void board_init()
     }
 }
 
+void board_set_reversed(bool reversed)
+{
+    motor_reversed = reversed;
+}
+
 void board_motor_run(bool open, std::chrono::milliseconds run)
 {
-#if CONFIG_VALVE_REVERSE
-    open = !open;
-#endif
+    if (motor_reversed) {
+        open = !open;
+    }
     esp_pm_lock_acquire(motor_lock);
     gpio_set_level(PIN_MOTOR_SLEEP, DRV8833_AWAKE);
     delay(DRV8833_WAKE_TIME);
-    set_bridge(open ? BRIDGE_FORWARD : BRIDGE_REVERSE);
+    set_bridge(open ? BRIDGE_OPEN : BRIDGE_CLOSE);
     delay(run);
     // Brake, then let the driver sleep.
     set_bridge(BRIDGE_BRAKE);

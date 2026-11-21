@@ -2,8 +2,10 @@
  * DIY valve head: Matter-over-Thread water valve on a XIAO ESP32-C6 or an ESP32-H2.
  *
  * Endpoint 1 is a Matter Water Valve (open/closed) with a Power Source cluster for the
- * 18650. The device is a sleepy Thread end device (ICD): it light-sleeps between polls,
- * wakes the motor driver only to move, and reads the battery once an hour.
+ * 18650. Endpoint 2 is an on/off switch, "Reverse direction": on swaps which way the motor
+ * turns, like swapping its wires; it is stored, so it survives restarts. The device is a
+ * sleepy Thread end device (ICD): it light-sleeps between polls, wakes the motor driver only
+ * to move, and reads the battery once an hour.
  *
  * BOOT button: a short press opens a pairing window (15 min, over the network) so another
  * controller can join; holding it 10 s clears every pairing and restarts.
@@ -19,6 +21,7 @@
 
 #include <esp_err.h>
 #include <esp_log.h>
+#include <esp_ota_ops.h>
 #include <esp_pm.h>
 #include <esp_timer.h>
 #include <nvs_flash.h>
@@ -32,6 +35,7 @@
 
 #include <platform/ESP32/OpenthreadLauncher.h>
 #include <app/server/Server.h>
+#include <app/icd/server/ICDNotifier.h>
 #include <app-common/zap-generated/attributes/Accessors.h>
 #include <app/clusters/valve-configuration-and-control-server/valve-configuration-and-control-cluster.h>
 #include <app/clusters/valve-configuration-and-control-server/valve-configuration-and-control-delegate.h>
@@ -75,6 +79,7 @@ static constexpr int BATTERY_CRITICAL_HALF_PCT = 5 * HALF_PCT_PER_PCT;
 static constexpr int BATTERY_WARNING_HALF_PCT = 20 * HALF_PCT_PER_PCT;
 
 static uint16_t valve_endpoint_id;
+static uint16_t reverse_endpoint_id;
 static QueueHandle_t move_queue;
 /** One slot: a new request replaces a waiting one. */
 static constexpr UBaseType_t MOVE_QUEUE_LENGTH = 1;
@@ -215,6 +220,20 @@ static void battery_timer_cb(void *)
 
 static bool pairing_session;        // a controller is pairing the device right now
 static bool restart_after_pairing;  // paired since the last restart: restart once pairing is over
+static bool updating;               // a firmware update is downloading or about to be applied
+
+/**
+ * Stay in fast polling while updating: the SDK doesn't do it by itself, so a 1.5 MB image would
+ * come in one block per slow poll and take hours. The ICD has no keep-active reason for updates;
+ * the test-event one is otherwise unused here (no test event triggers are enabled).
+ */
+static void keep_icd_active(bool on)
+{
+#if CHIP_CONFIG_ENABLE_ICD_SERVER
+    using Flag = chip::app::ICDListener::KeepActiveFlag;
+    chip::app::ICDNotifier::GetInstance().BroadcastActiveRequest(Flag::kTestEventTriggerActiveMode, on);
+#endif
+}
 
 static void update_status()
 {
@@ -222,19 +241,29 @@ static void update_status()
     const bool pairable = server.GetCommissioningWindowManager().IsCommissioningWindowOpen();
 
     // No light sleep while pairing is possible (sleeping between radio events can miss the phone's
-    // Bluetooth messages and stall pairing at "connecting"), nor until the restart after a pairing.
+    // Bluetooth messages and stall pairing at "connecting"), nor until the restart after a pairing,
+    // nor while a firmware update runs (light sleep powers the flash down while the image is being
+    // written to it, and slows the download).
     static esp_pm_lock_handle_t awake;
     static bool held;
     if (!awake) {
         esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, PM_LOCK_NO_ARG, "pairing", &awake);
     }
-    if ((pairable || pairing_session || restart_after_pairing) != held) {
+    if ((pairable || pairing_session || restart_after_pairing || updating) != held) {
         held = !held;
         held ? esp_pm_lock_acquire(awake) : esp_pm_lock_release(awake);
     }
 
+    static bool icd_held;
+    if (updating != icd_held) {
+        icd_held = updating;
+        keep_icd_active(icd_held);
+    }
+
     if (pairing_session) {
         led_set(LED_JOINING);
+    } else if (updating) {
+        led_set(LED_UPDATING);
     } else if (pairable) {
         led_set(LED_PAIRING);
     } else if (server.GetFabricTable().FabricCount() > 0 && !chip::DeviceLayer::ConnectivityMgr().IsThreadAttached()) {
@@ -398,12 +427,67 @@ static void recovery_tick(void *)
     schedule(recovery_check);
 }
 
+/* ---- Firmware update: awake until it is applied, failed, or this long has passed ---- */
+
+/**
+ * Longest a firmware update keeps the device awake. Fast polling brings a full image in within
+ * about 15 min; a provider that goes quiet without aborting must not keep the battery draining.
+ */
+static constexpr auto UPDATE_MAX_AWAKE = 1h;
+
+static void update_timed_out(intptr_t)
+{
+    if (updating) {
+        ESP_LOGW(TAG, "Firmware update still not done after %d min: sleeping again",
+                 static_cast<int>(UPDATE_MAX_AWAKE / 1min));
+        updating = false;
+        update_status();
+    }
+}
+
+static void update_timer_cb(void *)
+{
+    schedule(update_timed_out);
+}
+
+static void set_updating(bool on)
+{
+    static esp_timer_handle_t timer;
+    if (!timer) {
+        const esp_timer_create_args_t args = {.callback = update_timer_cb, .name = "update"};
+        esp_timer_create(&args, &timer);
+    }
+    if (on && !updating) {
+        ESP_LOGI(TAG, "Firmware update started: staying awake");
+        esp_timer_stop(timer);
+        esp_timer_start_once(timer, to_us(UPDATE_MAX_AWAKE));
+    } else if (!on && updating) {
+        ESP_LOGW(TAG, "Firmware update ended without applying");
+        esp_timer_stop(timer);
+    }
+    updating = on;
+}
+
 /* ---- Matter callbacks ---- */
 
 static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 {
     namespace DeviceEventType = chip::DeviceLayer::DeviceEventType;
     switch (event->Type) {
+    case DeviceEventType::kOtaStateChanged:
+        switch (event->OtaStateChanged.newState) {
+        case chip::DeviceLayer::kOtaDownloadInProgress:
+            set_updating(true);
+            break;
+        case chip::DeviceLayer::kOtaDownloadFailed:
+        case chip::DeviceLayer::kOtaDownloadAborted:
+        case chip::DeviceLayer::kOtaApplyFailed:
+            set_updating(false);
+            break;
+        default:  // download complete or applying: stay awake until the restart into the new image
+            return;
+        }
+        break;
     case DeviceEventType::kCommissioningComplete:
         ESP_LOGI(TAG, "Commissioning complete");
         pairing_session = false;
@@ -422,6 +506,12 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
         pairing_session = false;
         break;
     case DeviceEventType::kServerReady:
+        // Started without crashing: keep this image. Until now, a restart (e.g. an abort while
+        // creating the endpoints) makes the bootloader go back to the image before the update.
+        if (esp_ota_mark_app_valid_cancel_rollback() != ESP_OK) {
+            ESP_LOGW(TAG, "Could not mark this firmware as good");
+        }
+        break;
     case DeviceEventType::kCommissioningWindowOpened:
     case DeviceEventType::kCommissioningWindowClosed:
     case DeviceEventType::kFabricRemoved:
@@ -446,9 +536,30 @@ static esp_err_t app_identification_cb(identification::callback_type_t type, uin
     return ESP_OK;
 }
 
+/* ---- "Reverse direction" switch ---- */
+
+static bool motor_reversed = MOTOR_REVERSED_DEFAULT;
+
+static void set_reversed(bool reversed)
+{
+    if (reversed == motor_reversed) {
+        return;
+    }
+    motor_reversed = reversed;
+    board_set_reversed(reversed);
+    ESP_LOGI(TAG, "Motor direction %s", reversed ? "reversed" : "normal");
+    // The valve now sits at the other end from where the firmware thinks it is: drive to the
+    // open stop again, which makes the position known.
+    request_level(LEVEL_OPEN);
+}
+
 static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16_t endpoint_id, uint32_t cluster_id,
                                          uint32_t attribute_id, esp_matter_attr_val_t *val, void *priv_data)
 {
+    if (type == attribute::POST_UPDATE && endpoint_id == reverse_endpoint_id && cluster_id == OnOff::Id &&
+        attribute_id == OnOff::Attributes::OnOff::Id) {
+        set_reversed(val->val.b);
+    }
     return ESP_OK;
 }
 
@@ -505,6 +616,22 @@ extern "C" void app_main()
                                                          nullable<uint32_t>(static_cast<uint32_t>(BATTERY_MAX_MV)));
     cluster::power_source::attribute::create_bat_percent_remaining(ps, nullable<uint8_t>(), nullable<uint8_t>(BATTERY_EMPTY_HALF_PCT),
                                                                    nullable<uint8_t>(BATTERY_FULL_HALF_PCT));
+
+    // Shows up in Home Assistant as a switch on the same device; rename it "Reverse direction" there.
+    on_off_plug_in_unit::config_t reverse_config;
+    reverse_config.on_off.on_off = MOTOR_REVERSED_DEFAULT;
+    // StartUpOnOff null = keep the stored value at boot (its default, 0, would switch it off every restart).
+    reverse_config.on_off_lighting.start_up_on_off = nullable<uint8_t>();
+    endpoint_t *reverse = on_off_plug_in_unit::create(node, &reverse_config, ENDPOINT_FLAG_NONE, nullptr);
+    ABORT_APP_ON_FAILURE(reverse != nullptr, ESP_LOGE(TAG, "Failed to create reverse switch endpoint"));
+    reverse_endpoint_id = endpoint::get_id(reverse);
+    // OnOff is non-volatile and loaded from flash when it is created: this is the stored switch
+    // position, or the default on first boot. Read before Matter starts, so no write can race it.
+    esp_matter_attr_val_t reversed = esp_matter_invalid(nullptr);
+    attribute::get_val(attribute::get(reverse_endpoint_id, OnOff::Id, OnOff::Attributes::OnOff::Id), &reversed);
+    motor_reversed = reversed.val.b;
+    board_set_reversed(motor_reversed);
+    ESP_LOGI(TAG, "Motor direction %s", motor_reversed ? "reversed" : "normal");
 
     esp_openthread_platform_config_t ot_config = {
         .radio_config = {.radio_mode = RADIO_MODE_NATIVE},
