@@ -10,7 +10,7 @@ Layout along the body: **drive | battery**, with the [motor board](../motor-boar
 - **Housing:** a one-piece **tray** (printed front-face-down, open towards the valve), a **lid** on the valve side that slides in from the back, an **adapter** that screws into the tray with a left-hand thread, a separate **ring nut** that turns freely around it and clamps it to the valve. The board presses into a pocket in the tray, and the battery keeps it there. No screws, no clips across a seam, no supports.
 - **Size (defaults):** 26 × 104.7 mm, **37.5 mm deep** from the valve's thread face.
 
-The model is [`valve_head_tray.scad`](valve_head_tray.scad), the firmware is in [`firmware/`](firmware) and can be flashed straight from the project page in the browser. The version for loose bought boards is [`versions/loose-boards/valve_head_tray.scad`](versions/loose-boards/valve_head_tray.scad), and the older left/right clamshell version is [`versions/clamshell/valve_head.scad`](versions/clamshell/valve_head.scad).
+The model is [`valve_head_tray.scad`](valve_head_tray.scad), the firmware is in [`firmware/`](firmware) and can be flashed straight from the project page in the browser.
 
 ![assembly](renders/assembly.png)
 
@@ -117,7 +117,7 @@ The motor board's cost isn't known yet, so there's no total per head.
 
 ## Wiring
 
-Pairing and flashing are in [`firmware/README.md`](firmware/README.md). The same wiring as a KiCad schematic is [`electronics/valve_head.kicad_sch`](electronics/valve_head.kicad_sch), and it opens in the project page's viewer.
+Pairing and flashing are in [`firmware/README.md`](firmware/README.md).
 
 The board's wire pads, in a row at its end next to the drive column:
 
@@ -128,10 +128,6 @@ The board's wire pads, in a row at its end next to the drive column:
 | J3 | Motor (swap the two wires if it runs backwards) |
 
 The encoder pads (J4) stay empty, and their parts stay off the board. Everything else is on the board, see [its README](../motor-board).
-
-For a test with loose bought boards, before the motor board exists, use the [loose-boards tray](versions/loose-boards/valve_head_tray.scad) and this wiring:
-
-![wiring](renders/wiring.svg)
 
 **Charging:** through the USB-C socket in the back wall. The ESP's own USB port is inside, only for flashing, and never at the same time as the battery.
 

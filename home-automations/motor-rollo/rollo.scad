@@ -5,7 +5,7 @@
 //  Rastnase und ein Filament-Stift.
 //
 //  Aufbau (Achse = X, Motorseite links bei x = 0 = Wand):
-//   [Halter]─[Kopf Ø28: USB-C (unten) │ Motorplatine (../motor-board)]─[Endkappe]═ IKEA-Rohr ═[608 direkt im Rohr]─[Achse]─[Halter]
+//   [Halter]─[Kopf Ø28: USB-C (unten) │ Motorplatine]─[Endkappe]═ IKEA-Rohr ═[608 direkt im Rohr]─[Achse]─[Halter]
 //                     └─ Journal ─ Kartusche: 18650 │ N20 ─ Mitnehmer (dreht Rohr)
 //
 //  Kopf, Journal und Kartusche stehen fest (Vierkantkeil im Halter),
@@ -67,7 +67,7 @@ journal_id  = 9;    // Kabeldurchgang
 key_z       = 4.8;  // Abflachung = Verdrehsicherung Journal ↔ Kartusche
 jour_engage = 7;
 
-/* [Motorplatine, siehe ../motor-board] */
+/* [Motorplatine: Masse der alten Super-Mini-Platine; die neue ist pcb/ auf Branch pcb-designs] */
 brd_l      = 27.6;
 brd_w      = 21;
 brd_t      = 0.8;
