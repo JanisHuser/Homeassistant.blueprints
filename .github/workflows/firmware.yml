@@ -2,8 +2,8 @@
 # build script or this workflow, or a manual run, builds them all.
 # - pull requests: checks that the firmware still builds, image downloadable from the run
 # - main: when a project's PROJECT_VER has no release yet, tags <project>-<version> (e.g. diy-valve-head-0.1.0),
-#   publishes a GitHub release with the image just built and redeploys the site, whose browser installer
-#   flashes the latest release
+#   publishes a GitHub release with the image just built (and the Matter update image, if the project builds one)
+#   and redeploys the site, whose browser installer flashes the latest release
 name: Firmware
 
 on:
@@ -74,6 +74,8 @@ jobs:
           name: firmware
           path: |
             _firmware/*/*.bin
+            _firmware/*/*.ota
+            _firmware/*/*.json
 
   release:
     if: github.ref == 'refs/heads/main'
@@ -111,11 +113,22 @@ jobs:
               cp "$image" "${assets[-1]}"
               flash+="esptool.py --chip $target write_flash 0x0 $tag-$target.bin"$'\n'
             done
+            # Matter update images, already named <tag>-<target>.ota, with their .json for the Matter Server
+            ota=""
+            for update in "$dir$tag"-*.ota "$dir$tag"-*.json; do
+              [ -f "$update" ] || continue
+              assets+=("$update")
+            done
+            if compgen -G "$dir$tag-*.ota" >/dev/null; then
+              ota="
+
+          Update over Matter: put the \`.ota\` and \`.json\` of your chip into the Matter Server's \`updates\` folder and restart it (see the project README)."
+            fi
             gh release create "$tag" "${assets[@]}" --target "$GITHUB_SHA" --title "$project $version" \
               --notes "Merged images, one per chip, flashed at offset 0x0 (or use the browser installer on the project page, which picks the right one).
 
           \`\`\`bash
-          ${flash}\`\`\`"
+          ${flash}\`\`\`${ota}"
             echo "$tag: released"
             released=true
           done

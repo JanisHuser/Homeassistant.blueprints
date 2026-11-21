@@ -1,0 +1,7 @@
+dependencies:
+  # WS2812 status LED of the ESP32-H2 Super Mini (main/led.cpp).
+  espressif/led_strip:
+    version: "~2.5.5"
+  # BOOT button, with the light-sleep wake-up handled the way Espressif's ICD example does it.
+  espressif/button:
+    version: "^4"

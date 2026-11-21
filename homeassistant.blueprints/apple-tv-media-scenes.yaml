@@ -24,6 +24,7 @@ blueprint:
     skipping or scrubbing (which briefly reports paused) does not flicker the
     lights.
   domain: automation
+  source_url: https://github.com/JanisHuser/Homeassistant.blueprints/blob/main/homeassistant.blueprints/apple-tv-media-scenes.yaml
   author: Janis
   input:
     media_player:

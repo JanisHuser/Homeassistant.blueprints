@@ -4,6 +4,7 @@
 
 #ifdef PIN_RGB_LED
 
+#include <esp_pm.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
@@ -19,16 +20,25 @@ static constexpr int LED_GREEN_SHIFT = 12;
 static constexpr int LED_BLUE_SHIFT = 4;
 
 static led_strip_handle_t strip;
+static esp_pm_lock_handle_t awake;
 static esp_timer_handle_t blink_timer;
 static SemaphoreHandle_t lock;
 static led_look_t base, over;
 static bool overridden, lit;
 
-/* The RMT driver keeps the chip out of light sleep while it exists, so it only lives while the LED is on. */
+/*
+ * The chip stays out of light sleep while the LED is on. The RMT driver doesn't see to that itself (without
+ * DMA it only holds the CPU frequency up), and while its channel exists, light sleep keeps the peripheral
+ * power domain on but still powers the radio down. In that mixed sleep the Thread radio loses its parent,
+ * e.g. while identifying. The RMT channel only lives while the LED is on, so light sleep is normal otherwise.
+ */
 static void strip_on()
 {
     if (strip) {
         return;
+    }
+    if (awake) {
+        esp_pm_lock_acquire(awake);
     }
     const led_strip_config_t strip_cfg = {
         .strip_gpio_num = PIN_RGB_LED,
@@ -46,6 +56,9 @@ static void strip_off()
         led_strip_clear(strip);  // the LED keeps its colour without data
         led_strip_del(strip);
         strip = nullptr;
+        if (awake) {
+            esp_pm_lock_release(awake);
+        }
     }
 }
 
@@ -97,6 +110,9 @@ void led_init()
     const esp_timer_create_args_t timer_args = {.callback = blink, .name = "led"};
     ESP_ERROR_CHECK(esp_timer_create(&timer_args, &blink_timer));
     lock = xSemaphoreCreateMutex();
+    if (esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "led", &awake) != ESP_OK) {
+        awake = nullptr;  // no power management
+    }
     // Whatever the LED showed before a reset stays lit until told otherwise.
     show(RGB_OFF);
     strip_off();
