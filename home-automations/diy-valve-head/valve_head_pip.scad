@@ -10,7 +10,7 @@
 //   behind the column (lid off), then slid towards the valve (-Y): plates into their slot under the front face, motor
 //   can along its pad, nut flats first into the pusher's pocket (open towards the motor anyway). No opening outside.
 // - the spring contact plate sits upright in a printed carrier, pressed in on the bench. The carrier is the card
-//   between the drive unit and the plate: pushed up into slots in the side walls after the drive unit; the lid holds it.
+//   between the drive unit and the plate: pushed up behind the ring nut, then snapped forward into slots in the side walls.
 // - the board lies deep (the motor sets the depth): a guide tube from the BOOT pin hole down to just over SW1 takes
 //   the paperclip onto the button, and a shroud under the light window keeps the LEDs' light together.
 //
@@ -27,7 +27,8 @@
 // touches the gear plates (its pocket is open at the top, so that is in range; the first close pulls it down onto the
 // pocket's floor). Push the pusher up against its ledges. Drop the drive unit into the bay, slide it towards the valve
 // until the latch clicks behind the gear plates. Lay the motor wires into their slot. Press the spring plate (wire
-// soldered on) into the carrier from its open end until it stops, push the carrier up into its slots. Board, cell, lid.
+// soldered on) up into the carrier's groove until it stops and the snap clicks. Push the carrier up into the bay ~2.3 mm behind its
+// slots (clear of the ring nut, the motor wires drop into its notch), then forward until it snaps in. Board, cell, lid.
 //
 // Drive unit retention: a print-in-place spring latch under the front face (+X side) catches the gear plates' back
 // end; the plates' chamfered corner pushes its tooth aside on the way in. Crush ribs take out the axial play.
@@ -39,6 +40,7 @@
 // hand-tight). If it still turns in practice: a TPU washer under the flange.
 //
 // Render:  openscad -D 'pip="print"' -o pip_print.3mf valve_head_pip.scad
+//          one STL per print: pip="print_a" -> tray.stl, pip="lid" -> lid.stl, pip="separator" -> separator.stl
 
 // new parameters go before the include: the overrides below are evaluated where the included file first sets them
 /* ---------------- case study parameters ---------------- */
@@ -64,14 +66,32 @@ seat_gap     = 2.05; // drive unit's back end to the spring plate's rear face: c
                      // + 0.8 of carrier behind the plate
 // contact carrier: a printed card between the drive unit and the spring plate (bare metal on both sides: can, gear
 // plates, contact plate) that also holds the plate. Can't be printed in place (the drive slides through there), so it
-// is a loose part on print B. The plate presses into its pocket from the open (valve) end until it stops; then the
-// carrier pushes up into slots in the side walls after the drive unit, from the manifold side; the lid holds it in
+// is a loose part on print B. The plate slides up into its groove under thin lips until it stops; then the
+// carrier goes up into the bay after the drive unit, from the manifold side, and slides forward into slots in the
+// side walls; snap bumps and the cell's spring keep it there, the lid holds it in
 sep_t        = 0.8;  // card thickness (4 layers): the part in the side walls' slots
 sep_clr      = 0.1;  // per side in its slot (along Y)
 sep_slot     = 0.6;  // slot depth into each side wall
+// the ring nut (pip_nut_od) reaches under the carrier's home: it goes up into the bay behind the nut, then slides
+// forward (-Y) into place and snaps past a bump in each wall slot; the cell's spring presses it forward from then on
+sep_in_clr   = 0.4;  // carrier's front face off the nut's rim on the way up
+snap_h       = 0.25; // snap bump: reaches this far out of the slot's floor (per side, into the card's edge)
+snap_w       = 0.6;  // and this far along Y each side of its peak (two ramps, ~23 deg)
+snap_l       = 4;    // and this long along Z, from the card's bottom edge up (the walls flex most near the opening)
 car_side     = 1.5;  // carrier: wall beside the plate's pocket
 car_cap      = 1.2;  // carrier: above the plate's top edge (the tab goes up through a slot in it)
-car_lip      = 1;    // carrier: lips over the plate's side and top edges, on the cell side
+car_slot     = 0.7;  // carrier: groove for the plate's edges along Y (plate con_t 0.3)
+car_fit      = 0.4;  // carrier: groove's play per side around the plate's edges (X and its top edge)
+car_lip      = 1;    // carrier: lips reach this far in over the plate's side and top edges, on the cell side
+car_lip_t    = 0.4;  // and are this thick (2 layers): thinner than the groove, so they stand out little past the plate
+// snap: one side's wall + lip is a leaf, cut free from the body below it and held only at the top; a tooth at its
+// lower end clicks in under the plate's bottom edge once the plate is slid up to its stop
+car_snap_side = 1;   // +1 = +X, -1 = -X
+car_leaf_w   = 0.8;  // leaf's outer wall beside the groove (X), thinner than car_side so it bends
+car_gap      = 0.4;  // slit under the leaf (Y), between it and the body
+car_tooth    = 0.4;  // tooth reaches this far in past the plate's edge, with the plate pushed against the far side
+                     // (the leaf pushes it there): also how far the leaf bends
+car_tooth_h  = 1.6;  // tooth's height (Z): a 45 deg ramp for the plate going up, flat on top where the plate sits
 // board: the front face is well above it (the motor sets the depth), so BOOT and the LEDs get a way up to it
 boot_tube    = 0.8;  // guide tube's wall around the BOOT pin hole, from the front face down to just over SW1
 boot_gap     = 0.4;  // tube's end over SW1's top (brd_top above the board)
@@ -106,7 +126,7 @@ mot_len = 18;     // can + terminals beyond the gearbox (22 - 4)
 valve_stroke = 6.7;
 
 part = "none";       // the included file draws nothing of its own
-pip  = "assembly";   // assembly | section | section_closed | insert | tray | nut | pusher | lid | print | collide
+pip  = "assembly";   // assembly | section | section_closed | insert | tray | nut | pusher | lid | separator | print | print_a | print_b | collide
 
 /* ---------------- overrides of valve_head_tray.scad ---------------- */
 // floor and pad: the screw's end has to clear the floor when the drive slides in, so the motor can stands on a pad
@@ -153,10 +173,15 @@ sep_y0   = tw_y1 + clr;                        // carrier slot's front face (= t
 sep_y1   = sep_y0 + sep_t + 2 * sep_clr;       // and its back face
 sep_z0   = z_cover + clr;                      // card's bottom edge: on the lid
 sep_z1   = z_l0 - 0.4;                         // card's top edge: under the latch leaf
-car_x    = con_w / 2 + clr + car_side;          // carrier body's half width (the part between the side walls)
+car_x    = con_w / 2 + car_fit + car_side;          // carrier body's half width (the part between the side walls)
 car_y0   = sep_y0 + sep_clr;                    // carrier's front face (towards the drive unit)
-car_y1   = y_batt0 + con_slot + car_lip;        // and its back face (the lips, towards the cell)
-car_z1   = z_batt + con_w / 2 + clr + car_cap;  // carrier body's top
+car_y1   = y_batt0 + car_slot + car_lip_t;      // and its back face (the lips, towards the cell)
+car_z1   = z_batt + con_w / 2 + car_fit + car_cap;  // carrier body's top
+z_leaf1  = z_batt + con_w / 2 - car_lip;        // snap leaf's root (fixed above: the top lip)
+tooth_x  = con_w / 2 - car_fit - car_tooth;     // tooth's tip
+tooth_z1 = z_batt - con_w / 2 - 0.05;           // tooth's top: just under the plate's bottom edge (0.45 up to the stop)
+snap_y0  = sep_y1;                              // snap bump's front ramp starts at the slot's back face
+sep_back = max(pip_nut_od / 2 + sep_in_clr - car_y0, snap_y0 + 2 * snap_w + 0.2 - car_y0);   // carrier goes up this far behind its home
 z_boot0  = z_brd1 + brd_top + boot_gap;         // BOOT guide tube's lower end
 z_led0   = z_brd1 + led_room + 0.3;             // light shroud's lower end
 // nut lip: perpendicular thickness between its lip cone and its outer cone (both 45 deg)
@@ -175,8 +200,15 @@ assert(z_mot0 >= z_floor + 0.5, "motor pad too thin");
 assert(y_batt0 - sep_y1 >= 0.8 - 0.001, "carrier too thin behind the spring plate");
 assert(car_z1 <= sep_z1, "carrier's body sticks out over its card");
 assert(car_x <= in_half - 0.5, "carrier's body too wide for the bay");
+assert(car_y0 + sep_back + (car_y1 - car_y0) + 0.5 <= holder_yf, "carrier hits the front battery holders on its way up");
+assert(car_z1 < wire_z - wire_ch / 2 - clr, "carrier's body over the motor wires' notch");
 assert(z_batt - con_w / 2 >= sep_z0 + 0.5, "spring plate's lower edge below the carrier");
-assert(car_y1 + 0.5 <= y_cell0, "carrier's lips reach the cell");
+assert(car_y1 + 0.5 <= y_cell0, "carrier reaches the cell");
+assert(tooth_z1 - car_tooth_h >= sep_z0, "snap tooth below the carrier");
+assert(car_tooth_h > con_w / 2 + car_fit - tooth_x, "snap tooth's ramp steeper than 45 deg");
+assert(y_batt0 - car_gap >= car_y0 + sep_t + 0.3, "snap leaf's slit cuts into the card");
+leaf_strain = 3 * (car_lip + car_fit + car_leaf_w) * car_tooth / (2 * pow(z_leaf1 - (tooth_z1 - car_tooth_h / 2), 2));
+echo(str("PIP: snap leaf strain ", leaf_strain * 100, " %"));
 assert(car_z1 < wire_z - wire_ch / 2 || car_x < in_half - wire_ch, "carrier runs into the motor wires' corner channel");
 assert(z_boot0 < z_top - 0.5, "board too close to the front face for a BOOT guide tube");
 assert(z_led0 < z_top, "board too close to the front face for a light shroud");
@@ -251,33 +283,50 @@ module pip_breakaway() {
 }
 
 module sep_card_2d(c = 0) {
-    // carrier's card in X/Z: across the bay into both wall slots; a notch for the motor wires' corner channel
+    // carrier's card in X/Z: across the bay into both wall slots; a notch for the motor wires' corner channel, open at
+    // the top: the wires are already laid in when the card goes up, so they drop into it
+    n0 = wire_z - wire_ch / 2 - clr + c;   // notch's lower edge
     difference() {
         translate([-(in_half + sep_slot - sep_clr) - c, sep_z0 - c]) square([2 * (in_half + sep_slot - sep_clr + c), sep_z1 - sep_z0 + 2 * c]);
-        translate([wire_side * (in_half - wire_ch / 2), wire_z]) square([wire_ch + 2 * clr - 2 * c, wire_ch + 2 * clr - 2 * c], center = true);
-        translate([wire_side * (in_half + sep_slot), wire_z]) square([2 * sep_slot + 0.02, wire_ch + 2 * clr - 2 * c], center = true);
+        translate([wire_side < 0 ? -(in_half + sep_slot) - 1 : in_half - wire_ch - clr + c, n0]) square([wire_ch + clr - c + sep_slot + 1, sep_z1 - n0 + 1]);
     }
 }
 module carrier() {   // in place
-    // the card in the side walls' slots, a body behind it with a pocket for the spring plate: open at the bottom (the
-    // plate presses in from there until its top edge stops), lips over its side and top edges on the cell side, and a
-    // slot for its tab up through the top, open towards the cell (solder the wire on after pressing the plate in)
+    // the card in the side walls' slots, a body behind it with a groove for the spring plate: open at the bottom (the
+    // plate slides in from there until its top edge stops), thin lips over its side and top edges on the cell side, and
+    // a slot for its tab up through the top, open towards the cell
     difference() {
         union() {
             translate([0, car_y0 + sep_t, 0]) rotate([90, 0, 0]) linear_extrude(sep_t) sep_card_2d();
             translate([-car_x, car_y0, sep_z0]) cube([2 * car_x, car_y1 - car_y0, car_z1 - sep_z0]);
         }
-        translate([-con_w / 2 - clr, y_batt0, sep_z0 - 1]) cube([con_w + 2 * clr, con_slot, z_batt + con_w / 2 + clr - sep_z0 + 1]);
-        translate([-(con_w / 2 - car_lip), y_batt0 + con_slot - 0.01, sep_z0 - 1]) cube([con_w - 2 * car_lip, car_lip + 1, z_batt + con_w / 2 - car_lip - sep_z0 + 1]);
+        translate([-con_w / 2 - car_fit, y_batt0, sep_z0 - 1]) cube([con_w + 2 * car_fit, car_slot, z_batt + con_w / 2 + car_fit - sep_z0 + 1]);
+        translate([-(con_w / 2 - car_lip), y_batt0 + car_slot - 0.01, sep_z0 - 1]) cube([con_w - 2 * car_lip, car_lip_t + 1, z_batt + con_w / 2 - car_lip - sep_z0 + 1]);
         translate([-(1.5 + clr + 0.25), y_batt0, z_batt]) cube([3 + 2 * clr + 0.5, car_y1 - y_batt0 + 1, car_z1 - z_batt + 1]);
+        // snap leaf: slit under it (and its tooth), outer wall thinned; it stays fixed above z_leaf1 (the top lip)
+        mirror([car_snap_side < 0 ? 1 : 0, 0, 0]) {
+            translate([tooth_x - 0.01, y_batt0 - car_gap, sep_z0 - 1]) cube([car_x - tooth_x + 1, car_gap + 0.01, z_leaf1 - sep_z0 + 1]);
+            translate([con_w / 2 + car_fit + car_leaf_w, y_batt0 - car_gap, sep_z0 - 1]) cube([car_x, car_y1 - y_batt0 + car_gap + 1, z_leaf1 - sep_z0 + 1]);
+        }
     }
+    // the tooth, on the leaf's inner face in the groove, under the plate's bottom edge (plate at its top stop)
+    mirror([car_snap_side < 0 ? 1 : 0, 0, 0]) translate([0, y_batt0 + car_slot, 0]) rotate([90, 0, 0]) linear_extrude(car_slot) polygon([
+        [con_w / 2 + car_fit + 0.01, tooth_z1 - car_tooth_h], [tooth_x, tooth_z1 - car_tooth_h + (con_w / 2 + car_fit - tooth_x)],
+        [tooth_x, tooth_z1], [con_w / 2 + car_fit + 0.01, tooth_z1]]);
 }
 module carrier_flat(x, y) {   // flat on the bed, its front face (the card) down, starting at x (+X), centred on y
     translate([x - sep_z0, y, 0]) rotate([0, 0, 90]) rotate([90, 0, 0]) translate([0, -car_y0, 0]) carrier();
 }
 module sep_slot_cut() {
     // slots in the side walls for the carrier's card, open down to the bay's opening
-    translate([-(in_half + sep_slot), sep_y0, z_body0 - 1]) cube([2 * (in_half + sep_slot), sep_y1 - sep_y0, sep_z1 + 0.3 - z_body0 + 1]);
+    // ... and that far further back: the carrier goes up there (behind the nut) and slides forward into them
+    translate([-(in_half + sep_slot), sep_y0, z_body0 - 1]) cube([2 * (in_half + sep_slot), sep_y1 - sep_y0 + sep_back, sep_z1 + 0.3 - z_body0 + 1]);
+}
+module sep_snap() {
+    // a bump on each slot's floor just behind the card: the card's edges snap past it going forward
+    for (m = [0, 1]) mirror([m, 0, 0]) translate([0, 0, sep_z0]) linear_extrude(snap_l) polygon([
+        [in_half + sep_slot + 0.01, snap_y0], [in_half + sep_slot - snap_h, snap_y0 + snap_w],
+        [in_half + sep_slot + 0.01, snap_y0 + 2 * snap_w]]);
 }
 
 module latch() {
@@ -402,6 +451,7 @@ module pip_tray() {
         translate([usb_x - usb_rec[0] / 2, y_max - (wall - usb_wall), z_usb - usb_rec[1] / 2]) cube([usb_rec[0], 2, usb_rec[1]]);
     }
     latch();   // after the cuts: the gear plates' slot would cut its tooth off
+    sep_snap();   // after the cuts: in the carrier's slots
     // crush ribs under the front face, along the way in, rounded ends, near the plates' front end (clear of their
     // chamfer): the plates ride under them over the last few mm and the drive unit is clamped between pad and front face
     // (no axial play, held against sliding back). On the front face: they grow up from the bed side in the print
@@ -549,6 +599,8 @@ if (pip == "assembly") {
     pip_pusher();
 } else if (pip == "lid") {
     translate([0, 0, -z_body0]) pip_lid();
+} else if (pip == "separator") {
+    carrier_flat(0, 0);   // the contact carrier alone, its card face down
 } else if (pip == "print") {
     print_set();
     translate([-(body_w + 18), 0, -z_body0]) pip_lid();   // on the other side of the tray

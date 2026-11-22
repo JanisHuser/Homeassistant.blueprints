@@ -10,7 +10,7 @@ Layout along the body: **drive | battery**, with the [rollo board](../smart-pcb/
 - **Housing:** a one-piece **tray** (printed front-face-down, open towards the valve), a **lid** on the valve side that slides in from the back, an **adapter** that screws into the tray with a coarse left-hand thread (0.6 turn), a separate **ring nut** that turns freely around it and clamps it to the valve. The board presses into a pocket in the tray, and the battery keeps it there. No screws, no clips across a seam, no supports.
 - **Size (defaults):** 23.4 × 103.7 mm, **37.5 mm deep** from the valve's thread face.
 
-The model is [`valve_head_tray.scad`](valve_head_tray.scad), the firmware is in [`../smart-pcb/firmware/products/diy-valve-head`](../smart-pcb/firmware/products/diy-valve-head), part of the [smart PCB firmware](../smart-pcb/firmware) and can be flashed straight from the project page in the browser. The print-in-place version, with the nut and pusher printed in the tray, is [`valve_head_pip.scad`](valve_head_pip.scad); its print files are in [`stl/pip`](stl/pip).
+The model is [`valve_head_tray.scad`](valve_head_tray.scad), the firmware is in [`../smart-pcb/firmware/products/diy-valve-head`](../smart-pcb/firmware/products/diy-valve-head), part of the [smart PCB firmware](../smart-pcb/firmware) and can be flashed straight from the project page in the browser. The print-in-place version, with the nut and pusher printed in the tray, is [`valve_head_pip.scad`](valve_head_pip.scad); its print files are in [`stl/pip`](stl/pip): `tray.stl` (the tray with the nut and pusher printed in place), `lid.stl` and `separator.stl` (the contact carrier), each from `openscad -D 'pip="print_a"'`, `'pip="lid"'` and `'pip="separator"'`.
 
 ![assembly](renders/assembly.png)
 
@@ -125,7 +125,7 @@ The board's wire pads, all at its end towards the drive column:
 
 | Ref | Goes to |
 |---|---|
-| J2 (M1, M2, underside) | Motor (swap the two wires if it runs backwards) |
+| J2 (M1, M2, underside) | Motor (if it runs backwards, swap the two wires or turn on the "Reverse direction" switch in Home Assistant) |
 | J3 (BAT−) | Spring contact plate (cell minus) |
 | J4 (BAT+) | Button contact plate (cell plus) |
 
@@ -142,7 +142,7 @@ This is what the [firmware](../smart-pcb/firmware/products/diy-valve-head) does:
 - **Close / open:** wake the DRV8833, drive the motor in the wanted direction for a fixed time (travel time + ~0.5 s), then sleep. At the end the motor stalls briefly against the stop, which lock motors are made for.
 - Measure the travel time once (7.1 mm in the print-in-place version `valve_head_pip.scad`, 5.4 mm in the tray; depends on the screw pitch) and set the timeout from it.
 - The push reaction goes from the gear plates into the tray's front face, through its walls into the left-hand thread, and through the adapter into the valve. The lid is not in that path.
-- If the motor moves the wrong way the first time, swap its wires.
+- If the motor moves the wrong way the first time, turn on the "Reverse direction" switch in Home Assistant (or swap its wires).
 
 ## Status
 
