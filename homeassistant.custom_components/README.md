@@ -21,7 +21,7 @@ The room is modelled as two heat stores, the screed and the room:
 room[k+1] = room[k] + a·(outdoor − room) + b·floor_duty + e·(floor_room − room) + c·sun + d
 ```
 
-`floor_duty` and `floor_room` are the valve opening and the room temperature, smoothed by the screed's time constant. `a`..`e` are learned with recursive least squares, which forgets slowly over about 10 days. The screed time constant is picked from 0.5–8 h by which candidate predicts best 6 h ahead. Until about two days of data are in, the model blends from a typical-room guess.
+`floor_duty` and `floor_room` are the valve opening and the room temperature, smoothed by the screed's time constant. `a`..`e` are learned with recursive least squares, which forgets slowly over about 10 days. The screed time constant is picked from 0.5–8 h by which candidate predicts best 6 h ahead. Until about two days of data are in, the model blends from a typical-room guess. After every update the estimates are kept physical: heat loss, heating and sun can't go negative.
 
 The planner tries valve levels of 0, 25, 50, 75 and 100 % per cycle. It picks the plan with the lowest cost: being cold during comfort time costs the most, being cold during setback costs less, being more than 0.2 K too warm during comfort time or more than 0.3 K above eco outside it costs something, and energy costs a little ("Comfort vs. savings" sets the last two).
 
@@ -37,7 +37,7 @@ The model and planner are in [`model.py`](smart_floor_heating/model.py) and have
 
 | Setting | What to pick |
 |---|---|
-| Valves | The thermostats / valve heads of that room's heating circuit (one or more `climate` entities). |
+| Valves | The thermostats, valve heads or valves of that room's heating circuit (`climate` or `valve` entities, e.g. the DIY Matter valve head). |
 | Room temperature sensors and thermostats | Temperature sensors and room thermostats (`climate` entities, their current temperature) in the room itself. With several, their average is used. Don't add valve heads on the manifold: they measure the manifold, not the room. |
 | Weather | Your weather entity, for the outdoor and sun forecast. |
 | Outdoor temperature sensor | Optional, used instead of the weather's current temperature. |
@@ -154,6 +154,8 @@ kind: sensors     # sensors (temperature inputs, with average) | windows (open/c
 ## The first days
 
 The first two days run on a typical-room guess, blended towards what it learns. After about 96 usable half-hour steps (two days without open windows or sensor gaps) it runs on its own model. Fast-changing weather and a schedule with real setbacks help it learn faster than a steady room does.
+
+If the learned model can't be right, the room raises a repair issue (**Settings → Repairs**) and plans with the typical-room guess until it is fixed, so it keeps heating. "Can't be right" means: the room would keep its heat for 150 h or more with the heating off, or full heating would warm it by 0.05 K/h or less. Wrong data causes this, for example a valve that ran the wrong way. **Fix** in the repair resets what that room learned; it then learns again over two days.
 
 ## Tests
 

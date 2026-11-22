@@ -24,7 +24,7 @@
           "closed_setpoint": "Valve setpoint to close"
         },
         "data_description": {
-          "valves": "Thermostats or valve heads on the floor-heating manifold. They are only opened and closed; the room sensor decides.",
+          "valves": "Thermostats, valve heads or valves (e.g. the DIY Matter valve head) on the floor-heating manifold. They are only opened and closed; the room sensor decides.",
           "room_sensors": "Temperature sensors and room thermostats in the room itself, not the valve heads on the manifold. With several, their average is used.",
           "weather": "For the outdoor and sun forecast.",
           "outdoor_sensor": "Optional, used instead of the weather's current temperature.",
@@ -65,7 +65,7 @@
           "closed_setpoint": "Valve setpoint to close"
         },
         "data_description": {
-          "valves": "Thermostats or valve heads on the floor-heating manifold. They are only opened and closed; the room sensor decides.",
+          "valves": "Thermostats, valve heads or valves (e.g. the DIY Matter valve head) on the floor-heating manifold. They are only opened and closed; the room sensor decides.",
           "room_sensors": "Temperature sensors and room thermostats in the room itself, not the valve heads on the manifold. With several, their average is used.",
           "weather": "For the outdoor and sun forecast.",
           "outdoor_sensor": "Optional, used instead of the weather's current temperature.",
@@ -303,6 +303,19 @@
         "presence": {
           "name": "Presence",
           "description": "People, trackers, input booleans, groups or zones; empty: none."
+        }
+      }
+    }
+  },
+  "issues": {
+    "implausible_model": {
+      "title": "{room}: learned heating model is implausible",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Reset what {room} learned?",
+            "description": "The model learned for {room} can't be right: {details}. This usually comes from wrong data, for example a valve that ran the wrong way. Until it is fixed, {room} plans with the default model, so it keeps heating.\n\nReset it to forget what was learned; the room then learns again over the next two days."
+          }
         }
       }
     }

@@ -83,7 +83,8 @@ def horizon(start_h: float, day: int) -> list:
     return steps
 
 
-def run(days: int, seed: int = 1):
+def run(days: int, seed: int = 1, reversed_valve: bool = False):
+    """reversed_valve: the valve shuts when the model opens it, like a motor wired backwards."""
     rng = random.Random(seed)
     room = SimRoom()
     rm = model.RoomModel()
@@ -101,7 +102,7 @@ def run(days: int, seed: int = 1):
         open_this_step = max(0, min(step_min, open_min - (step % CYCLE_STEPS) * step_min))
         temps = []
         for m in range(step_min):
-            room.tick(m < open_this_step, outdoor_at(hour), sun_at(hour, day))
+            room.tick((m < open_this_step) != reversed_valve, outdoor_at(hour), sun_at(hour, day))
             temps.append(room.room)
         avg = sum(temps) / len(temps) + rng.gauss(0, 0.03)
         rm.observe(avg, outdoor_at(hour), sun_at(hour, day), open_this_step / step_min, True)
@@ -170,3 +171,54 @@ def test_cools_at_night():
     mean = sum(night) / len(night)
     print(f"night mean {mean:.2f} °C")
     assert mean < COMFORT - 0.1
+
+
+def _physical(learner) -> bool:
+    a, b, e, c, _d = learner.theta
+    return a >= model.A_MIN and b >= model.B_MIN and 0 <= e <= model.E_MAX and c >= 0
+
+
+def test_healthy_room_has_no_issues():
+    rm, _, _ = run(days=6)
+    assert rm.trusted
+    assert rm.issues == []
+    assert all(_physical(l) for l in rm.learners)
+
+
+def test_reversed_valve_stays_physical():
+    """A valve that runs backwards teaches "heating cools the room". Whatever the
+    learner makes of that, its coefficients must stay physical (never negative)."""
+    rm, _, _ = run(days=6, reversed_valve=True)
+    assert all(_physical(l) for l in rm.learners)
+
+
+def test_near_zero_heat_loss_is_flagged_and_planning_uses_prior():
+    """The Wohnzimmer case: a learned heat loss close to zero (room keeps its heat for
+    days) predicts warming with the valve shut, so the planner never heats."""
+    rm = model.RoomModel()
+    for learner in rm.learners:
+        learner.theta = [0.0009, 0.6031, 0.2, 0.1513, 0.001]
+        learner.samples = model.MIN_SAMPLES_TRUSTED
+        learner.err_ema = 1.0
+    assert rm.issues == [model.ISSUE_NO_HEAT_LOSS]
+    assert rm.params().as_tuple == model._clamp(model._prior_theta())
+    cold_night = [model.StepInput(outdoor=4.6, sun=0.0, target=21.0, comfort=True)] * 12
+    assert sum(rm.plan(20.4, cold_night, 2).duties) > 0
+
+
+def test_stored_negative_model_is_flagged():
+    """Models stored before the projection existed may hold negative values."""
+    rm = model.RoomModel()
+    for learner in rm.learners:
+        learner.theta = [-0.0014, 0.6667, 0.0, 0.1569, 0.0014]
+        learner.samples = model.MIN_SAMPLES_TRUSTED
+        learner.err_ema = 1.0
+    rm = model.RoomModel.from_dict(rm.to_dict())
+    assert model.ISSUE_NO_HEAT_LOSS in rm.issues
+    assert rm.params().a == model._clamp(model._prior_theta())[0]
+
+
+def test_reset_forgets_learning():
+    rm, _, _ = run(days=3)
+    rm.reset()
+    assert rm.samples == 0 and not rm.trusted and rm.issues == []

@@ -16,6 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -78,7 +79,7 @@ from .const import (
     TARGET_COMFORT,
     TARGET_ECO,
 )
-from .model import STEP_H, Plan, RoomModel, StepInput
+from .model import ISSUE_NO_HEAT_LOSS, ISSUE_NO_HEATING_EFFECT, STEP_H, Plan, RoomModel, StepInput
 from .shared import get_shared, office_days
 
 _LOGGER = logging.getLogger(__name__)
@@ -193,6 +194,7 @@ class RoomController:
             self.rules.pop("calendars", None)  # moved to the shared entry
             self.rules["office"] = {**OFFICE_DEFAULT, **self.rules.get("office", {})}
 
+        self._check_model()
         now = dt_util.now()
         self._sample(now)
         await self._replan(now)
@@ -422,11 +424,58 @@ class RoomController:
         )
         if not b.learn_ok:
             self.learning_status = "paused: window open"
+        elif self.model.issues:
+            self.learning_status = "implausible: using defaults"
         elif self.model.trusted:
             self.learning_status = "learned"
         else:
             self.learning_status = "learning"
+        self._check_model()
         self._save()
+
+    @property
+    def issue_id(self) -> str:
+        return f"implausible_model_{self.entry.entry_id}"
+
+    def _check_model(self) -> None:
+        """Raise a repair issue while the learned model is implausible, clear it once it isn't.
+
+        The planner already falls back to the defaults then (model.params), so the room keeps
+        heating; the issue tells the user the learned values are wrong and offers a reset.
+        """
+        issues = self.model.issues
+        if not issues:
+            ir.async_delete_issue(self.hass, DOMAIN, self.issue_id)
+            return
+        learned = self.model.learned()
+        details = []
+        if ISSUE_NO_HEAT_LOSS in issues:
+            details.append(f"the room would keep its heat for {STEP_H / learned.a:.0f} h with the heating off")
+        if ISSUE_NO_HEATING_EFFECT in issues:
+            details.append(f"full heating would warm it by only {learned.heat_gain_k_per_h:.2f} K/h")
+        if not ir.async_get(self.hass).async_get_issue(DOMAIN, self.issue_id):
+            _LOGGER.warning("%s: learned model is implausible (%s)", self.entry.title, "; ".join(details))
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            self.issue_id,
+            is_fixable=True,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="implausible_model",
+            translation_placeholders={"room": self.entry.title, "details": "; ".join(details)},
+            data={"entry_id": self.entry.entry_id},
+        )
+
+    async def async_reset_model(self) -> None:
+        """Forget what the room learned; it plans with the defaults and learns again."""
+        self.model.reset()
+        self.learning_status = "learning"
+        self._check_model()
+        await self._store.async_save(self._data_to_save())
+        now = dt_util.now()
+        await self._replan(now)
+        await self._apply_valve(now)
+        self._notify()
 
     # ---- planning --------------------------------------------------------
 
@@ -707,10 +756,7 @@ class RoomController:
             and not self.window_holds_valve
             and in_cycle < self.open_minutes
         )
-        mismatch = any(
-            _float(s.attributes.get("temperature")) != self._setpoint(s, want_open)
-            for s in self._valve_states()
-        )
+        mismatch = any(not self._matches(s, want_open) for s in self._valve_states())
         due = self._last_command is None or now - self._last_command >= RECOMMAND_AFTER
         if want_open == self.valve_open and not (mismatch and due):
             return
@@ -733,8 +779,23 @@ class RoomController:
             value = self.conf.get(CONF_CLOSED_SETPOINT) or state.attributes.get("min_temp", 5)
         return float(value)
 
+    def _matches(self, state: State, want_open: bool) -> bool:
+        """Whether a valve already is where the controller wants it."""
+        if state.domain == "valve":
+            return state.state in (("open", "opening") if want_open else ("closed", "closing"))
+        return _float(state.attributes.get("temperature")) == self._setpoint(state, want_open)
+
     async def _command(self, state: State, want_open: bool) -> None:
         try:
+            if state.domain == "valve":
+                # A plain valve entity, e.g. the DIY valve head over Matter.
+                await self.hass.services.async_call(
+                    "valve",
+                    "open_valve" if want_open else "close_valve",
+                    {"entity_id": state.entity_id},
+                    blocking=True,
+                )
+                return
             if state.state != "heat" and "heat" in state.attributes.get("hvac_modes", []):
                 await self.hass.services.async_call(
                     "climate",

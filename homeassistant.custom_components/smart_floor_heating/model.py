@@ -61,6 +61,16 @@ TAU_MAX_H = 300.0
 B_MIN = 0.01
 E_MAX = 0.9
 MAX_STEP_CHANGE_K = 1.5  # bigger jumps between steps are sensor glitches
+A_MIN = STEP_H / TAU_MAX_H
+
+# Plausibility: a learned model this close to the bounds has learned something
+# unphysical (a room that keeps its heat for days, a floor that barely warms
+# it), usually from wrong data such as a valve that runs the wrong way. The
+# planner then uses the prior instead, and the room reports an issue.
+TAU_IMPLAUSIBLE_H = 150.0  # room air alone keeping its heat this long
+HEAT_GAIN_IMPLAUSIBLE_K_PER_H = 0.05  # full output warming the room this slowly
+ISSUE_NO_HEAT_LOSS = "no_heat_loss"
+ISSUE_NO_HEATING_EFFECT = "no_heating_effect"
 
 # Learned enough to trust: about two days of usable data.
 MIN_SAMPLES_TRUSTED = 96
@@ -86,10 +96,20 @@ def _prior_theta() -> list[float]:
 
 
 def _clamp(theta: list[float]) -> tuple[float, float, float, float, float]:
-    a = min(max(theta[0], STEP_H / TAU_MAX_H), STEP_H / TAU_MIN_H)
+    a = min(max(theta[0], A_MIN), STEP_H / TAU_MIN_H)
     b = max(theta[1], B_MIN)
     e = min(max(theta[2], 0.0), E_MAX)
     return a, b, e, max(theta[3], 0.0), theta[4]
+
+
+def _project(theta: list[float]) -> list[float]:
+    """Keep the learner's estimate physical: heat loss, heating and sun can't be negative.
+
+    Without this, wrong data (a reversed valve, a sensor next to a heater) lets
+    a or b run negative, and the other parameters bend to make up for it.
+    """
+    a, b, e, c, d = _clamp(theta)
+    return [a, b, e, c, d]
 
 
 def _blend(prior: list[float], learned: list[float], samples: int) -> list[float]:
@@ -153,7 +173,7 @@ class Learner:
         px = [sum(self.p[i][j] * x[j] for j in range(N_PARAMS)) for i in range(N_PARAMS)]
         denom = FORGETTING + sum(x[i] * px[i] for i in range(N_PARAMS))
         gain = [v / denom for v in px]
-        self.theta = [t + g * err for t, g in zip(self.theta, gain)]
+        self.theta = _project([t + g * err for t, g in zip(self.theta, gain)])
         for i in range(N_PARAMS):
             for j in range(N_PARAMS):
                 self.p[i][j] = (self.p[i][j] - gain[i] * px[j]) / FORGETTING
@@ -334,6 +354,29 @@ class RoomModel:
         return self.samples >= MIN_SAMPLES_TRUSTED
 
     @property
+    def issues(self) -> list[str]:
+        """What is implausible about the learned model; empty while learning or fine."""
+        if not self.trusted:
+            return []
+        learned = self.learned()
+        issues = []
+        if STEP_H / learned.a >= TAU_IMPLAUSIBLE_H:
+            issues.append(ISSUE_NO_HEAT_LOSS)
+        if learned.heat_gain_k_per_h <= HEAT_GAIN_IMPLAUSIBLE_K_PER_H:
+            issues.append(ISSUE_NO_HEATING_EFFECT)
+        return issues
+
+    def learned(self) -> Params:
+        """What the learner has, within bounds, even where params() falls back to the prior."""
+        a, b, e, c, d = _clamp(self.best.theta)
+        return Params(a=a, b=b, e=e, c=c, d=d, floor_tau_h=self.best.floor_tau_h)
+
+    def reset(self) -> None:
+        """Forget everything learned and start again from the prior."""
+        self.learners = [Learner(t) for t in FLOOR_TAU_CANDIDATES_H]
+        self.forget_last()
+
+    @property
     def rmse(self) -> float | None:
         """Typical error of the 6 h ahead prediction, in K."""
         err = self.best.err_ema
@@ -341,11 +384,12 @@ class RoomModel:
 
     def params(self) -> Params:
         best = self.best
-        theta = (
-            best.theta
-            if self.trusted
-            else _blend(_prior_theta(), best.theta, self.samples)
-        )
+        if self.issues:
+            theta = _prior_theta()  # don't plan with a model that can't be right
+        elif self.trusted:
+            theta = best.theta
+        else:
+            theta = _blend(_prior_theta(), best.theta, self.samples)
         a, b, e, c, d = _clamp(theta)
         return Params(a=a, b=b, e=e, c=c, d=d, floor_tau_h=best.floor_tau_h)
 

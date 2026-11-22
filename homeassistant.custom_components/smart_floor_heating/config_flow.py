@@ -84,7 +84,7 @@ def _schema(values: dict[str, Any], with_temps: bool) -> vol.Schema:
 
     fields: dict[Any, Any] = {
         vol.Required(CONF_VALVES, default=values.get(CONF_VALVES, [])): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="climate", multiple=True)
+            selector.EntitySelectorConfig(domain=["climate", "valve"], multiple=True)
         ),
         vol.Required(
             CONF_ROOM_SENSORS, default=values.get(CONF_ROOM_SENSORS, [])
